@@ -1,0 +1,47 @@
+Authentication & Encryption
+
+Encryption
+ between client and server
+ between servers
+
+UNICORE/X
+ Job Execution
+  Status
+    Abort
+    Check for exit status
+
+   indepedent of Queuing system
+
+   benötigen wir in Form von Fork -> PID -> PID -> Job Status
+
+
+
+  Dateizugriff unabhängig von Cluster System
+
+Workflow Management
+  Workflow Management
+    # Glorified fork loop
+    Dependency resolution # Is Job 4, which 5 depends on already finished?
+
+    State Handling #
+    Resubmission of Failed jobs
+  NOT
+    Checkpoint Ready #
+    Workflow restart ready in the middle
+
+   Saving:
+     Worklow IDs, Filename, User?
+       For Each Workflow:
+         JobIDs, Cluster, Exec Directory
+
+
+UNICORE Base
+  NOT
+    Routing of jobs between crazy network topologies
+
+
+
+Notes
+   ssh
+     temporary keys with ssh cert authority
+
