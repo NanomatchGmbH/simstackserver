@@ -56,10 +56,9 @@ class XMLYMLInstantiationBase(object):
         self._setup_empty_field_values()
 
         for key,value in kwargs.items():
-            print(key)
             if self.contains(key):
-                print("setting!!!")
-                self._field_values[key] = value
+                if self._field_values[key] != None:
+                    self._field_values[key] = value
 
     def contains(self,key):
         return key in self._field_names
