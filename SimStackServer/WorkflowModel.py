@@ -1,4 +1,5 @@
 import sys
+import uuid
 from abc import abstractmethod, abstractclassmethod
 from enum import Flag, auto
 from io import StringIO
@@ -57,7 +58,7 @@ class XMLYMLInstantiationBase(object):
 
         for key,value in kwargs.items():
             if self.contains(key):
-                if self._field_values[key] != None:
+                if value != None:
                     self._field_values[key] = value
 
     def contains(self,key):
@@ -213,6 +214,7 @@ class WorkflowElementList(object):
         self._clear()
         for inputvar in args:
             if isinstance(inputvar,list):
+                print(inputvar)
                 for fieldtype, myobj in inputvar:
                     self.add_to_list(fieldtype, myobj)
 
@@ -399,19 +401,26 @@ class CurrentTrash(object):
 
 class WorkflowExecModule(XMLYMLInstantiationBase):
     _fields = [
-        ("resources",    Resources,           None, "Computational resources", "m"),
+        ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
+        ("resources", Resources, None, "Computational resources", "m"),
         ("dependencies", WorkflowElementList, None, "List of strings containing Ids this job is dependent upon.", "m")
     ]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not "uid" in kwargs:
+            self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
 
     @classmethod
     def fields(cls):
         return cls._fields
+
+    @property
+    def uid(self):
+        return self._field_values["uid"]
 
     @property
     def resources(self):
