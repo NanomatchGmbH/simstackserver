@@ -9,7 +9,8 @@ from io import StringIO
 from lxml import etree
 
 from SimStackServer.Util.FileUtilities import mkdir_p, file_to_xml
-from SimStackServer.WorkflowModel import Resources, WorkflowExecModule, WorkflowElementList, DirectedGraph, Workflow
+from SimStackServer.WorkflowModel import Resources, WorkflowExecModule, WorkflowElementList, DirectedGraph, Workflow, \
+    StringList
 
 
 class TestWorkflowModel(unittest.TestCase):
@@ -68,6 +69,8 @@ class TestWorkflowModel(unittest.TestCase):
         self.assertEqual(resources.memory, other_resource.memory)
         self.assertEqual(resources.host, other_resource.host)
         self.assertEqual(resources.queue, other_resource.queue)
+
+
 
     def testDigraphTravseral(self):
         ooommmm = DirectedGraph([(3,[4444,983]),(983,12)])
@@ -192,5 +195,11 @@ class TestWorkflowModel(unittest.TestCase):
         test_xml = etree.Element("Workflow")
         ab = Workflow(elements = oik, graph = ooommmm)
 
+        ab.to_xml(test_xml)
+        print(etree.tostring(test_xml, encoding="utf8", pretty_print=True).decode())
+
+
+        test_xml = etree.Element("StringList")
+        ab = StringList(["aaa","abbb"])
         ab.to_xml(test_xml)
         print(etree.tostring(test_xml, encoding="utf8", pretty_print=True).decode())

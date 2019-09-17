@@ -316,6 +316,29 @@ class WorkflowElementList(object):
             else:
                 mydict["value"] = str(element)
 
+
+class StringList(WorkflowElementList):
+    """
+    A WorkflowElementList, which you can conveniently initialize with only Strings
+
+    """
+    def __init__(self, *args, **kwargs):
+        strings = []
+        arglist = list(args)
+        delete = []
+        for arg in arglist:
+            if isinstance(arg, list):
+                strings = arg
+                delete.append(arg)
+        for todel in delete:
+            arglist.remove(todel)
+
+        super().__init__(arglist, **kwargs)
+
+        self._storage = strings
+        for i in strings:
+            self._typelist.append("str")
+
 class Resources(XMLYMLInstantiationBase):
     """
     Class to store computational resources. Used to create jobs. Host refers to the HPC master this is running on.
