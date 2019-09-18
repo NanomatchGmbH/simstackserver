@@ -1,6 +1,37 @@
 import os
 from lxml import etree
 
+class PathSplitError(Exception):
+    pass
+
+def split_directory_in_subdirectories(mypath: str):
+    """
+    Splits directories into a list of concatenated subdirectories. Has a failsafe at 5000 subdirectories.
+
+    :param mypath (str): Path to be split into subdirectories. (/home/me/test)
+    :return (list of str): List of directories, which have to be traversed in order ([/home,/home/me,/home/me/test])
+
+    """
+    togenerate = []
+    from os.path import split
+    if not mypath.endswith('/') and not mypath == "":
+        togenerate.append(mypath)
+    first = "A"
+    counter = 0
+    while first != "" and first != "/":
+        counter+=1
+        first,second = split(mypath)
+        if not first in togenerate:
+            if first != "/" and first != "":
+                togenerate.append(first)
+        mypath = first
+        if counter == 5000:
+            raise PathSplitError("Directory %s cannot be split into subdirectories"%mypath)
+
+    togenerate.reverse()
+    return togenerate
+
+
 
 def mkdir_p(path):
     import errno

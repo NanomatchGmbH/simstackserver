@@ -6,8 +6,8 @@ from os.path import join
 from shutil import rmtree
 import getpass
 
-from SimStackServer.ClusterManager import ClusterManager
-from SimStackServer.Util.FileUtilities import mkdir_p
+from SimStackServer.ClusterManager import ClusterManager, SSHExpectedDirectoryError
+from SimStackServer.Util.FileUtilities import mkdir_p, PathSplitError
 from SimStackServer.WorkflowModel import Resources
 
 
@@ -40,7 +40,14 @@ class TestClusterManager(unittest.TestCase):
         res = Resources()
 
         cm.write_jobfile("test.jobscript","echo HELLO WORLD\n",res,"HELLO_WORLD")
-        cm.mkdir_p("Test")
+        assert cm.exists_as_directory("huubbertt") == False
+        assert cm.exists_as_directory("/") == True
+        self.assertRaises(SSHExpectedDirectoryError, cm.exists_as_directory,"/dev/urandom")
+        cm.mkdir_p("2del", basepath_override="")
+        cm.mkdir_p("/Test/hubababbiiibidi", basepath_override="2del")
+        return
+        assert cm.exists_as_directory(self._remote_dir + '2del/Test/hubababbiiibidi') == True
+
 
         with open(self._testfilename,'rt') as in1:
             file1 = in1.read()

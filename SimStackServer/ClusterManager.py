@@ -1,8 +1,17 @@
+import stat
+
+
 import paramiko
 from os import path
+import posixpath
 
+from paramiko import SFTPAttributes
+
+from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories
 from SimStackServer.WorkflowModel import Resources
 
+class SSHExpectedDirectoryError(Exception):
+    pass
 
 class ClusterManager(object):
     def __init__(self, url, port, calculation_basepath, user, queueing_system):
@@ -20,7 +29,7 @@ class ClusterManager(object):
         self._ssh_client = paramiko.SSHClient()
         self._ssh_client.load_system_host_keys()
         self._should_be_connected = False
-        self._sftp_client = None
+        self._sftp_client : paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
 
@@ -114,9 +123,25 @@ class ClusterManager(object):
             return False
         return transport.is_active()
 
+    def exists_as_directory(self, path):
+        """
+        Checks if an absolute path on remote exists and is a directory. Throws if it exists as file
+        :param path (str): The path to check
+        :return bool: Exists, does not exist
+        """
+        try:
+            sftpa : SFTPAttributes = self._sftp_client.stat(path)
+        except FileNotFoundError as e:
+            return False
+        if stat.S_ISDIR(sftpa.st_mode):
+            return True
+        raise SSHExpectedDirectoryError("Path <%s> to expected directory exists, but was not directory"%path )
+
     def mkdir_p(self,directory,basepath_override = None, mode_override = None):
         """
-        Creates a directory, if not existing. Does nothing if it exists. Throws if the path is a file.
+        Creates a directory, if not existing. Does nothing if it exists. Throws if the path cannot be generated or is a file
+        The function will make sure every directory in "directory" is generated but not in basepath or basepath_override.
+        Bug: Mode is still ignored! I think this might be a bug in ubuntu 14.04 ssh and we should try again later.
         :param directory (str): Directory to be generated on the server. basepath will be appended
         :param basepath_override (str): If set, a custom basepath is used. If you want create a specific absolute directory, used basepath_override=""
         :param mode_override (int): Mode such as 1777
@@ -128,12 +153,24 @@ class ClusterManager(object):
         if basepath_override is None:
             basepath_override = self._calculation_basepath
 
-        try:
-            self._sftp_client.mkdir(self._calculation_basepath + '/' +  directory)
-        except Exception as e:
-            pass
+        if self._calculation_basepath is not "":
+            if directory.startswith("/"):
+                directory = directory[1:]
+
+        subdirs = split_directory_in_subdirectories(directory)
+        complete_subdirs = []
+        for mydir in subdirs:
+            complete_subdirs.append(posixpath.join(basepath_override,mydir))
 
 
+        for dir in complete_subdirs:
+            if self.exists_as_directory(dir):
+                continue
+            else:
+                #self._sftp_client.mkdir(dir,mode = mode_override)
+                self._sftp_client.mkdir(dir)
+
+        return directory
 
 
     def __del__(self):
