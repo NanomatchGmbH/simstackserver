@@ -1,6 +1,3 @@
-import socket
-import clusterjob
-
 import paramiko
 from os import path
 
@@ -25,6 +22,7 @@ class ClusterManager(object):
         self._should_be_connected = False
         self._sftp_client = None
         self._queueing_system = queueing_system
+        self._default_mode = 770
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -43,7 +41,7 @@ class ClusterManager(object):
         """
         self._ssh_client.connect(self._url,self._port, username=self._user)
         self._should_be_connected = True
-        self._sftp_client =self._ssh_client.open_sftp()
+        self._sftp_client = self._ssh_client.open_sftp()
 
     def disconnect(self):
         """
@@ -55,6 +53,7 @@ class ClusterManager(object):
             self._sftp_client.close()
 
     def write_jobfile(self, remote_file, exec_script, resources : Resources, jobname):
+        import clusterjob
         jobscript = clusterjob.Job(exec_script, backend=self._queueing_system, jobname = jobname,
                                          queue = resources.queue, time = resources.walltime, nodes = resources.nodes,
                                          threads = resources.cpus_per_node, mem = resources.memory,
@@ -66,7 +65,7 @@ class ClusterManager(object):
         with self._sftp_client.file(remote_file, 'w', bufsize = 16*M ) as outfile:
             outfile.write(str(jobscript))
 
-    def put_file(self, from_file, to_file):
+    def put_file(self, from_file, to_file, optional_callback = None):
         """
         Transfer a file from_file (local) to to_file(remote)
 
@@ -74,13 +73,14 @@ class ClusterManager(object):
 
         :param from_file (str): Existing file on host
         :param to_file (str): Remote file (will be overwritten)
+        :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
         if not path.isfile(from_file):
             raise FileNotFoundError("File %s was not found during ssh put file on local host"%(from_file))
-        self._sftp_client.put(from_file,to_file,self._dummy_callback)
+        self._sftp_client.put(from_file,to_file,optional_callback)
 
-    def get_file(self, from_file, to_file):
+    def get_file(self, from_file, to_file, optional_callback = None):
         """
         Transfer a file from_file (remote) to to_file(local)
 
@@ -88,9 +88,10 @@ class ClusterManager(object):
 
         :param from_file (str): Existing file on remote
         :param to_file (str): Local file (will be overwritten)
+        :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
-        self._sftp_client.get(from_file, to_file, self._dummy_callback)
+        self._sftp_client.get(from_file, to_file, optional_callback)
 
     def exec_command(self, command):
         """
@@ -102,6 +103,38 @@ class ClusterManager(object):
         stdin, stdout, stderr = self._ssh_client.exec_command(command)
         for line in stdout:
             print(line)
+
+    def is_connected(self):
+        """
+        Returns True if the ssh transport is currently connected. Returns not True otherwise
+        :return (bool): True or not True
+        """
+        transport = self._ssh_client.get_transport()
+        if transport is None:
+            return False
+        return transport.is_active()
+
+    def mkdir_p(self,directory,basepath_override = None, mode_override = None):
+        """
+        Creates a directory, if not existing. Does nothing if it exists. Throws if the path is a file.
+        :param directory (str): Directory to be generated on the server. basepath will be appended
+        :param basepath_override (str): If set, a custom basepath is used. If you want create a specific absolute directory, used basepath_override=""
+        :param mode_override (int): Mode such as 1777
+        :return (str): The absolute path of the generated directory.
+        """
+
+        if mode_override is None:
+            mode_override = self._default_mode
+        if basepath_override is None:
+            basepath_override = self._calculation_basepath
+
+        try:
+            self._sftp_client.mkdir(self._calculation_basepath + '/' +  directory)
+        except Exception as e:
+            pass
+
+
+
 
     def __del__(self):
         """
