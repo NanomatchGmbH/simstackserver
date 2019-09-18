@@ -40,6 +40,7 @@ class TestClusterManager(unittest.TestCase):
         res = Resources()
 
         cm.write_jobfile("test.jobscript","echo HELLO WORLD\n",res,"HELLO_WORLD")
+        cm.mkdir_p("Test")
 
         with open(self._testfilename,'rt') as in1:
             file1 = in1.read()
