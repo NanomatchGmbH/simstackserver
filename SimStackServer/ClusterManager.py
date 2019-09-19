@@ -51,6 +51,7 @@ class ClusterManager(object):
         self._ssh_client.connect(self._url,self._port, username=self._user)
         self._should_be_connected = True
         self._sftp_client = self._ssh_client.open_sftp()
+        self.mkdir_p(self._calculation_basepath,basepath_override="")
 
     def disconnect(self):
         """
@@ -74,7 +75,7 @@ class ClusterManager(object):
         with self._sftp_client.file(remote_file, 'w', bufsize = 16*M ) as outfile:
             outfile.write(str(jobscript))
 
-    def put_file(self, from_file, to_file, optional_callback = None):
+    def put_file(self, from_file, to_file, optional_callback = None, basepath_override = None):
         """
         Transfer a file from_file (local) to to_file(remote)
 
@@ -83,11 +84,15 @@ class ClusterManager(object):
         :param from_file (str): Existing file on host
         :param to_file (str): Remote file (will be overwritten)
         :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
+        :param basepath_override (str): Overrides the basepath in case of uploads somewhere else.
         :return: Nothing
         """
         if not path.isfile(from_file):
             raise FileNotFoundError("File %s was not found during ssh put file on local host"%(from_file))
-        self._sftp_client.put(from_file,to_file,optional_callback)
+        if basepath_override is None:
+            basepath_override = self._calculation_basepath
+        abstofile = basepath_override + "/" + to_file
+        self._sftp_client.put(from_file,abstofile,optional_callback)
 
     def get_file(self, from_file, to_file, optional_callback = None):
         """
@@ -122,6 +127,12 @@ class ClusterManager(object):
         if transport is None:
             return False
         return transport.is_active()
+
+    def exists(self, path):
+        try:
+            return self.exists_as_directory(path)
+        except SSHExpectedDirectoryError:
+            return True
 
     def exists_as_directory(self, path):
         """

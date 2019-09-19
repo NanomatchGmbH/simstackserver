@@ -214,7 +214,7 @@ class WorkflowElementList(object):
         self._clear()
         for inputvar in args:
             if isinstance(inputvar,list):
-                print(inputvar)
+                #print(inputvar)
                 for fieldtype, myobj in inputvar:
                     self.add_to_list(fieldtype, myobj)
 
