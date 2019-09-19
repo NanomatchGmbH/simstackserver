@@ -75,6 +75,40 @@ class ClusterManager(object):
         with self._sftp_client.file(remote_file, 'w', bufsize = 16*M ) as outfile:
             outfile.write(str(jobscript))
 
+    def _resolve_file_in_basepath(self,filename, basepath_override):
+        if basepath_override is None:
+            basepath_override = self._calculation_basepath
+
+        return basepath_override + '/' + filename
+
+    def delete_file(self, filename, basepath_override = None):
+        resolved_filename = self._resolve_file_in_basepath(filename, basepath_override)
+        self._sftp_client.remove(resolved_filename)
+
+    def __rmtree_helper(self,abspath):
+        postremove_files = []
+        for file_attr in self._sftp_client.listdir_attr(abspath):
+            fname = file_attr.filename
+
+            newabspath = abspath + '/' + fname
+            if stat.S_ISDIR(file_attr.st_mode):
+                print("Going in with %s"%newabspath)
+                self.__rmtree_helper(newabspath)
+            else:
+                postremove_files.append(newabspath)
+        for myfile in postremove_files:
+            #print("Im deleting: %s" %myfile)
+            self._sftp_client.remove(myfile)
+        self._sftp_client.rmdir(abspath)
+        #print("Im deleting %s"%abspath)
+
+    def rmtree(self, dirname, basepath_override = None):
+        abspath = self._resolve_file_in_basepath(dirname,basepath_override)
+        if not self.exists_as_directory(abspath):
+            return
+        self.__rmtree_helper(abspath)
+        print("Actually left rmtree helper")
+
     def put_file(self, from_file, to_file, optional_callback = None, basepath_override = None):
         """
         Transfer a file from_file (local) to to_file(remote)
@@ -83,7 +117,7 @@ class ClusterManager(object):
 
         :param from_file (str): Existing file on host
         :param to_file (str): Remote file (will be overwritten)
-        :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
+        :param optional_callWorkback (function): Function looking like this: callback(bytes_written, total_bytes)
         :param basepath_override (str): Overrides the basepath in case of uploads somewhere else.
         :return: Nothing
         """
@@ -92,9 +126,35 @@ class ClusterManager(object):
         if basepath_override is None:
             basepath_override = self._calculation_basepath
         abstofile = basepath_override + "/" + to_file
+        # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
+        if self.exists_as_directory(abstofile):
+            abstofile += "/" + posixpath.basename(from_file)
         self._sftp_client.put(from_file,abstofile,optional_callback)
 
-    def get_file(self, from_file, to_file, optional_callback = None):
+    def list_dir(self, path, basepath_override = None):
+        files = []
+        if basepath_override is None:
+            basepath_override = self._calculation_basepath
+
+        abspath = basepath_override + '/' + path
+
+
+        for file_attr in self._sftp_client.listdir_iter(abspath):
+            file_attr : SFTPAttributes
+            file_char = 'd' if stat.S_ISDIR(file_attr.st_mode) else 'f'
+            fname  = file_attr.filename
+            longname = file_attr.longname
+            print(fname, longname, file_char)
+            files.append(
+                {
+                    'name': fname,
+                    'path': abspath,
+                    'type': file_char
+                }
+            )
+        return files
+
+    def get_file(self, from_file, to_file, basepath_override = None, optional_callback = None):
         """
         Transfer a file from_file (remote) to to_file(local)
 
@@ -102,10 +162,15 @@ class ClusterManager(object):
 
         :param from_file (str): Existing file on remote
         :param to_file (str): Local file (will be overwritten)
+        :param basepath_override (str): If set, this custom basepath is used for lookup
         :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
-        self._sftp_client.get(from_file, to_file, optional_callback)
+        if basepath_override is None:
+            basepath_override = self._calculation_basepath
+
+        getpath = basepath_override + '/' + from_file
+        self._sftp_client.get(getpath, to_file, optional_callback)
 
     def exec_command(self, command):
         """
@@ -133,6 +198,14 @@ class ClusterManager(object):
             return self.exists_as_directory(path)
         except SSHExpectedDirectoryError:
             return True
+
+    def is_directory(self, path, basepath_override = None):
+        resolved = self._resolve_file_in_basepath(path, basepath_override)
+        sftpa : SFTPAttributes = self._sftp_client.stat(resolved)
+        if stat.S_ISDIR(sftpa.st_mode):
+            return True
+        return False
+
 
     def exists_as_directory(self, path):
         """
