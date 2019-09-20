@@ -92,7 +92,6 @@ class ClusterManager(object):
 
             newabspath = abspath + '/' + fname
             if stat.S_ISDIR(file_attr.st_mode):
-                print("Going in with %s"%newabspath)
                 self.__rmtree_helper(newabspath)
             else:
                 postremove_files.append(newabspath)
@@ -107,7 +106,6 @@ class ClusterManager(object):
         if not self.exists_as_directory(abspath):
             return
         self.__rmtree_helper(abspath)
-        print("Actually left rmtree helper")
 
     def put_file(self, from_file, to_file, optional_callback = None, basepath_override = None):
         """
@@ -130,6 +128,10 @@ class ClusterManager(object):
         if self.exists_as_directory(abstofile):
             abstofile += "/" + posixpath.basename(from_file)
         self._sftp_client.put(from_file,abstofile,optional_callback)
+
+    def remote_open(self,filename, mode, basepath_override= None):
+        abspath = self._resolve_file_in_basepath(filename,basepath_override)
+        return self._sftp_client.open(abspath, mode)
 
     def list_dir(self, path, basepath_override = None):
         files = []
