@@ -18,5 +18,12 @@ class TestConfig(unittest.TestCase):
         config.add_server("NMC","strunk","int-nanomatchcluster.int.kit.edu", 22, "/home/strunk", "torque")
         config.write()
         otherconfig = Config()
-
         self.assertDictEqual(config._servers,otherconfig._servers)
+
+    def test_is_running_and_pid(self):
+        config = Config()
+        assert config.is_running() == False
+        config.register_pid()
+        assert config.is_running() == True
+        config.teardown_pid()
+        assert config.is_running() == False
