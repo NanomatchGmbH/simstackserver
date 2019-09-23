@@ -21,27 +21,11 @@ if __name__ == '__main__':
         me = get_my_runtime()
         #We register with crontab:
         config.register_crontab(me)
-
-        ### Testing logfile:
-        mycounter = 0
-        maxcount = 23
-        test_logfile = "/home/strunk/outlogfile.txt"
-        if os.path.exists(test_logfile):
-            with open(test_logfile, 'rt') as outfile:
-                mycounter = int(outfile.read())
-
-        for i in range(0,maxcount):
-            time.sleep(2)
-            mycounter += 1
-            with open(test_logfile, 'wt') as outfile:
-                outfile.write("%d" % mycounter)
-            if mycounter >= maxcount:
-                break
-
+        work_done = False
 
 
         ###
-        if mycounter >= maxcount:
+        if work_done:
             config.unregister_crontab()
         #cm = ClusterManager()
         #cm.run()
