@@ -729,7 +729,7 @@ class Workflow(XMLYMLInstantiationBase):
         """ Same loop again this time copying files """
 
         for myoutput in wfem.outputs:
-            tofile = myoutput[1]
+            tofile = self.storage + '/' + myoutput[1]
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
