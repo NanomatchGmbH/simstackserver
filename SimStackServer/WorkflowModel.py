@@ -679,8 +679,8 @@ class Workflow(XMLYMLInstantiationBase):
 
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
-        print(running_jobs,"running")
-        print("Finished",self.graph.is_workflow_finished())
+
+
         for running_job in running_jobs:
 
             running = self.elements.get_element_by_uid(running_job)
@@ -701,6 +701,7 @@ class Workflow(XMLYMLInstantiationBase):
                 tostart.run_jobfile(self.queueing_system)
                 self.graph.start(rdjob)
                 self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
+        self._logger.info("Workflow %s has been finished." %self.name)
 
     def _stage_file(self,fromfile,tofile):
         # At the moment this should only be a cp, but later it can also be a scp
