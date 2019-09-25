@@ -579,6 +579,7 @@ class DirectedGraph(object):
 
     def get_running_jobs(self):
         outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "running"]
+        return outnodes
 
     def start(self, node):
         assert self._graph.nodes[node]["status"] == "ready"
@@ -684,7 +685,7 @@ class Workflow(XMLYMLInstantiationBase):
             if not self._prepare_job(tostart):
                 raise WorkflowAbort("Could not prepare job.")
             else:
-                tostart.write_jobfile(self.queueing_system)
+                tostart.run_jobfile(self.queueing_system)
                 self.graph.start(rdjob)
                 self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
 
