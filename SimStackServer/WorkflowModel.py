@@ -495,7 +495,7 @@ cd $CLUSTERJOB_WORKDIR
 
     def completed_or_aborted(self):
         asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
-        return asyncresult.status > 0
+        return asyncresult.status >= 0
 
     @property
     def uid(self):
@@ -710,7 +710,7 @@ class Workflow(XMLYMLInstantiationBase):
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
             # tofile = myinput[0]
-            output = myoutput[1]
+            output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
             if not path.isfile(absfile):
