@@ -733,6 +733,8 @@ class Workflow(XMLYMLInstantiationBase):
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
+            tofiledir = path.dirname(tofile)
+            mkdir_p(tofiledir)
             if not path.isfile(absfile):
                 mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
                 self._logger.error(mystdout)
