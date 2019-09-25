@@ -474,6 +474,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         )
 
         with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
+            outfile.write("cd ${CLUSTERJOB_WORKDIR}")
             outfile.write(str(jobscript)+ '\n')
 
         asyncresult = jobscript.submit()
