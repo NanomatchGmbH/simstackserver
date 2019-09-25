@@ -674,6 +674,7 @@ class Workflow(XMLYMLInstantiationBase):
 
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
+        print(running_jobs,"running")
         for running_job in running_jobs:
 
             running = self.elements.get_element_by_uid(running_job)
@@ -683,7 +684,7 @@ class Workflow(XMLYMLInstantiationBase):
 
 
         ready_jobs = self.graph.get_next_ready()
-        self.graph.traverse()
+        #self.graph.traverse()
         for rdjob in ready_jobs:
             tostart = self.elements.get_element_by_uid(rdjob)
             tostart : WorkflowExecModule
