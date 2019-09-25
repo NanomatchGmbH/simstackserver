@@ -11,7 +11,7 @@ from pathlib import Path
 
 from os import path
 
-from clusterjob import AsyncResult
+
 from lxml import etree
 
 import numpy as np
