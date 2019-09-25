@@ -589,6 +589,11 @@ class DirectedGraph(object):
         assert self._graph.nodes[node]["status"] == "running"
         self._graph.nodes[node]["status"] = "success"
 
+    def is_workflow_finished(self):
+        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "unstarted" or self._graph.nodes[node]["status"] == "ready"]
+        return len(outnodes) == 0
+
+
     def to_xml(self, parent_element):
         toparse = "".join(nx.generate_graphml(self._graph))
         myetree = etree.fromstring(toparse)
@@ -675,12 +680,14 @@ class Workflow(XMLYMLInstantiationBase):
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
         print(running_jobs,"running")
+        print("Finished",self.graph.is_workflow_finished())
         for running_job in running_jobs:
 
             running = self.elements.get_element_by_uid(running_job)
             running : WorkflowExecModule
             if running.completed_or_aborted():
                 self._postjob_care(running)
+                self.graph.finish(running_job)
 
 
         ready_jobs = self.graph.get_next_ready()
@@ -717,7 +724,22 @@ class Workflow(XMLYMLInstantiationBase):
                 mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
                 self._logger.error(mystdout)
                 raise WorkflowAbort(mystdout)
-        print("Success")
+
+
+        """ Same loop again this time copying files """
+
+        for myoutput in wfem.outputs:
+            tofile = myoutput[1]
+            output = myoutput[0]
+            absfile = jobdirectory + '/' + output
+
+            if not path.isfile(absfile):
+                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                self._logger.error(mystdout)
+                raise WorkflowAbort(mystdout)
+
+            shutil.copyfile(absfile, tofile)
+        return True
 
 
 
@@ -771,10 +793,6 @@ class Workflow(XMLYMLInstantiationBase):
             irgendwie drauf achten, dass nur user mit zmq kommunizieren können
         Server vom client aus starten
     """
-
-    def _start_job(self):
-        pass
-
 
     @property
     def elements(self) -> WorkflowElementList:

@@ -108,9 +108,10 @@ class SimStackServer(object):
         # Do stuff
         if workflow_file is not None:
             workflow = self._workflow_object_from_file(workflow_file)
-            workflow.jobloop()
-            time.sleep(3)
-            workflow.jobloop()
+
+            for i in range(0,10):
+                workflow.jobloop()
+                time.sleep(3)
 
         work_done = True
         #
