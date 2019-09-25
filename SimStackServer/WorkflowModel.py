@@ -431,11 +431,11 @@ class CurrentTrash(object):
 class WorkflowExecModule(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
+        ("given_name", str, "WFEM", "Name of this WorkflowExecModule.", "a"),
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
-        ("resources", Resources, None, "Computational resources", "m"),
-        ("dependencies", WorkflowElementList, None, "List of strings containing Ids this job is dependent upon.", "m")
+        ("resources", Resources, None, "Computational resources", "m")
     ]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -450,6 +450,13 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     @property
     def uid(self):
         return self._field_values["uid"]
+
+    def set_given_name(self,given_name):
+        self._field_values["given_name"] = given_name
+
+    @property
+    def given_name(self):
+        return self._field_values["given_name"]
 
     @property
     def resources(self):
