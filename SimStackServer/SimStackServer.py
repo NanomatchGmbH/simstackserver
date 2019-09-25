@@ -1,4 +1,5 @@
 import json
+import time
 
 from lxml import etree
 
@@ -107,6 +108,8 @@ class SimStackServer(object):
         # Do stuff
         if workflow_file is not None:
             workflow = self._workflow_object_from_file(workflow_file)
+            workflow.jobloop()
+            time.sleep(3)
             workflow.jobloop()
 
         work_done = True

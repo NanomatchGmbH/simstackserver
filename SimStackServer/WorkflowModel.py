@@ -10,6 +10,8 @@ from io import StringIO
 from pathlib import Path
 
 from os import path
+
+from clusterjob import AsyncResult
 from lxml import etree
 
 import numpy as np
@@ -451,11 +453,14 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
             self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
 
+        # This one has to be hacked out again. It is currently clusterjob dependent and we really don't want that.
+        self._async_result_workaround = None
+
     @classmethod
     def fields(cls):
         return cls._fields
 
-    def write_jobfile(self, queueing_system):
+    def run_jobfile(self, queueing_system):
         import clusterjob
         #Sanity checks
         # check if runtime directory is not unset
@@ -479,10 +484,17 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         #    outfile.write(str(jobscript)+ '\n')
 
         asyncresult = jobscript.submit()
-        print(asyncresult.status)
-        #print(jobid)
+        self._async_result_workaround = asyncresult
         self.set_jobid(asyncresult.job_id)
-        return jobscript
+
+    def _recreate_asyncresult_from_jobid(self, jobid):
+        # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
+        # It will require a modified clusterjob
+        return self._async_result_workaround
+
+    def completed_or_aborted(self):
+        asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
+        return asyncresult.status > 0
 
     @property
     def uid(self):
@@ -564,6 +576,8 @@ class DirectedGraph(object):
         for node in self._graph:
             self._graph.nodes[node]["status"] = "unstarted"
 
+    def get_running_jobs(self):
+        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "running"]
 
     def start(self, node):
         assert self._graph.nodes[node]["status"] == "ready"
@@ -657,9 +671,12 @@ class Workflow(XMLYMLInstantiationBase):
         self._abs_resolve_storage()
 
     def jobloop(self):
+        running_jobs = self.graph.get_running_jobs()
+        for running_job in running_jobs:
+            print(running_job)
+
         ready_jobs = self.graph.get_next_ready()
         self.graph.traverse()
-        print(ready_jobs)
         for rdjob in ready_jobs:
             tostart = self.elements.get_element_by_uid(rdjob)
             tostart : WorkflowExecModule
@@ -721,13 +738,7 @@ class Workflow(XMLYMLInstantiationBase):
 
 
     """
-    Liste für morgen
-    - Im Client Storage ID setzen und beim Workflow mit angeben.
-    - Staging oben weiterschreiben
     Sobald gestaged: 
-        write jobfile in WorkflowExecModule rüberziehen
-        submitten und ID abgreifen
-        Digraph start muss id speichern
         Check auf id mit clusterjob
         Delay Loop, auch mit expo backoff
         Sobald fertig, stageout genau wie stagein machen
