@@ -1,14 +1,19 @@
+import logging
+import shutil
 import sys
 import uuid
 from abc import abstractmethod, abstractclassmethod
 from enum import Flag, auto
 from io import StringIO
 
+from os import path
 from lxml import etree
 
 import numpy as np
 import networkx as nx
 
+class ParserError(Exception):
+    pass
 
 class Status(Flag):
     UNINITIALIZED = auto()
@@ -188,8 +193,12 @@ def workflow_element_factory(name):
     :param name:
     :return:
     """
-    if name == "WorkflowElement":
+    if name == "WorkflowExecModule":
         return WorkflowExecModule
+    elif name == "StringList":
+        return StringList
+    elif name == "WorkflowElementList":
+        return WorkflowElementList
     elif name == "int":
         return int
     elif name == "str":
@@ -200,9 +209,9 @@ def workflow_element_factory(name):
         #print(globals())
         if name.startswith("np."):
             name = name[3:]
-        classobj = getattr(globals()["np"],name)
-        assert np.issubdtype(classobj, np.number), "Only allowed to import actual numbertypes"
-        return classobj
+            classobj = getattr(globals()["np"],name)
+            assert np.issubdtype(classobj, np.number), "Only allowed to import actual numbertypes"
+            return classobj
 
 
 class UnknownWFEError(Exception):
@@ -221,10 +230,25 @@ class WorkflowElementList(object):
     def _clear(self):
         self._storage = []
         self._typelist = []
+        self._uid_to_seqnum = {}
 
     def add_to_list(self, mytype, actual_object):
         self._typelist.append(mytype)
         self._storage.append(actual_object)
+
+    def __getitem__(self, item):
+        assert isinstance(item,int)
+        return self._storage[item]
+
+    def __len__(self):
+        return len(self._storage)
+
+    def __iter__(self):
+        for item in self._storage:
+            yield item
+
+    def get_element_by_uid(self, uid):
+        return self._storage[self._uid_to_seqnum[uid]]
 
     def to_xml(self, parent_element):
         """
@@ -254,8 +278,10 @@ class WorkflowElementList(object):
         :return:
         """
         self._clear()
+        seqnum = 0
         for child in in_xml:
             field = child.attrib["type"]
+
             try:
                 fieldobject = workflow_element_factory(field)
                 if not _is_basetype(fieldobject):
@@ -265,6 +291,9 @@ class WorkflowElementList(object):
                     myfo = fieldobject(child.text)
                 self._storage.append(myfo)
                 self._typelist.append(field)
+                if "uid" in child.attrib:
+                    uid = child.attrib["uid"]
+                    self._uid_to_seqnum[uid] = len(self._storage) - 1
             except UnknownWFEError as e:
                 pass
 
@@ -481,6 +510,7 @@ class DirectedGraph(object):
         for node in self._graph:
             self._graph.nodes[node]["status"] = "unstarted"
 
+
     def start(self, node):
         assert self._graph.nodes[node]["status"] == "ready"
         self._graph.nodes[node]["status"] = "running"
@@ -501,14 +531,24 @@ class DirectedGraph(object):
         self._graph = nx.from_dict_of_dicts(input_dict["graphml"])
 
     def from_xml(self, input_xml):
-        sio = StringIO()
-        etreestring = etree.tostring(input_xml,encoding="utf8").decode()
-        sio = StringIO(etreestring)
-        nx.read_graphml(sio)
+        found = False
+        #print(etree.tostring(input_xml,encoding="utf8"))
+        for child in input_xml:
+            if child.tag == "{http://graphml.graphdrawing.org/xmlns}graphml":
+                found = True
+                etreestring = etree.tostring(child, encoding="utf8").decode()
+                sio = StringIO(etreestring)
+                self._graph = nx.read_graphml(sio)
+                break
+        if not found:
+            raise ParserError("No graph element found.")
 
     def get_next_ready(self):
         nodes = self._graph.nodes
+
         for a in nx.dfs_tree(self._graph):
+            if a == "0":
+                nodes[a]["status"] = "success"
             if nodes[a]["status"] == "unstarted":
                 candidate = True
                 for pred in self._graph.predecessors(a):
@@ -526,71 +566,89 @@ class DirectedGraph(object):
         for a in nx.dfs_tree(self._graph):
             print(a)
 
+class WorkflowAbort(Exception):
+    pass
+
 class Workflow(XMLYMLInstantiationBase):
     _fields = [
-        ("elements", WorkflowElementList, None, "List of Linear Workflow Elements (this can also be fors or splits", "m"),
+        ("elements", WorkflowElementList, None, "List of Linear Workflow Elements (this can also be fors or splits)", "m"),
         ("graph", DirectedGraph, None, "Directed Graph of all Elements. All elements in elements have to be referenced here."
                                        "There must not be cycles (we should check this). In case an element is a ForEach or "
-                                       "another workflow this workflow does not need to be encoded here." , "m")
+                                       "another workflow this workflow does not need to be encoded here." , "m"),
+        ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a")
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._name = "Workflow"
+        self._logger = logging.getLogger("Workflow")
 
     def fields(cls):
         return cls._fields
 
+    def jobloop(self):
+        ready_jobs = self.graph.get_next_ready()
+        self.graph.traverse()
+        print(ready_jobs)
+        for rdjob in ready_jobs:
+            tostart = self.elements.get_element_by_uid(rdjob)
+            tostart : WorkflowExecModule
+            if not self._prepare_job(tostart):
+                raise WorkflowAbort("Could not prepare job.")
+
+
+    def _stage_file(self,fromfile,tofile):
+        # At the moment this should only be a cp, but later it can also be a scp
+        shutil.copyfile(fromfile, tofile)
+
+    def _prepare_job(self, wfem : WorkflowExecModule):
+
+        ### Stage: We have to check if all inputs can be staged in
+        print("I have to start", wfem.name)
+        for myinput in wfem.inputs:
+            tofile = myinput[0]
+            source = myinput[1]
+            if not path.isfile(source):
+                self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
+                return False
+
+
+
+            return True
+
+    """
+    Liste für morgen
+    - Im Client Storage ID setzen und beim Workflow mit angeben.
+    - Staging oben weiterschreiben
+    Sobald gestaged: 
+        write jobfile in WorkflowExecModule rüberziehen
+        submitten und ID abgreifen
+        Digraph start muss id speichern
+        Check auf id mit clusterjob
+        Delay Loop, auch mit expo backoff
+        Sobald fertig, stageout genau wie stagein machen
+        digraph finish aufrufen
+        get_next_ready und von vorn
+        
+    WF API
+        zeromq api schreiben
+        ssh transport auf zeromq port anheben 
+            irgendwie drauf achten, dass nur user mit zmq kommunizieren können
+        Server vom client aus starten
+    """
+
+    def _start_job(self):
+        pass
+
+
     @property
-    def elements(self):
+    def elements(self) -> WorkflowElementList:
         return self._field_values["elements"]
 
     @property
-    def graph(self):
+    def graph(self) -> DirectedGraph:
         return self._field_values["graph"]
 
-"""
-class WorkflowElement(WorkflowElementBase):
-    def __init__(self, jobid, infodict):
-        super().__init__()
-        self._state = Status.UNINITIALIZED
-        self._infodict = infodict
-        self._imports = []
-        self._exports = []
-
-"""
-
-
-"""
-    Once a job comes back, a specification is returned containing the outputfiles and whether the job was a success.
-    
-    Jobs, which depend on this job (we need a cached list here), are updated for their dependencies. If all dependencies are met,
-    the render function is called once and the
-     the jobs
-    are returned in the iterate next ready step.
-    
-    If 
-    
-"""
-
-
-class WorkflowModel(object):
-    def __init__(self):
-        self._element_dict = {} # uid zu element object 5421
-        # -> Element ( Jobid, State, Inputs, Outputs, ... Templatedirectory?, RAM, Cores, Name?,  )
-
-    def iterate_next_ready_jobs(self):
-        pass
-        my_next_ready_jobs = [] # fill this list
-        for job in my_next_ready_jobs:
-            yield job
-        #yield next_element
-
-    #def modify_job(self, status .... stellen):
-    #    pass
-
-    def save(self,filename):
-        pass
-
-    def restore(self,filename):
-        pass
+    @property
+    def storage(self) -> str:
+        return self._field_values["storage"]

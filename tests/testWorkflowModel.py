@@ -110,6 +110,14 @@ class TestWorkflowModel(unittest.TestCase):
         outnodes = ooommmm.get_next_ready()
         assert len(outnodes) == 0
 
+    def testWorkflow(self):
+        myworkflow = join(self._input_dir, "rendered_workflow.xml")
+        with open(myworkflow,'rt') as infile:
+            myxml = etree.parse(infile).getroot()
+        a = Workflow()
+        a.from_xml(myxml)
+        a.jobloop()
+
 
     def testWorkflowElement(self):
         a = WorkflowExecModule()
@@ -187,7 +195,7 @@ class TestWorkflowModel(unittest.TestCase):
         print(etree.tostring(test_xml, pretty_print=True).decode())
         for hild in test_xml:
             assert hild.tag == "{http://graphml.graphdrawing.org/xmlns}graphml"
-            ooommmm.from_xml(hild)
+        ooommmm.from_xml(test_xml)
         outtest = {}
         ooommmm.to_dict(outtest)
         ooommmm.from_dict(outtest)
