@@ -261,6 +261,9 @@ class ClusterManager(object):
     def get_calculation_basepath(self):
         return self._calculation_basepath
 
+    def get_queueing_system(self):
+        return self._queueing_system
+
     def __del__(self):
         """
         We make sure that the connections are closed on destruction.

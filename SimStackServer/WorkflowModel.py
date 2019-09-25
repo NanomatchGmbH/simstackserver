@@ -601,7 +601,8 @@ class Workflow(XMLYMLInstantiationBase):
                                        "There must not be cycles (we should check this). In case an element is a ForEach or "
                                        "another workflow this workflow does not need to be encoded here." , "m"),
         ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a"),
-        ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a")
+        ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
+        ("queueing_system",str, "unset", "Name of the queueing system. Might move into WFEM in case of split jobs.", "a")
     ]
 
     def __init__(self, *args, **kwargs):
@@ -730,3 +731,10 @@ class Workflow(XMLYMLInstantiationBase):
     @property
     def name(self) -> str:
         return self._field_values["name"]
+
+    @property
+    def queueing_system(self) -> str:
+        return self._field_values["queueing_system"]
+
+    def set_queueing_system(self, queueing_system) -> str:
+        self._field_values["queueing_system"] = queueing_system
