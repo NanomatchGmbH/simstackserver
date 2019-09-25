@@ -466,22 +466,20 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
             del kwargs["queue"]
 
 
-        jobscript = clusterjob.Job(self.exec_command, backend=queueing_system, jobname = self.given_name,
+        jobscript = clusterjob.Job("cd ${CLUSTERJOB_WORKDIR}\n"+self.exec_command, backend=queueing_system, jobname = self.given_name,
                                          time = self.resources.walltime, nodes = self.resources.nodes,
                                          threads = self.resources.cpus_per_node, mem = self.resources.memory,
                                          stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                          workdir = self.runtime_directory, **kwargs
         )
 
-        with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
-            outfile.write("cd ${CLUSTERJOB_WORKDIR}")
-            outfile.write(str(jobscript)+ '\n')
+        #with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
+        #    outfile.write(str(jobscript)+ '\n')
 
         asyncresult = jobscript.submit()
         print(asyncresult.status)
         #print(jobid)
-        #print(dir(jobid))
-        self.set_jobid(asyncresult.jobid)
+        self.set_jobid(asyncresult.job_id)
         return jobscript
 
     @property
