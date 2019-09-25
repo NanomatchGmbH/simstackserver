@@ -1,3 +1,4 @@
+import logging
 import unittest
 import numpy as np
 from os import path
@@ -15,9 +16,11 @@ from SimStackServer.WorkflowModel import Resources, WorkflowExecModule, Workflow
 
 class TestWorkflowModel(unittest.TestCase):
     def setUp(self):
+        logging.basicConfig(level=logging.DEBUG)
         self._input_dir = "%s/input_dirs/WorkflowModel" % path.dirname(path.realpath(__file__))
         self._exec_dir = "%s/exec_dirs/WorkflowModel" % path.dirname(path.realpath(__file__))
         mkdir_p(self._exec_dir)
+
 
     def tearDown(self):
         rmtree(self._exec_dir)

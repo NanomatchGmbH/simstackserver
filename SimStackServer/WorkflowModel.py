@@ -1,3 +1,4 @@
+import datetime
 import logging
 import shutil
 import sys
@@ -6,11 +7,16 @@ from abc import abstractmethod, abstractclassmethod
 from enum import Flag, auto
 from io import StringIO
 
+from pathlib import Path
+
 from os import path
 from lxml import etree
 
 import numpy as np
 import networkx as nx
+
+from SimStackServer.Util.FileUtilities import mkdir_p
+
 
 class ParserError(Exception):
     pass
@@ -435,7 +441,9 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
-        ("resources", Resources, None, "Computational resources", "m")
+        ("resources", Resources, None, "Computational resources", "m"),
+        ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
+        ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
     ]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -450,6 +458,12 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     @property
     def uid(self):
         return self._field_values["uid"]
+
+    def set_runtime_directory(self, runtime_directory):
+        self._field_values["runtime_directory"] = runtime_directory
+
+    def set_jobid(self, jobid):
+        self._field_values["jobid"] = jobid
 
     def set_given_name(self,given_name):
         self._field_values["given_name"] = given_name
@@ -479,8 +493,12 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         return self._field_values["exec_command"]
 
     @property
-    def dependencies(self):
-        return self._field_values["dependencies"]
+    def jobid(self):
+        return self._field_values["jobid"]
+
+    @property
+    def runtime_directory(self):
+        return self._field_values["runtime_directory"]
 
 class DirectedGraph(object):
     def __init__(self, *args, **kwargs):
@@ -590,9 +608,23 @@ class Workflow(XMLYMLInstantiationBase):
         super().__init__(*args, **kwargs)
         self._name = "Workflow"
         self._logger = logging.getLogger("Workflow")
+        self._abs_resolve_storage()
+
+    def _abs_resolve_storage(self):
+        if not self.storage.startswith('/'):
+            home = str(Path.home())
+            self._field_values["storage"] = home + '/' + self._field_values["storage"]
 
     def fields(cls):
         return cls._fields
+
+    def from_xml(self, in_xml):
+        super().from_xml(in_xml)
+        self._abs_resolve_storage()
+
+    def from_dict(self, in_dict):
+        super().from_dict(in_dict)
+        self._abs_resolve_storage()
 
     def jobloop(self):
         ready_jobs = self.graph.get_next_ready()
@@ -603,26 +635,60 @@ class Workflow(XMLYMLInstantiationBase):
             tostart : WorkflowExecModule
             if not self._prepare_job(tostart):
                 raise WorkflowAbort("Could not prepare job.")
+            else:
+                self.graph.start(rdjob)
+                self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
 
 
     def _stage_file(self,fromfile,tofile):
         # At the moment this should only be a cp, but later it can also be a scp
         shutil.copyfile(fromfile, tofile)
 
-    def _prepare_job(self, wfem : WorkflowExecModule):
+    def _get_job_directory(self, wfem: WorkflowExecModule):
+        now = datetime.datetime.now()
+        nowstr = now.strftime("%Y-%m-%d-%H:%M:%S")
+        submitname = "%s-%s" %(nowstr, wfem.given_name)
+        return submitname
 
-        ### Stage: We have to check if all inputs can be staged in
-        print("I have to start", wfem.name)
+    def _prepare_job(self, wfem : WorkflowExecModule):
+        """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
-            tofile = myinput[0]
+            #tofile = myinput[0]
             source = myinput[1]
-            if not path.isfile(source):
+            absfile = self.storage + '/' + source
+
+            if not path.isfile(absfile):
                 self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
                 return False
 
+        jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
+
+        counter = 0
+        while path.isdir(jobdirectory):
+            jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem) + "%d"%counter
+            counter += 1
+            if counter == 20:
+                raise WorkflowAbort("Job directory could not be generated even after 20 attempts.")
+        mkdir_p(jobdirectory)
 
 
-            return True
+        """ Same loop again this time copying files """
+        for myinput in wfem.inputs:
+            tofile = jobdirectory + '/' + myinput[0]
+            source = myinput[1]
+            absfile = self.storage + '/' + source
+
+            if not path.isfile(absfile):
+                self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
+                return False
+            shutil.copyfile(absfile, tofile)
+
+        wfem.set_runtime_directory(jobdirectory)
+        return True
+
+
+
+
 
     """
     Liste für morgen

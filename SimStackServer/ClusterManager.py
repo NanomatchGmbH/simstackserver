@@ -70,10 +70,10 @@ class ClusterManager(object):
                                          stdout = jobname + ".stdout", stderr = jobname + ".stderr"
         )
         #print(jobscript.backends[self._queueing_system].keys())
-
-        M=1024*1024
-        with self._sftp_client.file(remote_file, 'w', bufsize = 16*M ) as outfile:
-            outfile.write(str(jobscript))
+        return jobscript
+        #M=1024*1024
+        #with self._sftp_client.file(remote_file, 'w', bufsize = 16*M ) as outfile:
+        #    outfile.write(str(jobscript))
 
     def _resolve_file_in_basepath(self,filename, basepath_override):
         if basepath_override is None:

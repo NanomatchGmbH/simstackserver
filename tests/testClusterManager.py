@@ -39,7 +39,7 @@ class TestClusterManager(unittest.TestCase):
 
         res = Resources()
 
-        cm.write_jobfile("test.jobscript","echo HELLO WORLD\n",res,"HELLO_WORLD")
+        #cm.write_jobfile("test.jobscript","echo HELLO WORLD\n",res,"HELLO_WORLD")
         assert cm.exists_as_directory("huubbertt") == False
         assert cm.exists_as_directory("/") == True
         self.assertRaises(SSHExpectedDirectoryError, cm.exists_as_directory,"/dev/urandom")
