@@ -590,7 +590,7 @@ class DirectedGraph(object):
         self._graph.nodes[node]["status"] = "success"
 
     def is_workflow_finished(self):
-        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "unstarted" or self._graph.nodes[node]["status"] == "ready"]
+        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] != "success" ]
         return len(outnodes) == 0
 
 
@@ -701,7 +701,8 @@ class Workflow(XMLYMLInstantiationBase):
                 tostart.run_jobfile(self.queueing_system)
                 self.graph.start(rdjob)
                 self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
-        self._logger.info("Workflow %s has been finished." %self.name)
+        if self.graph.is_workflow_finished():
+            self._logger.info("Workflow %s has been finished." %self.name)
 
     def _stage_file(self,fromfile,tofile):
         # At the moment this should only be a cp, but later it can also be a scp
