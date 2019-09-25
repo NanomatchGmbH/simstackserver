@@ -61,7 +61,7 @@ class WorkflowManager(object):
     def check_status_submit(self):
         for wfmodel in self._inprogress_models:
             wfmodel: Workflow
-            wfmodel.
+
 
 
 

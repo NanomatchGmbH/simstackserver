@@ -575,7 +575,8 @@ class Workflow(XMLYMLInstantiationBase):
         ("graph", DirectedGraph, None, "Directed Graph of all Elements. All elements in elements have to be referenced here."
                                        "There must not be cycles (we should check this). In case an element is a ForEach or "
                                        "another workflow this workflow does not need to be encoded here." , "m"),
-        ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a")
+        ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a"),
+        ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a")
     ]
 
     def __init__(self, *args, **kwargs):
@@ -652,3 +653,7 @@ class Workflow(XMLYMLInstantiationBase):
     @property
     def storage(self) -> str:
         return self._field_values["storage"]
+
+    @property
+    def name(self) -> str:
+        return self._field_values["name"]
