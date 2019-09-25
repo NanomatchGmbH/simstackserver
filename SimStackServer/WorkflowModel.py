@@ -455,6 +455,26 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def fields(cls):
         return cls._fields
 
+    def write_jobfile(self, queueing_system):
+        import clusterjob
+        #Sanity checks
+        # check if runtime directory is not unset
+
+        jobscript = clusterjob.Job(self.exec_command, backend=queueing_system, jobname = self.given_name,
+                                         queue = self.resources.queue, time = self.resources.walltime, nodes = self.resources.nodes,
+                                         threads = self.resources.cpus_per_node, mem = self.resources.memory,
+                                         stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
+                                         workdir = self.runtime_directory
+        )
+
+        with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
+            outfile.write(str(jobscript)+ '\n')
+
+        jobid = jobscript.submit()
+        print(jobid)
+        self.set_jobid(jobid)
+        return jobscript
+
     @property
     def uid(self):
         return self._field_values["uid"]
@@ -637,9 +657,9 @@ class Workflow(XMLYMLInstantiationBase):
             if not self._prepare_job(tostart):
                 raise WorkflowAbort("Could not prepare job.")
             else:
+                tostart.write_jobfile(self.queueing_system)
                 self.graph.start(rdjob)
                 self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
-
 
     def _stage_file(self,fromfile,tofile):
         # At the moment this should only be a cp, but later it can also be a scp

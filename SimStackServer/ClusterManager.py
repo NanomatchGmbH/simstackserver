@@ -62,19 +62,6 @@ class ClusterManager(object):
         if self._sftp_client != None:
             self._sftp_client.close()
 
-    def write_jobfile(self, remote_file, exec_script, resources : Resources, jobname):
-        import clusterjob
-        jobscript = clusterjob.Job(exec_script, backend=self._queueing_system, jobname = jobname,
-                                         queue = resources.queue, time = resources.walltime, nodes = resources.nodes,
-                                         threads = resources.cpus_per_node, mem = resources.memory,
-                                         stdout = jobname + ".stdout", stderr = jobname + ".stderr"
-        )
-        #print(jobscript.backends[self._queueing_system].keys())
-        return jobscript
-        #M=1024*1024
-        #with self._sftp_client.file(remote_file, 'w', bufsize = 16*M ) as outfile:
-        #    outfile.write(str(jobscript))
-
     def _resolve_file_in_basepath(self,filename, basepath_override):
         if basepath_override is None:
             basepath_override = self._calculation_basepath

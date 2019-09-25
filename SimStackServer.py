@@ -14,7 +14,11 @@ if __name__ == '__main__':
     try:
         # We try to silently start a new server
         ss = SimStackServer(my_runtime)
-        ss.main_loop()
+        if len(sys.argv) >= 2:
+            wf_filename = sys.argv[1]
+            ss.main_loop(wf_filename)
+        else:
+            ss.main_loop()
     except AlreadyRunningException as e:
         # In case we are already running we silently discard and exit.
         pass

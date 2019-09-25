@@ -63,11 +63,6 @@ class WorkflowManager(object):
             wfmodel: Workflow
 
 
-
-
-
-
-
 class SimStackServer(object):
     def __init__(self, my_executable):
         self._config : Config = None
@@ -99,11 +94,22 @@ class SimStackServer(object):
             self._config.unregister_crontab()
         self._config.teardown_pid()
 
-    def main_loop(self):
+    @staticmethod
+    def _workflow_object_from_file(filename):
+        with open(filename,'rt') as infile:
+            myxml = etree.parse(infile).getroot()
+        a = Workflow()
+        a.from_xml(myxml)
+        return a
+
+    def main_loop(self, workflow_file = None):
         work_done = False
         # Do stuff
+        if workflow_file is not None:
+            workflow = self._workflow_object_from_file(workflow_file)
+            workflow.jobloop()
 
-
+        work_done = True
         #
         self._shutdown(remove_crontab=work_done)
 
