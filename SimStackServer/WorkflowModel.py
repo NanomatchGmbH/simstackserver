@@ -465,7 +465,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         if queue == "default" and queueing_system == "pbs":
             del kwargs["queue"]
 
-        toexec = """cd $CLUSTERJOB_WORKDIR
+        toexec = """cd ${CLUSTERJOB_WORKDIR}
 %s
 """%self.exec_command
         jobscript = clusterjob.Job(toexec, backend=queueing_system, jobname = self.given_name,
