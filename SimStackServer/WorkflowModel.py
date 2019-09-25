@@ -459,9 +459,11 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         import clusterjob
         #Sanity checks
         # check if runtime directory is not unset
-
+        queue = self.resources.queue
+        if queue == "default" and queueing_system == "pbs":
+            queue = None
         jobscript = clusterjob.Job(self.exec_command, backend=queueing_system, jobname = self.given_name,
-                                         queue = self.resources.queue, time = self.resources.walltime, nodes = self.resources.nodes,
+                                         queue = queue, time = self.resources.walltime, nodes = self.resources.nodes,
                                          threads = self.resources.cpus_per_node, mem = self.resources.memory,
                                          stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                          workdir = self.runtime_directory
@@ -472,6 +474,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
 
         jobid = jobscript.submit()
         print(jobid)
+        print(dir(jobid))
         self.set_jobid(jobid)
         return jobscript
 
