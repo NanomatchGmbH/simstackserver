@@ -675,7 +675,12 @@ class Workflow(XMLYMLInstantiationBase):
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
         for running_job in running_jobs:
-            print(running_job)
+
+            running = self.elements.get_element_by_uid(running_job)
+            running : WorkflowExecModule
+            if running.completed_or_aborted():
+                self._postjob_care(running)
+
 
         ready_jobs = self.graph.get_next_ready()
         self.graph.traverse()
@@ -698,6 +703,22 @@ class Workflow(XMLYMLInstantiationBase):
         nowstr = now.strftime("%Y-%m-%d-%H:%M:%S")
         submitname = "%s-%s" %(nowstr, wfem.given_name)
         return submitname
+
+    def _postjob_care(self, wfem : WorkflowExecModule):
+        jobdirectory = wfem.runtime_directory
+        """ Sanity check to check if all files are there """
+        for myoutput in wfem.outputs:
+            # tofile = myinput[0]
+            output = myoutput[1]
+            absfile = jobdirectory + '/' + output
+
+            if not path.isfile(absfile):
+                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                self._logger.error(mystdout)
+                raise WorkflowAbort(mystdout)
+        print("Success")
+
+
 
     def _prepare_job(self, wfem : WorkflowExecModule):
         """ Sanity check to check if all files are there """
@@ -734,10 +755,6 @@ class Workflow(XMLYMLInstantiationBase):
 
         wfem.set_runtime_directory(jobdirectory)
         return True
-
-
-
-
 
     """
     Sobald gestaged: 
