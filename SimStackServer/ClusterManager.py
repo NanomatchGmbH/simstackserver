@@ -258,6 +258,8 @@ class ClusterManager(object):
 
         return directory
 
+    def get_calculation_basepath(self):
+        return self._calculation_basepath
 
     def __del__(self):
         """
