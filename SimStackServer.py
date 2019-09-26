@@ -4,6 +4,19 @@ import sys, os
 
 from SimStackServer.SimStackServer import SimStackServer, AlreadyRunningException
 
+from os.path import join
+
+if __name__ == '__main__':
+    base_path = os.path.dirname(os.path.realpath(__file__))
+    dir_path = path.join(base_path,"external","clusterjob")
+    if not dir_path in sys.path:
+        sys.path.append(dir_path)
+
+    dir_path = path.join(base_path,"external","python-crontab")
+    if not dir_path in sys.path:
+        sys.path.append(dir_path)
+
+import ctypes
 
 def get_my_runtime():
     me = os.path.abspath(os.path.realpath(__file__))
