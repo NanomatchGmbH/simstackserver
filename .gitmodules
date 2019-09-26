@@ -1,0 +1,3 @@
+[submodule "external/clusterjob"]
+	path = external/clusterjob
+	url = git@github.com:timostrunk/clusterjob.git
