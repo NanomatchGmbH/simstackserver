@@ -18,7 +18,8 @@ if __name__ == '__main__':
 from SimStackServer.SimStackServer import SimStackServer, AlreadyRunningException
 
 def get_my_runtime():
-    me = os.path.abspath(os.path.realpath(__file__))
+    #me = os.path.abspath(os.path.realpath(__file__))
+    me = sys.executable + " " + sys.argv[0]
     return me
 
 if __name__ == '__main__':

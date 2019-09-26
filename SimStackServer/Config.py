@@ -124,9 +124,7 @@ class Config(object):
         :return:
         """
         ct = CronTab(user=True)
-        already_present = False
-        for job in ct.find_comment(self._servertag_full):
-            already_present = True
+        for _ in ct.find_comment(self._servertag_full):
             return
 
         job = ct.new(command=name_of_process, comment = self._servertag_full)
