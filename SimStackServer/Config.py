@@ -42,8 +42,12 @@ class Config(object):
         mkdir_p(cls._dirs.user_log_dir)
         mypath = path.join(cls._dirs.user_log_dir,"simstack_server.log")
         logging.basicConfig(format='%(asctime)s %(message)s',
+                            level=logging.INFO)
+        """
+        logging.basicConfig(format='%(asctime)s %(message)s',
                             filename=mypath,
                             level=logging.DEBUG)
+        """
 
     @classmethod
     def register_pid(cls):
