@@ -1,3 +1,6 @@
 [submodule "external/clusterjob"]
 	path = external/clusterjob
-	url = git@github.com:timostrunk/clusterjob.git
+	url = https://github.com/timostrunk/clusterjob.git
+[submodule "external/python-crontab"]
+	path = external/python-crontab
+	url = https://gitlab.com/doctormo/python-crontab.git
