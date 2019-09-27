@@ -4,3 +4,6 @@
 [submodule "external/python-crontab"]
 	path = external/python-crontab
 	url = https://gitlab.com/doctormo/python-crontab.git
+[submodule "external/python-daemon"]
+	path = external/python-daemon
+	url = https://pagure.io/python-daemon.git

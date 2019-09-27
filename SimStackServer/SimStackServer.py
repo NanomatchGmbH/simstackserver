@@ -67,24 +67,31 @@ class WorkflowManager(object):
 class SimStackServer(object):
     def __init__(self, my_executable):
         self._config : Config = None
-        if self._register(my_executable):
+        if not self._register(my_executable):
             raise AlreadyRunningException("Already running, please discard silently.")
         self._logger = logging.getLogger("SimStackServer")
+
+    @staticmethod
+    def register_pidfile():
+        return Config.register_pid()
+
+    @staticmethod
+    def get_appdirs():
+        return Config._dirs
 
     def _register(self, my_executable):
         self._config = Config()
         if self._config.is_running():
             return False
 
-        self._config.register_pid()
-        # Workblock start
         try:
             me = my_executable
             # We register with crontab:
             self._config.register_crontab(me)
 
+            return True
+
         except Exception as e:
-            self._config.teardown_pid()
             raise e
 
     def _shutdown(self, remove_crontab = True):
@@ -93,7 +100,6 @@ class SimStackServer(object):
             raise SystemExit("Could not setup config. Exiting.")
         if remove_crontab:
             self._config.unregister_crontab()
-        self._config.teardown_pid()
 
     @staticmethod
     def _workflow_object_from_file(filename):
@@ -114,12 +120,6 @@ class SimStackServer(object):
                 time.sleep(3)
 
         work_done = True
-        #
         self._shutdown(remove_crontab=work_done)
-
-    def __del__(self):
-        # In any case on destruct we try to remove the PID if by some means we didn't using regular shutdown.
-        if not self._config is None:
-            self._config.teardown_pid()
 
 

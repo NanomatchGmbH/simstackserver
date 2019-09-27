@@ -161,6 +161,17 @@ class ClusterManager(object):
         getpath = basepath_override + '/' + from_file
         self._sftp_client.get(getpath, to_file, optional_callback)
 
+    def exec_background_command(self, command):
+        """
+            Executes a command.
+
+            :param command (str): Command to execute remotely.
+            :return: Nothing (currently)
+        """
+        stdin, stdout, stderr = self._ssh_client.exec_command(command)
+        for line in stdout:
+            print(line)
+
     def exec_command(self, command):
         """
         Executes a command.

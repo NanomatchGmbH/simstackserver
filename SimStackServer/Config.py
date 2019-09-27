@@ -8,6 +8,7 @@ import psutil
 from crontab import CronTab
 import logging
 
+
 from SimStackServer.Util.FileUtilities import mkdir_p
 
 
@@ -56,10 +57,8 @@ class Config(object):
         :return:
         """
         pidfilename = cls.get_pid_file()
-        if os.path.exists(pidfilename):
-            raise FileExistsError("File %s already exists."%pidfilename)
-        with open(pidfilename,'wt') as infile:
-            infile.write("%d"%(psutil.Process().pid))
+        from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
+        return NoEnterPIDLockFile(pidfilename, timeout = 0.0)
 
     @classmethod
     def get_pid_file(cls):
@@ -68,6 +67,7 @@ class Config(object):
         :return (str): Path to pidfile
         """
         pidfilename = cls._get_config_file("SimStackServer.pid")
+        print(pidfilename)
         return pidfilename
 
 
@@ -90,27 +90,29 @@ class Config(object):
         running on this pid, which is not python.
         :return (bool): True, if already running
         """
-        pidfilename = cls.get_pid_file()
-        exists = path.exists(pidfilename)
-        if not exists:
+        pidfile = cls.register_pid()
+
+        print("pidfile is locked",pidfile.is_locked())
+        if not pidfile.is_locked():
+            print("Returning here")
             return False
-        with open(pidfilename,'rt') as infile:
-            pid = int(infile.read())
+        pid = pidfile.read_pid()
 
         if not psutil.pid_exists(pid):
+            print(psutil.pid_exists(pid))
             try:
-                print("File %s already existed. Removing."%pidfilename)
-                os.remove(pidfilename)
+                print("Breaking lock 1 %d"%pid)
+                pidfile.break_lock()
             except FileNotFoundError as e:
                 #This exception might occur if a server was just in the process of shutting down.
                 pass
             return False
         else:
             proc = psutil.Process(pid)
-            if not "python" in proc.name():
+            if not "python" in proc.name() and not "SimStackServer.py" in proc.name():
                 try:
-                    print("File %s already existed. Removing." % pidfilename)
-                    os.remove(pidfilename)
+                    print("Process was locked, but process name %s was different."%proc.name())
+                    pidfile.break_lock()
                 except FileNotFoundError as e:
                     # This exception might occur if a server was just in the process of shutting down.
                     pass
