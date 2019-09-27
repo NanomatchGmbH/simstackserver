@@ -67,7 +67,6 @@ class Config(object):
         :return (str): Path to pidfile
         """
         pidfilename = cls._get_config_file("SimStackServer.pid")
-        print(pidfilename)
         return pidfilename
 
 
@@ -92,16 +91,12 @@ class Config(object):
         """
         pidfile = cls.register_pid()
 
-        print("pidfile is locked",pidfile.is_locked())
         if not pidfile.is_locked():
-            print("Returning here")
             return False
         pid = pidfile.read_pid()
 
         if not psutil.pid_exists(pid):
-            print(psutil.pid_exists(pid))
             try:
-                print("Breaking lock 1 %d"%pid)
                 pidfile.break_lock()
             except FileNotFoundError as e:
                 #This exception might occur if a server was just in the process of shutting down.

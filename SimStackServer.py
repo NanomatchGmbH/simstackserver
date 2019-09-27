@@ -84,6 +84,7 @@ if __name__ == '__main__':
             outfile.write(towrite)
             print(towrite[:-1])
 
+        sys.stdout.flush()
         workdir = appdirs.user_cache_dir
         mystd = join(appdirs.user_log_dir, "sss.stdout")
         mystderr = join(appdirs.user_log_dir, "sss.stderr")
@@ -104,6 +105,10 @@ if __name__ == '__main__':
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()
+
+            a = socket.recv()
+            print("Got something %s"%a)
+            socket.send(b"World")
 
             time.sleep(5)
 
