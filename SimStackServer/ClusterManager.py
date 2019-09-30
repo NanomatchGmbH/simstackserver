@@ -1,10 +1,11 @@
 import stat
-
+import time
 
 import paramiko
 from os import path
 import posixpath
 
+import zmq
 from paramiko import SFTPAttributes
 
 from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories
@@ -42,6 +43,9 @@ class ClusterManager(object):
         :return: Nothing
         """
         print("%d %% done"%(100.0*bytes_written/total_bytes))
+
+    def get_ssh_url(self):
+        return "%s@%s:%d"%(self._user,self._url,self._port)
 
     def connect(self):
         """
@@ -180,8 +184,33 @@ class ClusterManager(object):
         :return: Nothing (currently)
         """
         stdin, stdout, stderr = self._ssh_client.exec_command(command)
+        password = None
+        port = None
         for line in stdout:
-            print(line)
+            firstline = line[:-1]
+            myline = firstline.split()
+            if not len(myline) == 4:
+                raise ConnectionError("Expected port and secret key but myline was: <%s>"%firstline )
+            password = myline[3]
+            port = int(myline[2])
+            break
+        if password is None:
+            raise ConnectionError("Did not receive correct response to connection.")
+        print("Connecting to ZMQ serve at %d with password %s"%(port, password))
+        context = zmq.Context()
+
+        socket = context.socket(zmq.REQ)
+
+        socket.plain_username = b"simstack_client"
+        socket.plain_password = password.encode("utf8")
+
+        from zmq import ssh
+        ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url())
+        print("SENDING")
+        socket.send(b"Hello")
+        print("After send")
+        c = socket.recv()
+        print("this %s"%c)
 
     def is_connected(self):
         """
