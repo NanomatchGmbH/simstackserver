@@ -4,6 +4,7 @@ import sys, os
 import time
 import lockfile
 import zmq
+import socket
 
 
 from os.path import join
@@ -42,6 +43,14 @@ def setup_pid():
     from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
     return NoEnterPIDLockFile(Config._get_config_file("SimStackServer_setup.pid"), timeout = 0.0)
 
+def get_open_port():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("",0))
+    s.listen(1)
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
 if __name__ == '__main__':
     # We register another pid just for setup, because it takes three seconds from here to the Tag "PIDFILE TAKEOVER"
     setup_pidfile = setup_pid()
@@ -60,23 +69,16 @@ if __name__ == '__main__':
         except lockfile.AlreadyLocked as e:
             raise AlreadyRunningException("Second stage locking did not work.") from e
     except AlreadyRunningException as e:
-        #print("Exiting, because lock exists.")
-        #print("PID was",SimStackServer.register_pidfile().read_pid())
+        # print("Exiting, because lock exists.")
+        # print("PID was",SimStackServer.register_pidfile().read_pid())
         # In case we are already running we silently discard and exit.
         setup_pidfile.release()
         sys.exit(0)
     try:
         # We should be locked and running here:
         # Start a zero mq context
-        context = zmq.Context()
-        auth = ThreadAuthenticator(context)
-        auth.start()
-        auth.allow('127.0.0.1')
         mysecret = random_pass()
-        auth.configure_plain(domain = '*', passwords = {"simstack_client":mysecret})
-        socket = context.socket(zmq.REP)
-        socket.plain_server = True
-        myport = socket.bind_to_random_port('tcp://127.0.0.1', max_tries=400)
+        myport = get_open_port()
 
         appdirs = ss.get_appdirs()
         with open(join(appdirs.user_config_dir,"portconfig.txt"),'wt') as outfile:
@@ -84,7 +86,6 @@ if __name__ == '__main__':
             outfile.write(towrite)
             print(towrite[:-1])
 
-        sys.stdout.flush()
         workdir = appdirs.user_cache_dir
         mystd = join(appdirs.user_log_dir, "sss.stdout")
         mystderr = join(appdirs.user_log_dir, "sss.stderr")
@@ -98,17 +99,26 @@ if __name__ == '__main__':
         with daemon.DaemonContext(
             stdout = mystdfileobj,
             stderr = mystderrfileobj,
+            #files_preserve = [socket_fd],
             pidfile = mypidfile
         ):
             mypidfile.update_pid_to_current_process() # "PIDFILE TAKEOVER
+            context = zmq.Context()
+            auth = ThreadAuthenticator(context)
+            auth.start()
+            auth.allow('127.0.0.1')
+            auth.configure_plain(domain = '*', passwords = {"simstack_client":mysecret})
+            sock = context.socket(zmq.REP)
+            sock.plain_server = True
+            myport = sock.bind('tcp://127.0.0.1:%s'%myport)
 
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()
 
-            a = socket.recv()
+            a = sock.recv()
             print("Got something %s"%a)
-            socket.send(b"World")
+            sock.send(b"World")
 
             time.sleep(5)
 
@@ -117,6 +127,8 @@ if __name__ == '__main__':
                 ss.main_loop(wf_filename)
             else:
                 ss.main_loop()
+            sock.close()
+            context.term()
     except lockfile.AlreadyLocked:
         # This here happens, if in between the opening of the stdout and stderr another task took over and locked the file
         # It's rare, but I was able to reproduce it.
