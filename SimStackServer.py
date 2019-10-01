@@ -85,6 +85,7 @@ if __name__ == '__main__':
             towrite = "Port, Secret %d %s\n"%(myport,mysecret)
             outfile.write(towrite)
             print(towrite[:-1])
+        sys.stdout.flush()
 
         workdir = appdirs.user_cache_dir
         mystd = join(appdirs.user_log_dir, "sss.stdout")
