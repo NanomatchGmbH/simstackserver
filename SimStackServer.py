@@ -3,8 +3,8 @@
 import sys, os
 import time
 import lockfile
-import zmq
 import socket
+import logging
 
 
 from os.path import join
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     except lockfile.AlreadyLocked as e:
         flush_port_and_password_to_stdout(appdirs, True)
         sys.exit(0)
-
+    logfilehandler = Config._setup_root_logger()
     my_runtime = get_my_runtime()
     try:
         # We try to silently start a new server
@@ -137,14 +137,19 @@ if __name__ == '__main__':
         with daemon.DaemonContext(
             stdout = mystdfileobj,
             stderr = mystderrfileobj,
-            #files_preserve = [socket_fd],
+            files_preserve = [logfilehandler.stream],
             pidfile = mypidfile
         ):
+            logger = logging.getLogger("Startup")
+            logger.info("SimStackServer Daemon Startup")
             mypidfile.update_pid_to_current_process() # "PIDFILE TAKEOVER
+            logger.debug("PID written")
             ss.setup_zmq_port(myport, mysecret)
+            logger.debug("ZMQ port setup finished")
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()
+            logger.debug("Releasing setup PID")
 
             if len(sys.argv) >= 2:
                 wf_filename = sys.argv[1]

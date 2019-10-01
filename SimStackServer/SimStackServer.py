@@ -70,17 +70,22 @@ class WorkflowManager(object):
 
 class SimStackServer(object):
     def __init__(self, my_executable):
+        self._setup_root_logger()
         self._config : Config = None
         if not self._register(my_executable):
             raise AlreadyRunningException("Already running, please discard silently.")
         self._logger = logging.getLogger("SimStackServer")
         self._workflow_manager = WorkflowManager()
         self._zmq_context = None
-        self._sock = None
+        self._auth = None
         self._communication_timeout = 4.0
         self._polling_time = 500 # We check every half second for new message
         self._commthread = None
         self._stop_thread = False
+
+    @classmethod
+    def _setup_root_logger(cls):
+        Config._setup_root_logger()
 
     @staticmethod
     def register_pidfile():
@@ -90,17 +95,27 @@ class SimStackServer(object):
     def get_appdirs():
         return Config._dirs
 
-    def _zmq_worker_loop(self):
+    def _zmq_worker_loop(self, port):
+        context = self._zmq_context
+        sock = context.socket(zmq.REP)
+        sock.plain_server = True
+        sock.bind('tcp://127.0.0.1:%s' % port)
         poller = zmq.Poller()
-        poller.register(self._sock, zmq.POLLIN)
+        poller.register(sock, zmq.POLLIN)
         while True:
             if self._stop_thread:
+                self._logger.info("Terminating communication thread.")
+                poller.unregister(sock)
+                del poller
+                sock.close()
                 return
             socks = dict(poller.poll(self._polling_time))
-            if self._sock in socks:
-                message = self._sock.recv()
+            if sock in socks:
+                message = sock.recv()
                 print("Got message")
-                self._sock.send(b"World")
+                sock.send(b"World")
+            else:
+                print(socks)
             print("Iter")
 
 
@@ -123,21 +138,21 @@ class SimStackServer(object):
     def setup_zmq_port(self, port, password):
         if self._zmq_context is None:
             self._zmq_context = zmq.Context()
-            context = self._zmq_context
-            auth = ThreadAuthenticator(context)
+
+        if self._auth is None:
+            self._auth = ThreadAuthenticator(self._zmq_context)
+            auth = self._auth
             auth.start()
             auth.allow('127.0.0.1')
             auth.configure_plain(domain='*', passwords={"simstack_client": password})
-            self._sock = context.socket(zmq.REP)
-            sock = self._sock
-            sock.plain_server = True
-            sock.bind('tcp://127.0.0.1:%s' % port)
-            self._commthread = threading.Thread(target = self._zmq_worker_loop)
+
+        if self._commthread is None:
+            self._commthread = threading.Thread(target = self._zmq_worker_loop, args=(port,))
             self._commthread.start()
 
     def terminate(self):
-        if self._sock is not None:
-            self._sock.close()
+        self._stop_thread = True
+        time.sleep(2.0*self._polling_time/1000.0)
         if self._zmq_context is not None:
             self._zmq_context.term()
 
@@ -167,6 +182,7 @@ class SimStackServer(object):
                 time.sleep(3)
 
         work_done = True
+        time.sleep(10)
         self._shutdown(remove_crontab=work_done)
 
 
