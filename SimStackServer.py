@@ -74,6 +74,19 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup = False):
     
 
 if __name__ == '__main__':
+    ### Startup works like this:
+    # We check if another server is doing setup at the moment.
+    # If that is the case, we try to read the current password and port and write it to stdout
+    # Otherwise we lock the setup pid
+    #
+    # We try to make a new server. In this, we register another PID file
+    # If the server is already running, we release the setup pid file and print the current password and port to stdout and quit
+    # Otherwise we also acquire the server lock
+    # We get a new port and guess a new password.
+    #    Now we have to be fast, because we release the port and it could be reallocated in extreme cases.
+
+
+
     # We register another pid just for setup, because it takes three seconds from here to the Tag "PIDFILE TAKEOVER"
     appdirs = SimStackServer.get_appdirs()
     setup_pidfile = setup_pid()
@@ -128,32 +141,19 @@ if __name__ == '__main__':
             pidfile = mypidfile
         ):
             mypidfile.update_pid_to_current_process() # "PIDFILE TAKEOVER
-            context = zmq.Context()
-            auth = ThreadAuthenticator(context)
-            auth.start()
-            auth.allow('127.0.0.1')
-            auth.configure_plain(domain = '*', passwords = {"simstack_client":mysecret})
-            sock = context.socket(zmq.REP)
-            sock.plain_server = True
-            myport = sock.bind('tcp://127.0.0.1:%s'%myport)
-
+            ss.setup_zmq_port(myport, mysecret)
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()
-
-            for i in range(0,20):
-                a = sock.recv()
-                print("Got something %s"%a)
-                sock.send(b"World")
-                time.sleep(5)
 
             if len(sys.argv) >= 2:
                 wf_filename = sys.argv[1]
                 ss.main_loop(wf_filename)
             else:
                 ss.main_loop()
-            sock.close()
-            context.term()
+
+            ss.terminate()
+
     except lockfile.AlreadyLocked:
         # This here happens, if in between the opening of the stdout and stderr another task took over and locked the file
         # It's rare, but I was able to reproduce it.
