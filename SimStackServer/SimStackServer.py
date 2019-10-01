@@ -132,7 +132,7 @@ class SimStackServer(object):
             sock = self._sock
             sock.plain_server = True
             sock.bind('tcp://127.0.0.1:%s' % port)
-            self._commthread = threading.Thread(target = self._commthread)
+            self._commthread = threading.Thread(target = self._zmq_worker_loop)
             self._commthread.start()
 
     def terminate(self):
