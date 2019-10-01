@@ -104,7 +104,7 @@ class Config(object):
             return False
         else:
             proc = psutil.Process(pid)
-            if not "python" in proc.name() and not "SimStackServer.py" in proc.name():
+            if not "python" in proc.name() and not "SimStackServer.py" in proc.name() and not "ZMQbg" in proc.name():
                 try:
                     print("Process was locked, but process name %s was different."%proc.name())
                     pidfile.break_lock()

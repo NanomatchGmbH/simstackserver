@@ -29,6 +29,9 @@ from SimStackServer.SimStackServer import SimStackServer, AlreadyRunningExceptio
 from SimStackServer.Config import Config
 import daemon
 
+class InputFileError(Exception):
+    pass
+
 def get_my_runtime():
     #me = os.path.abspath(os.path.realpath(__file__))
     me = sys.executable + " " + sys.argv[0]
@@ -51,12 +54,33 @@ def get_open_port():
     s.close()
     return port
 
+def flush_port_and_password_to_stdout(appdirs, other_process_setup = False):
+    myfile = join(appdirs.user_config_dir,"portconfig.txt")
+    if other_process_setup and not os.path.exists(myfile):
+        # In this case another process might just be in the process of writing this file.
+        # We have to wait 5 seconds for it to appear
+        time.sleep(5.0)
+    with open(myfile, 'rt') as infile:
+        line = infile.read()
+        splitline = line.split()
+        if not len(splitline) == 4:
+            raise InputFileError("Input of portconfig was expected to be four fields, got <%s>"%line)
+        port = int(splitline[2])
+        mypass = splitline[3].strip()
+        print("Port Pass %d %s"%(port, mypass))
+        return
+    raise InputFileError("Inputfile %s did not contain lines."%myfile)
+       
+    
+
 if __name__ == '__main__':
     # We register another pid just for setup, because it takes three seconds from here to the Tag "PIDFILE TAKEOVER"
+    appdirs = SimStackServer.get_appdirs()
     setup_pidfile = setup_pid()
     try:
         setup_pidfile.acquire(timeout = 0.0)
     except lockfile.AlreadyLocked as e:
+        flush_port_and_password_to_stdout(appdirs, True)
         sys.exit(0)
 
     my_runtime = get_my_runtime()
@@ -72,6 +96,7 @@ if __name__ == '__main__':
         # print("Exiting, because lock exists.")
         # print("PID was",SimStackServer.register_pidfile().read_pid())
         # In case we are already running we silently discard and exit.
+        flush_port_and_password_to_stdout(appdirs,False)
         setup_pidfile.release()
         sys.exit(0)
     try:
@@ -80,7 +105,6 @@ if __name__ == '__main__':
         mysecret = random_pass()
         myport = get_open_port()
 
-        appdirs = ss.get_appdirs()
         with open(join(appdirs.user_config_dir,"portconfig.txt"),'wt') as outfile:
             towrite = "Port, Secret %d %s\n"%(myport,mysecret)
             outfile.write(towrite)
@@ -117,11 +141,11 @@ if __name__ == '__main__':
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()
 
-            a = sock.recv()
-            print("Got something %s"%a)
-            sock.send(b"World")
-
-            time.sleep(5)
+            for i in range(0,20):
+                a = sock.recv()
+                print("Got something %s"%a)
+                sock.send(b"World")
+                time.sleep(5)
 
             if len(sys.argv) >= 2:
                 wf_filename = sys.argv[1]
