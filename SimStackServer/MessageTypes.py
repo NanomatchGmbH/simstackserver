@@ -27,7 +27,7 @@ class Message(object):
     """The two next functions exist in case we need to fumble with encoding."""
     @staticmethod
     def _loads(message):
-        return mypacker.loads(message)
+        return mypacker.loads(message, raw = False)
 
     @staticmethod
     def _dumps(indict):
