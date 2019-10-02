@@ -1,6 +1,6 @@
 import json
 import time
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes
+from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message
 
 import zmq
 
@@ -97,13 +97,10 @@ class SimStackServer(object):
     def get_appdirs():
         return Config._dirs
 
-    def _message_handler(self, message):
-        message_type = int(message[0])
-        if len(message) > 1:
-            message = message[1:]
+    def _message_handler(self, message_type, message, sock):
         if message_type == MessageTypes.CONNECT:
             #Simply acknowledge connection, no args
-            self._sock.send(MessageTypes.CONNECT)
+            self._sock.send(Message.connect_message())
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
             pass
@@ -133,8 +130,8 @@ class SimStackServer(object):
                 return
             socks = dict(poller.poll(self._polling_time))
             if sock in socks:
-                message = sock.recv()
-                self._message_handler(message)
+                messagetype, message = Message.unpack(sock.recv())
+                self._message_handler(messagetype,message, sock)
             else:
                 print(socks)
             print("Iter")
