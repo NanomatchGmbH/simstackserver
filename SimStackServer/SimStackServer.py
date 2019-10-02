@@ -102,7 +102,7 @@ class SimStackServer(object):
     def _message_handler(self, message_type, message, sock):
         if message_type == MessageTypes.CONNECT:
             #Simply acknowledge connection, no args
-            self._sock.send(Message.connect_message())
+            sock.send(Message.connect_message())
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
             pass
@@ -120,7 +120,9 @@ class SimStackServer(object):
         context = self._zmq_context
         sock = context.socket(zmq.REP)
         sock.plain_server = True
-        sock.bind('tcp://127.0.0.1:%s' % port)
+        bindaddr = 'tcp://127.0.0.1:%s' % port
+        self._logger.info("Message worker thread binding to %s."%bindaddr)
+        sock.bind(bindaddr)
         poller = zmq.Poller()
         poller.register(sock, zmq.POLLIN)
         while True:
@@ -132,9 +134,11 @@ class SimStackServer(object):
                 return
             socks = dict(poller.poll(self._polling_time))
             if sock in socks:
+                print("Got something", socks)
                 data = sock.recv()
                 self._logger.info("Received a message.")
                 messagetype, message = Message.unpack(data)
+                    
                 self._logger.info("MessageType was: %d."%messagetype)
                 self._message_handler(messagetype,message, sock)
             else:
@@ -166,6 +170,7 @@ class SimStackServer(object):
             auth.start()
             auth.allow('127.0.0.1')
             auth.configure_plain(domain='*', passwords={"simstack_client": password})
+            self._logger.debug("Configured Authentication with pass %s"%password)
 
         if self._commthread is None:
             self._commthread = threading.Thread(target = self._zmq_worker_loop, args=(port,))
@@ -212,7 +217,7 @@ class SimStackServer(object):
                 time.sleep(3)
 
         work_done = True
-        time.sleep(10)
+        time.sleep(100)
         self._shutdown(remove_crontab=work_done)
 
 

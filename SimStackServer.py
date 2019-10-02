@@ -5,6 +5,7 @@ import time
 import lockfile
 import socket
 import logging
+import zmq
 
 
 from os.path import join
@@ -63,11 +64,11 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup = False):
     with open(myfile, 'rt') as infile:
         line = infile.read()
         splitline = line.split()
-        if not len(splitline) == 4:
+        if not len(splitline) == 5:
             raise InputFileError("Input of portconfig was expected to be four fields, got <%s>"%line)
         port = int(splitline[2])
         mypass = splitline[3].strip()
-        print("Port Pass %d %s"%(port, mypass))
+        print("Port Pass %d %s %s"%(port, mypass, zmq.zmq_version()))
         return
     raise InputFileError("Inputfile %s did not contain lines."%myfile)
        
@@ -119,7 +120,7 @@ if __name__ == '__main__':
         myport = get_open_port()
 
         with open(join(appdirs.user_config_dir,"portconfig.txt"),'wt') as outfile:
-            towrite = "Port, Secret %d %s\n"%(myport,mysecret)
+            towrite = "Port, Secret %d %s %s\n"%(myport,mysecret, zmq.zmq_version())
             outfile.write(towrite)
             print(towrite[:-1])
         sys.stdout.flush()

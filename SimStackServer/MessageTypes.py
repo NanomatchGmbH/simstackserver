@@ -19,9 +19,6 @@ class SSS_MESSAGETYPE(IntEnum):
 
 
 class Message(object):
-    def __init__(self):
-        pass
-
     @classmethod
     def connect_message(cls):
         mydict = {"MessageType": SSS_MESSAGETYPE.CONNECT}
@@ -34,7 +31,7 @@ class Message(object):
 
     @staticmethod
     def _dumps(indict):
-        return mypacker.dumps(indict)
+        return mypacker.dumps(indict, use_bin_type = True)
 
     @classmethod
     def unpack(cls, message):
@@ -42,7 +39,7 @@ class Message(object):
 
         upack = cls._loads(message)
         if not "MessageType" in upack:
-            raise InvalidMessageError("MessageType not found in Message")
+            raise InvalidMessageError("MessageType not found in Message. Message was: %s"%upack)
         messagetype = upack["MessageType"]
         return messagetype, upack
 
