@@ -158,6 +158,7 @@ if __name__ == '__main__':
                 ss.main_loop()
 
             ss.terminate()
+            logger.debug("Releasing final PID")
 
     except lockfile.AlreadyLocked:
         # This here happens, if in between the opening of the stdout and stderr another task took over and locked the file

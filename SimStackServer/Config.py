@@ -88,15 +88,18 @@ class Config(object):
             return False
         pid = pidfile.read_pid()
 
+        cls._get_cls_logger().debug("PID was %d"%pid)
         if not psutil.pid_exists(pid):
             try:
                 cls._get_cls_logger().warning("Process was locked, but process did not exist anymore. Restarting server")
                 pidfile.break_lock()
+                cls._get_cls_logger().debug("Breaking lock %d"%pid)
             except FileNotFoundError as e:
                 #This exception might occur if a server was just in the process of shutting down.
                 pass
             return False
         else:
+            cls._get_cls_logger().debug("PID existed already %d"%pid)
             proc = psutil.Process(pid)
             if not "python" in proc.name() and not "SimStackServer.py" in proc.name() and not "ZMQbg" in proc.name():
                 try:

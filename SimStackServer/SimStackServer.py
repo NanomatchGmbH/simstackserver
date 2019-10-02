@@ -74,9 +74,11 @@ class SimStackServer(object):
     def __init__(self, my_executable):
         self._setup_root_logger()
         self._config : Config = None
-        if not self._register(my_executable):
-            raise AlreadyRunningException("Already running, please discard silently.")
         self._logger = logging.getLogger("SimStackServer")
+        if not self._register(my_executable):
+            self._logger.debug("Already running, should exit here.")
+            
+            raise AlreadyRunningException("Already running, please discard silently.")
         self._workflow_manager = WorkflowManager()
         self._zmq_context = None
         self._auth = None
@@ -125,12 +127,15 @@ class SimStackServer(object):
             if self._stop_thread:
                 self._logger.info("Terminating communication thread.")
                 poller.unregister(sock)
-                del poller
                 sock.close()
+                self._logger.info("Closed socket, unregistered poller.")
                 return
             socks = dict(poller.poll(self._polling_time))
             if sock in socks:
-                messagetype, message = Message.unpack(sock.recv())
+                data = sock.recv()
+                self._logger.info("Received a message.")
+                messagetype, message = Message.unpack(data)
+                self._logger.info("MessageType was: %d."%messagetype)
                 self._message_handler(messagetype,message, sock)
             else:
                 print(socks)
@@ -153,7 +158,7 @@ class SimStackServer(object):
 
     def setup_zmq_port(self, port, password):
         if self._zmq_context is None:
-            self._zmq_context = zmq.Context()
+            self._zmq_context = zmq.Context.instance()
 
         if self._auth is None:
             self._auth = ThreadAuthenticator(self._zmq_context)
@@ -167,10 +172,19 @@ class SimStackServer(object):
             self._commthread.start()
 
     def terminate(self):
+        if not self._auth is None:
+            self._auth.stop()
         self._stop_thread = True
         time.sleep(2.0*self._polling_time/1000.0)
         if self._zmq_context is not None:
-            self._zmq_context.term()
+            self._logger.debug("Terminating ZMQ context.")
+            #The correct call here would be:
+            # self._zmq_context.term()
+            # However: term can hang and leave the Server dangling. Therefore: destory
+            # I will gladly take an error message over deadlock.
+            # If term ever gets a timeout argument, please switch over.
+            self._zmq_context.destroy()
+            self._logger.debug("ZMQ context terminated.")
 
     def _shutdown(self, remove_crontab = True):
         if self._config is None:
