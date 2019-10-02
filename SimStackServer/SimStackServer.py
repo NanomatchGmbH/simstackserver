@@ -1,5 +1,7 @@
 import json
 import time
+from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes
+
 import zmq
 
 from lxml import etree
@@ -95,6 +97,26 @@ class SimStackServer(object):
     def get_appdirs():
         return Config._dirs
 
+    def _message_handler(self, message):
+        message_type = int(message[0])
+        if len(message) > 1:
+            message = message[1:]
+        if message_type == MessageTypes.CONNECT:
+            #Simply acknowledge connection, no args
+            self._sock.send(MessageTypes.CONNECT)
+        elif message_type == MessageTypes.ABORTWF:
+            # Arg is associated workflow
+            pass
+        elif message_type == MessageTypes.LISTJOBS:
+            # Arg is associated workflow
+            pass
+        elif message_type == MessageTypes.DELWF:
+            # Arg is workflow submit name, which will be unique
+            pass
+        elif message_type == MessageTypes.LISTWFS:
+            # No Args, returns stringlist of Workflow submit names
+            pass
+
     def _zmq_worker_loop(self, port):
         context = self._zmq_context
         sock = context.socket(zmq.REP)
@@ -112,13 +134,10 @@ class SimStackServer(object):
             socks = dict(poller.poll(self._polling_time))
             if sock in socks:
                 message = sock.recv()
-                print("Got message")
-                sock.send(b"World")
+                self._message_handler(message)
             else:
                 print(socks)
             print("Iter")
-
-
 
     def _register(self, my_executable):
         self._config = Config()
