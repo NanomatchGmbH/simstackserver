@@ -195,6 +195,15 @@ class XMLYMLInstantiationBase(object):
                 parent_dict[name] = {}
                 fieldvalue.to_dict(parent_dict[name])
 
+    @classmethod
+    def new_instance_from_xml(cls, filename):
+        with open(filename, 'rt') as infile:
+            myxml = etree.parse(infile).getroot()
+        a = cls()
+        a.from_xml(myxml)
+
+
+
 def workflow_element_factory(name):
     """
     Placeholder function to generate WorkflowElements based on their name. Currently only returns the class of WorkflowElement
@@ -652,6 +661,7 @@ class Workflow(XMLYMLInstantiationBase):
                                        "another workflow this workflow does not need to be encoded here." , "m"),
         ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a"),
         ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
+        ("status", str, "READY", "Last checked status of the workflow", "a"),
         ("queueing_system",str, "unset", "Name of the queueing system. Might move into WFEM in case of split jobs.", "a")
     ]
 
@@ -817,6 +827,10 @@ class Workflow(XMLYMLInstantiationBase):
     @property
     def queueing_system(self) -> str:
         return self._field_values["queueing_system"]
+
+    @property
+    def status(self) -> str:
+        return self._field_values["status"]
 
     def set_queueing_system(self, queueing_system) -> str:
         self._field_values["queueing_system"] = queueing_system

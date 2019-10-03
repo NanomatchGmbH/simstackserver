@@ -16,7 +16,7 @@ class SSS_MESSAGETYPE(IntEnum):
     ABORTJOB = auto()
     DELJOB = auto()
     DISCONNECT = auto()
-
+    SUBMITWF = auto()
 
 class Message(object):
     @classmethod
@@ -24,7 +24,10 @@ class Message(object):
         mydict = {"MessageType": SSS_MESSAGETYPE.CONNECT}
         return mypacker.dumps(mydict)
 
-    """The two next functions exist in case we need to fumble with encoding."""
+    """
+        The two next functions exist in case we need to fumble with encoding.
+        ... which turned out to be true
+    """
     @staticmethod
     def _loads(message):
         return mypacker.loads(message, raw = False)

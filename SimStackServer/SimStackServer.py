@@ -20,13 +20,15 @@ class AlreadyRunningException(Exception):
     pass
 
 
-"""Tomorrow
-
-Add indirection to workflow model (graph running -> module)
-list of running wanos has to go into workflow model
-check status somehow
-file copy from to
-
+"""
+TODO:
+SimStackServer has to have a copy of WorkflowManager
+WorkflowManager should do a list of Workflows, inprogress, etc.
+WorkflowManager should send the workflowmodel if request
+Abort and delete are passed on to WorkflowManager
+Client gets a new section, finished, inprogress
+Who takes care of jobs? 
+-> Workflow
 """
 
 class WorkflowManager(object):
@@ -47,6 +49,41 @@ class WorkflowManager(object):
         with open(filename,'rt') as infile:
             xml = etree.parse(infile).getroot()
         return xml
+
+    def _get_workflows(self, which_ones):
+        """
+        Helper function, which prepares the workflows in the format to be communicated.
+        :param which_ones (dict):
+        :return (list): List of status dicts understood by client.
+        """
+        output = []
+        for workflow in which_ones:
+            workflow : Workflow
+            wfdict = {
+                'id': workflow.name,
+                'name' : workflow.name,
+                'path' : workflow.storage,
+                'status': workflow.status,
+                'type': 'w'
+            }
+            output.append(wfdict)
+
+        return output
+
+    def get_inprogress_workflows(self):
+        return self._get_workflows(self._inprogress_models)
+
+    def get_finished_workflows(self):
+        return self._get_workflows(self._finished_models)
+
+    def add_workflow(self, workflow_filename):
+        """
+        The client has just instructed us about the existence of a workflow. We have to add it here.
+        :param workflow_filename (str): Path to the new file
+        :return:
+        """
+        newwf = Workflow.new_instance_from_xml(workflow_filename)
+        self._inprogress_models.append(newwf)
 
     def _recreate_models(self):
         for source,target_models in zip([self._inprogress,self._finished],[self._inprogress_models,self._finished_models]):
@@ -198,19 +235,11 @@ class SimStackServer(object):
         if remove_crontab:
             self._config.unregister_crontab()
 
-    @staticmethod
-    def _workflow_object_from_file(filename):
-        with open(filename,'rt') as infile:
-            myxml = etree.parse(infile).getroot()
-        a = Workflow()
-        a.from_xml(myxml)
-        return a
-
     def main_loop(self, workflow_file = None):
         work_done = False
         # Do stuff
         if workflow_file is not None:
-            workflow = self._workflow_object_from_file(workflow_file)
+            workflow = Workflow.new_instance_from_xml(workflow_file)
 
             for i in range(0,10):
                 workflow.jobloop()
