@@ -152,6 +152,9 @@ class SimStackServer(object):
         elif message_type == MessageTypes.LISTWFS:
             # No Args, returns stringlist of Workflow submit names
             pass
+        elif message_type == MessageTypes.SUBMITWF:
+            pass
+
 
     def _zmq_worker_loop(self, port):
         context = self._zmq_context

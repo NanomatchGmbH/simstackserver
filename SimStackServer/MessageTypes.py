@@ -51,3 +51,9 @@ class Message(object):
         indict["MessageType"] = message_type
         return cls._dumps(indict)
 
+    @classmethod
+    def submit_wf_message(cls, filename):
+        mydict = {
+            "filename": filename
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.SUBMITWF, mydict)

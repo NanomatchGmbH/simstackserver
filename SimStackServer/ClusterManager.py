@@ -8,8 +8,11 @@ import posixpath
 import zmq
 from paramiko import SFTPAttributes
 
+from SimStackServer.MessageTypes import Message
+from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories
 from SimStackServer.WorkflowModel import Resources
+
 
 class SSHExpectedDirectoryError(Exception):
     pass
@@ -33,6 +36,9 @@ class ClusterManager(object):
         self._sftp_client : paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
+        self._context = zmq.Context.instance()
+        self._socket = None
+
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -165,20 +171,19 @@ class ClusterManager(object):
         getpath = basepath_override + '/' + from_file
         self._sftp_client.get(getpath, to_file, optional_callback)
 
-    def exec_background_command(self, command):
-        """
-            Executes a command.
-
-            :param command (str): Command to execute remotely.
-            :return: Nothing (currently)
-        """
-        stdin, stdout, stderr = self._ssh_client.exec_command(command)
-        for line in stdout:
-            print(line)
-
     def exec_command(self, command):
         """
-        Executes a command.
+                Executes a command.
+
+                :param command (str): Command to execute remotely.
+                :return: Nothing (currently)
+                """
+        stdin, stdout, stderr = self._ssh_client.exec_command(command)
+        return stdout, stderr
+
+    def connect_zmq_tunnel(self, command):
+        """
+        Executes the servercommand command and sets up the ZMQ tunnel
 
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
@@ -189,28 +194,42 @@ class ClusterManager(object):
         for line in stdout:
             firstline = line[:-1]
             myline = firstline.split()
-            if not len(myline) == 4:
-                raise ConnectionError("Expected port and secret key but myline was: <%s>"%firstline )
+            if not len(myline) == 5:
+                raise ConnectionError("Expected port and secret key and zmq version but myline was: <%s>"%firstline )
             password = myline[3]
             port = int(myline[2])
+            zmq_version_string = myline[4].strip()
+            if zmq_version_string != zmq.zmq_version():
+                errstring = "ZMQ version mismatch: Client: %s != Server: %s"%(zmq.zmq_version(), zmq_version_string)
+                print(errstring)
+                raise ConnectionError(errstring)
+
             break
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
         print("Connecting to ZMQ serve at %d with password %s"%(port, password))
-        context = zmq.Context()
 
-        socket = context.socket(zmq.REQ)
-
+        self._socket = self._context.socket(zmq.REQ)
+        socket = self._socket
         socket.plain_username = b"simstack_client"
-        socket.plain_password = password.encode("utf8")
+        socket.plain_password = password.encode("utf8").strip()
 
         from zmq import ssh
         ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url())
-        print("SENDING")
-        socket.send(b"Hello")
-        print("After send")
-        c = socket.recv()
-        print("this %s"%c)
+
+        #print("Tunnel connection done")
+        from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes
+        socket.send(Message.connect_message())
+
+        data = socket.recv()
+        messagetype, message = Message.unpack(data)
+        if messagetype == MessageTypes.CONNECT:
+            self._should_be_connected = True
+        else:
+            raise ConnectionError("Received message different from connect: %s"%c)
+
+    def submit_wf(self, filename):
+        self._socket.send(Message.submit_wf_message(filename))
 
     def is_connected(self):
         """
