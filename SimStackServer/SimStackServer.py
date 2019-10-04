@@ -41,8 +41,8 @@ class WorkflowManager(object):
         self._logger = logging.getLogger("WorkflowManager")
         self._inprogress = []
         self._finished = []
-        self._inprogress_models = []
-        self._finished_models = []
+        self._inprogress_models = {}
+        self._finished_models = {}
 
     def from_json(self, filename):
         with open(filename, 'rt') as infile:
@@ -114,8 +114,8 @@ class WorkflowManager(object):
 
     def start_wf(self, workflow_file):
         workflow = Workflow.new_instance_from_xml(workflow_file)
-        self._logger.debug("Added workflow from file %s with name %s"%(workflow_file, workflow.name))
-        self._inprogress_models[workflow.name] = workflow
+        self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
+        self._inprogress_models[workflow.submit_name] = workflow
 
 
 class SimStackServer(object):

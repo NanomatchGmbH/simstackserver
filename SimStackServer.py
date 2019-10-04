@@ -157,11 +157,15 @@ if __name__ == '__main__':
             setup_pidfile.break_lock()
             logger.debug("Releasing setup PID")
 
-            if len(sys.argv) >= 2:
-                wf_filename = sys.argv[1]
-                ss.main_loop(wf_filename)
-            else:
-                ss.main_loop()
+            try:
+                if len(sys.argv) >= 2:
+                    wf_filename = sys.argv[1]
+                    ss.main_loop(wf_filename)
+                else:
+                    ss.main_loop()
+            except Exception as e:
+                logger.exception("Exception in main loop. Terminating.")
+                 
 
             ss.terminate()
             logger.debug("Releasing final PID")

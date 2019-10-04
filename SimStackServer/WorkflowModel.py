@@ -201,6 +201,7 @@ class XMLYMLInstantiationBase(object):
             myxml = etree.parse(infile).getroot()
         a = cls()
         a.from_xml(myxml)
+        return a 
 
 
 
