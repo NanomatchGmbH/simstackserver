@@ -126,8 +126,16 @@ class WorkflowManager(object):
             json.dump(mydict, outfile)
 
     def check_status_submit(self):
-        for wfmodel in self._inprogress_models:
+        move_to_finished = []
+        for wfsubmit_name, wfmodel in self._inprogress_models.items():
             wfmodel: Workflow
+            if wfmodel.jobloop():
+                self._logger.debug("Moving %s to finished workflows"%wfsubmit_name)
+                move_to_finished.append(wfsubmit_name)
+
+        for key in move_to_finished:
+            self._finished_models[key] = self._inprogress_models[key]
+            del self._inprogress_models[key]
 
     def start_wf(self, workflow_file):
         workflow = self.add_inprogress_workflow(workflow_file)
@@ -305,6 +313,7 @@ class SimStackServer(object):
         while not self._stop_main:
             counter+=1
             if self._submitted_job_queue.empty():
+                self._workflow_manager.check_status_submit()
                 time.sleep(3)
             else:
                 try:
