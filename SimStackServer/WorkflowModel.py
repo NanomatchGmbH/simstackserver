@@ -826,6 +826,10 @@ class Workflow(XMLYMLInstantiationBase):
         return self._field_values["name"]
 
     @property
+    def submit_name(self) -> str:
+        return self._field_values["submit_name"]
+
+    @property
     def queueing_system(self) -> str:
         return self._field_values["queueing_system"]
 
