@@ -36,6 +36,11 @@ Who takes care of jobs?
 -> Workflow
 """
 
+
+class WorkflowError(Exception):
+    pass
+
+
 class WorkflowManager(object):
     def __init__(self):
         self._logger = logging.getLogger("WorkflowManager")
@@ -63,7 +68,7 @@ class WorkflowManager(object):
         :return (list): List of status dicts understood by client.
         """
         output = []
-        for workflow in which_ones:
+        for workflow in which_ones.values():
             workflow : Workflow
             wfdict = {
                 'id': workflow.name,
@@ -82,14 +87,26 @@ class WorkflowManager(object):
     def get_finished_workflows(self):
         return self._get_workflows(self._finished_models)
 
-    def add_workflow(self, workflow_filename):
+    def add_finished_workflow(self, workflow_filename):
+        return self._add_workflow(workflow_filename, self._finished_models)
+
+    def add_inprogress_workflow(self, workflow_filename):
+        return self._add_workflow(workflow_filename, self._inprogress_models)
+
+    def _add_workflow(self, workflow_filename, target_dict):
         """
         The client has just instructed us about the existence of a workflow. We have to add it here.
         :param workflow_filename (str): Path to the new file
         :return:
         """
         newwf = Workflow.new_instance_from_xml(workflow_filename)
-        self._inprogress_models.append(newwf)
+        newwf: Workflow
+        if newwf.submit_name in self._inprogress_models or newwf.submit_name in self._finished_models:
+            errormessage = "Discarding workflow with submit_name: %s as it was already present." %newwf.submit_name
+            self._logger.error(errormessage)
+            raise WorkflowError(errormessage)
+        target_dict[newwf.submit_name] = newwf
+        return newwf
 
     def _recreate_models(self):
         for source,target_models in zip([self._inprogress,self._finished],[self._inprogress_models,self._finished_models]):
@@ -113,10 +130,8 @@ class WorkflowManager(object):
             wfmodel: Workflow
 
     def start_wf(self, workflow_file):
-        workflow = Workflow.new_instance_from_xml(workflow_file)
+        workflow = self.add_inprogress_workflow(workflow_file)
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
-        self._inprogress_models[workflow.submit_name] = workflow
-
 
 class SimStackServer(object):
     def __init__(self, my_executable):
