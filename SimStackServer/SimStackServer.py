@@ -124,6 +124,7 @@ class SimStackServer(object):
         self._polling_time = 500 # We check every half second for new message
         self._commthread = None
         self._stop_thread = False
+        self._stop_main = False
 
     @classmethod
     def _setup_root_logger(cls):
@@ -164,12 +165,16 @@ class SimStackServer(object):
         context = self._zmq_context
         sock = context.socket(zmq.REP)
         sock.plain_server = True
+        sock.setsockopt(zmq.RCVTIMEO, 1000)
+        sock.setsockopt(zmq.LINGER, 0)
         bindaddr = 'tcp://127.0.0.1:%s' % port
         self._logger.info("Message worker thread binding to %s."%bindaddr)
         sock.bind(bindaddr)
         poller = zmq.Poller()
         poller.register(sock, zmq.POLLIN)
+        counter = 0
         while True:
+            counter += 1
             if self._stop_thread:
                 self._logger.info("Terminating communication thread.")
                 poller.unregister(sock)
@@ -183,11 +188,12 @@ class SimStackServer(object):
                 self._logger.info("Received a message.")
                 messagetype, message = Message.unpack(data)
                     
-                self._logger.info("MessageType was: %d."%messagetype)
+                self._logger.info("MessageType was: %s."%MessageTypes(messagetype).name)
                 self._message_handler(messagetype,message, sock)
             else:
-                print(socks)
-            print("Iter")
+                pass
+            if counter % 50 == 0:
+                self._logger.debug("Socket Worker Heartbeat log")
 
     def _register(self, my_executable):
         self._config = Config()
@@ -221,9 +227,11 @@ class SimStackServer(object):
             self._commthread.start()
 
     def _signal_handler(self, signum, frame):
-        assert signal in [signal.SIGTERM, signal.SIGINT]
-        self.terminate()
-
+        self._logger.debug("Received signal %d. Terminating server."%signum)
+        assert signum in [signal.SIGTERM, signal.SIGINT]
+        self._stop_main = True
+        self._stop_thread = True
+        
     def terminate(self):
         self._stop_thread = True
         time.sleep(2.0 * self._polling_time / 1000.0)
@@ -256,8 +264,9 @@ class SimStackServer(object):
                 workflow.jobloop()
                 time.sleep(3)
 
+        while not self._stop_main:
+            time.sleep(3)
+
         work_done = True
-        time.sleep(100)
+        self.terminate()
         self._shutdown(remove_crontab=work_done)
-
-
