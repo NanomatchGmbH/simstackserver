@@ -196,12 +196,10 @@ class SimStackServer(object):
                 return
             socks = dict(poller.poll(self._polling_time))
             if sock in socks:
-                print("Got something", socks)
                 data = sock.recv()
-                self._logger.info("Received a message.")
+                self._logger.debug("Received a message.")
                 messagetype, message = Message.unpack(data)
-                    
-                self._logger.info("MessageType was: %s."%MessageTypes(messagetype).name)
+                self._logger.debug("MessageType was: %s."%MessageTypes(messagetype).name)
                 self._message_handler(messagetype,message, sock)
             else:
                 pass
