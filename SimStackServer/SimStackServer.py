@@ -27,13 +27,25 @@ class AlreadyRunningException(Exception):
 
 """
 TODO:
-SimStackServer has to have a copy of WorkflowManager
-WorkflowManager should do a list of Workflows, inprogress, etc.
-WorkflowManager should send the workflowmodel if request
+
+
+
 Abort and delete are passed on to WorkflowManager
 Client gets a new section, finished, inprogress
 Who takes care of jobs? 
 -> Workflow
+
+
+Remaining problems:
+- Save and Load WorkflowManager
+   - Recreate jobs from jobid / only for checking
+- Delete Job? Abort Job? Abort Workflow?
+  - When Moving workflow, we need to save workflow
+  - Abort Workflow means: move to finished, set status to aborted, all in progress jobs abort
+  - Delete Workflow means: Abort workflow, then delete directory  
+  - Suspend workflow?
+
+
 """
 
 
