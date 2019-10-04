@@ -218,18 +218,24 @@ class ClusterManager(object):
         ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url())
 
         #print("Tunnel connection done")
-        from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes
+
         socket.send(Message.connect_message())
 
         data = socket.recv()
         messagetype, message = Message.unpack(data)
-        if messagetype == MessageTypes.CONNECT:
+        if messagetype == MTS.CONNECT:
             self._should_be_connected = True
         else:
-            raise ConnectionError("Received message different from connect: %s"%c)
+            raise ConnectionError("Received message different from connect: %s"%message)
+
+    def _recv_ack_message(self):
+        ackmessage = Message.unpack(self._socket.recv())
+        if not ackmessage["MessageType"] == MTS.ACK:
+            raise ConnectionAbortedError("Did not receive acknowledge after workflow submission.")
 
     def submit_wf(self, filename):
         self._socket.send(Message.submit_wf_message(filename))
+        self._recv_ack_message()
 
     def is_connected(self):
         """

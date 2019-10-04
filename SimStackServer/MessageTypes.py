@@ -9,6 +9,7 @@ class InvalidMessageError(Exception):
 
 class SSS_MESSAGETYPE(IntEnum):
     CONNECT = auto()
+    ACK = auto()
     LISTWFS = auto()
     LISTJOBS = auto()
     DELWF = auto()
@@ -22,6 +23,11 @@ class Message(object):
     @classmethod
     def connect_message(cls):
         mydict = {"MessageType": SSS_MESSAGETYPE.CONNECT}
+        return mypacker.dumps(mydict)
+
+    @classmethod
+    def ack_message(cls):
+        mydict = {"MessageType": SSS_MESSAGETYPE.ACK}
         return mypacker.dumps(mydict)
 
     """

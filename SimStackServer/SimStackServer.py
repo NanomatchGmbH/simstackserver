@@ -154,6 +154,7 @@ class SimStackServer(object):
             pass
         elif message_type == MessageTypes.SUBMITWF:
             self._logger.debug(message)
+            sock.send(Message.ack_message())
             #workflow = Workflow.new_instance_from_xml()
             #pass
 
