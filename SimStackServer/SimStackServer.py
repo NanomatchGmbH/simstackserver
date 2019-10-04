@@ -1,6 +1,8 @@
 import json
 import signal
 import time
+from queue import Queue, Empty
+
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message
 
 import zmq
@@ -125,6 +127,7 @@ class SimStackServer(object):
         self._commthread = None
         self._stop_thread = False
         self._stop_main = False
+        self._submitted_job_queue = Queue()
 
     @classmethod
     def _setup_root_logger(cls):
@@ -157,6 +160,8 @@ class SimStackServer(object):
         elif message_type == MessageTypes.SUBMITWF:
             self._logger.debug(message)
             sock.send(Message.ack_message())
+            workflow_filename = message["filename"]
+            self._submitted_job_queue.put(workflow_filename)
             #workflow = Workflow.new_instance_from_xml()
             #pass
 
@@ -264,8 +269,21 @@ class SimStackServer(object):
                 workflow.jobloop()
                 time.sleep(3)
 
+        counter = 0
         while not self._stop_main:
-            time.sleep(3)
+            counter+=1
+            if self._submitted_job_queue.empty():
+                time.sleep(3)
+            else:
+                try:
+                    tostart = self._submitted_job_queue.get(timeout = 5)
+                    self._logger.info("Starting workflow %s"%tostart)
+                except Empty as e:
+                    self._logger.error("Another thread consumed a workflow from the queue, although we should be the only thread.")
+            if counter % 30 == 0:
+                self._logger.debug("Main Thread heartbeat")
+
+
 
         work_done = True
         self.terminate()
