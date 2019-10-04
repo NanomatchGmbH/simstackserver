@@ -233,8 +233,9 @@ class ClusterManager(object):
         if not messagetype == MTS.ACK:
             raise ConnectionAbortedError("Did not receive acknowledge after workflow submission.")
 
-    def submit_wf(self, filename):
-        self._socket.send(Message.submit_wf_message(filename))
+    def submit_wf(self, filename, basepath_override = None):
+        resolved_filename = self._resolve_file_in_basepath(filename,basepath_override)
+        self._socket.send(Message.submit_wf_message(resolved_filename))
         self._recv_ack_message()
 
     def is_connected(self):
