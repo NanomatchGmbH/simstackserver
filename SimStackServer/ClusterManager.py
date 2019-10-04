@@ -229,8 +229,8 @@ class ClusterManager(object):
             raise ConnectionError("Received message different from connect: %s"%message)
 
     def _recv_ack_message(self):
-        ackmessage = Message.unpack(self._socket.recv())
-        if not ackmessage["MessageType"] == MTS.ACK:
+        messagetype, message = Message.unpack(self._socket.recv())
+        if not messagetype == MTS.ACK:
             raise ConnectionAbortedError("Did not receive acknowledge after workflow submission.")
 
     def submit_wf(self, filename):
