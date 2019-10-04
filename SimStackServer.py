@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import signal
 import sys, os
 import time
 import lockfile
@@ -135,11 +135,16 @@ if __name__ == '__main__':
         raise e
     try:
         # Careful: We close all files here
+        signal_map = {
+            signal.SIGTERM: ss._signal_handler,
+            signal.SIGINT: ss._signal_handler
+        }
         with daemon.DaemonContext(
             stdout = mystdfileobj,
             stderr = mystderrfileobj,
             files_preserve = [logfilehandler.stream],
-            pidfile = mypidfile
+            pidfile = mypidfile,
+            signal_map = signal_map
         ):
             logger = logging.getLogger("Startup")
             logger.info("SimStackServer Daemon Startup")

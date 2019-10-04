@@ -1,4 +1,5 @@
 import json
+import signal
 import time
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message
 
@@ -219,11 +220,15 @@ class SimStackServer(object):
             self._commthread = threading.Thread(target = self._zmq_worker_loop, args=(port,))
             self._commthread.start()
 
+    def _signal_handler(self, signum, frame):
+        assert signal in [signal.SIGTERM, signal.SIGINT]
+        self.terminate()
+
     def terminate(self):
+        self._stop_thread = True
+        time.sleep(2.0 * self._polling_time / 1000.0)
         if not self._auth is None:
             self._auth.stop()
-        self._stop_thread = True
-        time.sleep(2.0*self._polling_time/1000.0)
         if self._zmq_context is not None:
             self._logger.debug("Terminating ZMQ context.")
             #The correct call here would be:
