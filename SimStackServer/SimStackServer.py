@@ -1,6 +1,8 @@
 import json
+import os
 import signal
 import time
+from pathlib import Path
 from queue import Queue, Empty
 
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message
@@ -234,7 +236,18 @@ class SimStackServer(object):
         assert signum in [signal.SIGTERM, signal.SIGINT]
         self._stop_main = True
         self._stop_thread = True
-        
+
+    def _remote_relative_to_absolute_filename(self, infilename):
+        """
+        Resolves infilename to local home
+        :param infilename (str): Infilename as submitted by client. i.e. either absolute /home/me/abc/def or abc/def. NOT relative to current dir, but relative to home
+        :return (str): Absolute filename on cluster
+        """
+        if infilename.strip().startswith("/"):
+            return infilename
+        else:
+            return os.path.join(Path.home(),infilename)
+
     def terminate(self):
         self._stop_thread = True
         time.sleep(2.0 * self._polling_time / 1000.0)
@@ -275,7 +288,8 @@ class SimStackServer(object):
             else:
                 try:
                     tostart = self._submitted_job_queue.get(timeout = 5)
-                    self._logger.info("Starting workflow %s"%tostart)
+                    tostart_abs = self._remote_relative_to_absolute_filename(tostart)
+                    self._logger.info("Starting workflow %s"%tostart_abs)
                 except Empty as e:
                     self._logger.error("Another thread consumed a workflow from the queue, although we should be the only thread.")
             if counter % 30 == 0:
