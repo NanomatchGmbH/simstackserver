@@ -38,6 +38,7 @@ Who takes care of jobs?
 
 class WorkflowManager(object):
     def __init__(self):
+        self._logger = logging.getLogger("WorkflowManager")
         self._inprogress = []
         self._finished = []
         self._inprogress_models = []
@@ -110,6 +111,11 @@ class WorkflowManager(object):
     def check_status_submit(self):
         for wfmodel in self._inprogress_models:
             wfmodel: Workflow
+
+    def start_wf(self, workflow_file):
+        workflow = Workflow.new_instance_from_xml(workflow_file)
+        self._logger.debug("Added workflow from file %s with name %s"%(workflow_file, workflow.name))
+        self._inprogress_models[workflow.name] = workflow
 
 
 class SimStackServer(object):
@@ -292,6 +298,7 @@ class SimStackServer(object):
                     tostart = self._submitted_job_queue.get(timeout = 5)
                     tostart_abs = self._remote_relative_to_absolute_filename(tostart)
                     self._logger.info("Starting workflow %s"%tostart_abs)
+                    self._workflow_manager.start_wf(tostart_abs)
                 except Empty as e:
                     self._logger.error("Another thread consumed a workflow from the queue, although we should be the only thread.")
             if counter % 30 == 0:
