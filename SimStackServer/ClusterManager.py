@@ -249,11 +249,21 @@ class ClusterManager(object):
         self._socket.send(Message.abort_wf_message(workflow_submitname))
         self._recv_ack_message()
 
+    def delete_wf(self, workflow_submitname):
+        self._logger.debug("Sent delete WF message for submitname %s" % (workflow_submitname))
+        self._socket.send(Message.delete_wf_message(workflow_submitname))
+        self._recv_ack_message()
+
     def get_workflow_list(self):
         self._socket.send(Message.list_wfs_message())
         messagetype, message = self._recv_message()
         workflows = message["workflows"]
         return workflows
+    
+    def get_workflow_job_list(self, workflow):
+        self._socket.send(Message.list_jobs_of_wf_message(workflow_submit_name=workflow))
+        messagetype, message = self._recv_message()
+        print(message)
 
     def is_connected(self):
         """
@@ -341,3 +351,5 @@ class ClusterManager(object):
         self._ssh_client.close()
         if self._sftp_client != None:
             self._sftp_client.close()
+
+

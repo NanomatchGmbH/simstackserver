@@ -744,15 +744,19 @@ class Workflow(XMLYMLInstantiationBase):
 
     def get_running_finished_job_list_formatted(self):
         files = []
-        self.graph.get
-        #Timo here
-        files.append({
-            'id': job.get_id(),
-            'name': job.get_name(),
-            'type': 'j',
-            'path': job.get_working_dir(),
-            'status': job.get_status()
-        })
+        success, failed, running = self.graph.get_success_failed_running_jobs()
+        for job, status in zip([running,failed,success],[JobStatus.RUNNING,JobStatus.FAILED, JobStatus.SUCCESSFUL]):
+            jobobj = self.elements.get_element_by_uid(job)
+            jobobj : WorkflowExecModule
+            jobdict = {
+                'id': jobobj.given_name,
+                'name': jobobj.given_name,
+                'type': 'j',
+                'path': jobobj.runtime_directory,
+                'status': status
+            }
+            files.append(jobdict)
+        return files
 
     def _get_job_directory(self, wfem: WorkflowExecModule):
         now = datetime.datetime.now()

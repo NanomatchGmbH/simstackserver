@@ -102,6 +102,14 @@ class Message(object):
         return cls.dict_message(SSS_MESSAGETYPE.LISTWFJOBS, mydict)
 
     @classmethod
+    def list_jobs_of_wf_message_reply(cls, workflow_submit_name, list_of_jobs):
+        mydict = {
+            "workflow_submit_name": workflow_submit_name,
+            "list_of_jobs": list_of_jobs
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.LISTWFJOBSREPLY, mydict)
+
+    @classmethod
     def list_wfs_reply_message(cls, wf_info_list):
         mydict = cls._empty_dict_with_messagetype(SSS_MESSAGETYPE.LISTWFSREPLY)
         mydict["workflows"] = wf_info_list

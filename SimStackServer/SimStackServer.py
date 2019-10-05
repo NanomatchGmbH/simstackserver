@@ -154,6 +154,17 @@ class WorkflowManager(object):
             self._finished_models[key] = self._inprogress_models[key]
             del self._inprogress_models[key]
 
+    def list_jobs_of_workflow(self, workflow_submit_name):
+        if workflow_submit_name in self._inprogress_models:
+            mywf = self._inprogress_models[workflow_submit_name]
+        elif workflow_submit_name in self._finished_models:
+            mywf = self._finished_models[workflow_submit_name]
+        else:
+            self._logger.error("Could not find workflow in inprogress or finished workflows.")
+            return []
+        mywf: Workflow
+        return mywf.get_running_finished_job_list_formatted()
+
     def start_wf(self, workflow_file):
         workflow = self.add_inprogress_workflow(workflow_file)
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
@@ -204,10 +215,10 @@ class SimStackServer(object):
 
         elif message_type == MessageTypes.LISTWFJOBS:
             # Arg is associated workflow
-            toabort = message["workflow_submit_name"]
-            self._logger.error("LWFJ not implemented. Wanted to list jobs of %s"%toabort)
-
-            sock.send(Message.ack_message())
+            tolistwf = message["workflow_submit_name"]
+            self._logger.error("LWFJ not implemented. Wanted to list jobs of %s"%tolistwf)
+            list_of_jobs = self._workflow_manager.list_jobs_of_workflow(tolistwf)
+            sock.send(Message.list_jobs_of_wf_message_reply(tolistwf,list_of_jobs))
 
         elif message_type == MessageTypes.DELWF:
             sock.send(Message.ack_message())
