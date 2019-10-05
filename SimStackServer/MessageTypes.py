@@ -97,3 +97,10 @@ class Message(object):
             "filename": filename
         }
         return cls.dict_message(SSS_MESSAGETYPE.SUBMITWF, mydict)
+
+    @classmethod
+    def abort_wf_message(cls, workflow_submit_name):
+        mydict = {
+            "workflow_submit_name": workflow_submit_name
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.ABORTWF, mydict)

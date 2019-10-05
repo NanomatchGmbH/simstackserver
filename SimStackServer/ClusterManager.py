@@ -1,3 +1,4 @@
+import logging
 import stat
 import time
 
@@ -26,6 +27,7 @@ class ClusterManager(object):
         :param calculation_basepath (str): Where everything will be stored by default. "" == home directory.
         :param user (str): Username on the respective server.
         """
+        self._logger = logging.getLogger("ClusterManager")
         self._url = url
         self._port = port
         self._calculation_basepath = calculation_basepath
@@ -240,6 +242,11 @@ class ClusterManager(object):
     def submit_wf(self, filename, basepath_override = None):
         resolved_filename = self._resolve_file_in_basepath(filename,basepath_override)
         self._socket.send(Message.submit_wf_message(resolved_filename))
+        self._recv_ack_message()
+
+    def abort_wf(self, workflow_submitname):
+        self._logger.debug("Sent Abort WF message for submitname %s"%(workflow_submitname))
+        self._socket.send(Message.abort_wf_message(workflow_submitname))
         self._recv_ack_message()
 
     def get_workflow_list(self):

@@ -72,6 +72,12 @@ class WorkflowManager(object):
             xml = etree.parse(infile).getroot()
         return xml
 
+    def abort_workflow(self, workflow_submitname):
+        if workflow_submitname in self._inprogress_models:
+            self._inprogress_models[workflow_submitname].abort()
+        else:
+            self._logger.warning("Tried to abort workflow, which was not found.")
+
     def _get_workflows(self, which_ones):
         """
         Helper function, which prepares the workflows in the format to be communicated.
@@ -189,7 +195,10 @@ class SimStackServer(object):
             sock.send(Message.connect_message())
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
-            pass
+            toabort = message["workflow_submit_name"]
+            self._logger.debug("Receive workflow abort message %s" % toabort)
+            self._workflow_manager.abort_workflow(toabort)
+            self.send(Message.ack_message())
         elif message_type == MessageTypes.LISTJOBS:
             # Arg is associated workflow
             pass

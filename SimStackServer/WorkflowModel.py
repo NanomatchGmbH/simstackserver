@@ -11,7 +11,6 @@ from pathlib import Path
 
 from os import path
 
-
 from lxml import etree
 
 import numpy as np
@@ -604,7 +603,6 @@ class DirectedGraph(object):
         outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] != "success" ]
         return len(outnodes) == 0
 
-
     def to_xml(self, parent_element):
         toparse = "".join(nx.generate_graphml(self._graph))
         myetree = etree.fromstring(toparse)
@@ -690,11 +688,21 @@ class Workflow(XMLYMLInstantiationBase):
         super().from_dict(in_dict)
         self._abs_resolve_storage()
 
+    def abort(self):
+        self._field_values["status"] = JobStatus.ABORTED
+
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
 
-        for running_job in running_jobs:
+        if self.status == JobStatus.ABORTED:
+            """
+            for running_job in running_jobs:
+                running_job : AsyncResult
+                running_job.cancel()
+            """
+            return True
 
+        for running_job in running_jobs:
             running = self.elements.get_element_by_uid(running_job)
             running : WorkflowExecModule
             if running.completed_or_aborted():
@@ -709,10 +717,12 @@ class Workflow(XMLYMLInstantiationBase):
             if not self._prepare_job(tostart):
                 raise WorkflowAbort("Could not prepare job.")
             else:
+                self._field_values["status"] = JobStatus.RUNNING
                 tostart.run_jobfile(self.queueing_system)
                 self.graph.start(rdjob)
                 self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
         if self.graph.is_workflow_finished():
+            self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." %self.name)
             return True
         return False
