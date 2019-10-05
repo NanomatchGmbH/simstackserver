@@ -190,33 +190,48 @@ class SimStackServer(object):
         return Config._dirs
 
     def _message_handler(self, message_type, message, sock):
+        # Every message here MUST absolutely have a send after, otherwise the client will hang.
         if message_type == MessageTypes.CONNECT:
             #Simply acknowledge connection, no args
             sock.send(Message.connect_message())
+
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
+            sock.send(Message.ack_message())
             toabort = message["workflow_submit_name"]
             self._logger.debug("Receive workflow abort message %s" % toabort)
             self._workflow_manager.abort_workflow(toabort)
-            sock.send(Message.ack_message())
-        elif message_type == MessageTypes.LISTJOBS:
+
+        elif message_type == MessageTypes.LISTWFJOBS:
             # Arg is associated workflow
-            pass
+            toabort = message["workflow_submit_name"]
+            self._logger.error("LWFJ not implemented. Wanted to list jobs of %s"%toabort)
+
+            sock.send(Message.ack_message())
+
         elif message_type == MessageTypes.DELWF:
-            # Arg is workflow submit name, which will be unique
-            pass
+            sock.send(Message.ack_message())
+            toabort = message["workflow_submit_name"]
+            self._logger.debug("Receive workflow delete message %s" % toabort)
+            self._workflow_manager.abort_workflow(toabort)
+
+        elif message_type == MessageTypes.DELJOB:
+            workflow_submit_name = message["workflow_submit_name"]
+            job_submit_name = message["job_submit_name"]
+            self._logger.error("DELWF not implemented, however I would like to delete %s from %s"%(job_submit_name, workflow_submit_name))
+            sock.send(Message.ack_message())
+
         elif message_type == MessageTypes.LISTWFS:
             # No Args, returns stringlist of Workflow submit names
             self._logger.debug("Received LISTWFS message")
             workflows = self._workflow_manager.get_inprogress_workflows() + self._workflow_manager.get_finished_workflows()
             sock.send(Message.list_wfs_reply_message(workflows))
+
         elif message_type == MessageTypes.SUBMITWF:
-            self._logger.debug(message)
             sock.send(Message.ack_message())
             workflow_filename = message["filename"]
+            self._logger.debug("Received SUBMITWF message, submitting %s" % workflow_filename)
             self._submitted_job_queue.put(workflow_filename)
-            #workflow = Workflow.new_instance_from_xml()
-            #pass
 
 
     def _zmq_worker_loop(self, port):

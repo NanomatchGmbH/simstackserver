@@ -278,7 +278,6 @@ class ClusterManager(object):
             return True
         return False
 
-
     def exists_as_directory(self, path):
         """
         Checks if an absolute path on remote exists and is a directory. Throws if it exists as file

@@ -30,8 +30,10 @@ class SSS_MESSAGETYPE(IntEnum):
     ACK = auto()
     LISTWFS = auto()
     LISTWFSREPLY = auto()
-    LISTJOBS = auto()
-    LISTJOBSREPLY = auto()
+    LISTWFJOBS = auto()
+    LISTWFJOBSREPLY = auto()
+    #LISTJOBS = auto()
+    #LISTJOBSREPLY = auto()
     DELWF = auto()
     ABORTWF = auto()
     ABORTJOB = auto()
@@ -84,6 +86,20 @@ class Message(object):
     @classmethod
     def list_wfs_message(cls):
         return cls._dumps(cls._empty_dict_with_messagetype(SSS_MESSAGETYPE.LISTWFS))
+
+    @classmethod
+    def delete_wf_message(cls, workflow_submit_name):
+        mydict = {
+            "workflow_submit_name": workflow_submit_name
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.DELWF, mydict)
+
+    @classmethod
+    def list_jobs_of_wf_message(cls, workflow_submit_name):
+        mydict = {
+            "workflow_submit_name": workflow_submit_name
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.LISTWFJOBS, mydict)
 
     @classmethod
     def list_wfs_reply_message(cls, wf_info_list):

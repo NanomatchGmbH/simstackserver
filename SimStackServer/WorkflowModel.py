@@ -555,7 +555,7 @@ cd $CLUSTERJOB_WORKDIR
 class DirectedGraph(object):
     def __init__(self, *args, **kwargs):
         self._graph = nx.DiGraph()
-        self._default_node_attributes = { "Status" : "Waiting" }
+        self._default_node_attributes = { "status" : "waiting" }
 
         #I only collect chose to check
         all_node_ids = set()
@@ -590,6 +590,17 @@ class DirectedGraph(object):
     def get_running_jobs(self):
         outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "running"]
         return outnodes
+
+    def get_success_jobs(self):
+        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "success"]
+        return outnodes
+
+    def get_failed_jobs(self):
+        outnodes = [node for node in self._graph if self._graph.nodes[node]["status"] == "failed"]
+        return outnodes
+
+    def get_success_failed_running_jobs(self):
+        return self.get_success_jobs(), self.get_failed_jobs(), self.get_running_jobs()
 
     def start(self, node):
         assert self._graph.nodes[node]["status"] == "ready"
@@ -730,6 +741,18 @@ class Workflow(XMLYMLInstantiationBase):
     def _stage_file(self,fromfile,tofile):
         # At the moment this should only be a cp, but later it can also be a scp
         shutil.copyfile(fromfile, tofile)
+
+    def get_running_finished_job_list_formatted(self):
+        files = []
+        self.graph.get
+        #Timo here
+        files.append({
+            'id': job.get_id(),
+            'name': job.get_name(),
+            'type': 'j',
+            'path': job.get_working_dir(),
+            'status': job.get_status()
+        })
 
     def _get_job_directory(self, wfem: WorkflowExecModule):
         now = datetime.datetime.now()
