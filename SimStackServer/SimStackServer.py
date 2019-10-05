@@ -199,7 +199,7 @@ class SimStackServer(object):
         elif message_type == MessageTypes.LISTWFS:
             # No Args, returns stringlist of Workflow submit names
             self._logger.debug("Received LISTWFS message")
-            workflows = self._workflow_manager.get_inprogress_workflows()
+            workflows = self._workflow_manager.get_inprogress_workflows() + self._workflow_manager.get_finished_workflows()
             sock.send(Message.list_wfs_reply_message(workflows))
         elif message_type == MessageTypes.SUBMITWF:
             self._logger.debug(message)
