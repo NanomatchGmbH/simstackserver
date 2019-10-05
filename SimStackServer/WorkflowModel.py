@@ -592,7 +592,7 @@ class DirectedGraph(object):
         return outnodes
 
     def get_success_jobs(self):
-        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "success" and node != 0]
+        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "success"]
         return outnodes
 
     def get_failed_jobs(self):
@@ -747,6 +747,9 @@ class Workflow(XMLYMLInstantiationBase):
         success, failed, running = self.graph.get_success_failed_running_jobs()
         for joblist, status in zip([running,failed,success],[JobStatus.RUNNING,JobStatus.FAILED, JobStatus.SUCCESSFUL]):
             for job in joblist:
+                if job == '0':
+                    # 0 is start node, skip over it.
+                    continue
                 jobobj = self.elements.get_element_by_uid(job)
                 jobobj : WorkflowExecModule
                 jobdict = {
