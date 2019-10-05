@@ -20,7 +20,6 @@ from zmq.auth.thread import ThreadAuthenticator
 from SimStackServer.Config import Config
 from SimStackServer.WorkflowModel import Workflow
 
-
 class AlreadyRunningException(Exception):
     pass
 
@@ -83,8 +82,8 @@ class WorkflowManager(object):
         for workflow in which_ones.values():
             workflow : Workflow
             wfdict = {
-                'id': workflow.name,
-                'name' : workflow.name,
+                'id': workflow.submit_name,
+                'name' : workflow.submit_name,
                 'path' : workflow.storage,
                 'status': workflow.status,
                 'type': 'w'
@@ -199,7 +198,9 @@ class SimStackServer(object):
             pass
         elif message_type == MessageTypes.LISTWFS:
             # No Args, returns stringlist of Workflow submit names
-            pass
+            self._logger.debug("Received LISTWFS message")
+            workflows = self._workflow_manager.get_inprogress_workflows()
+            sock.send(Message.list_wfs_reply_message(workflows))
         elif message_type == MessageTypes.SUBMITWF:
             self._logger.debug(message)
             sock.send(Message.ack_message())

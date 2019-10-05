@@ -11,7 +11,9 @@ class SSS_MESSAGETYPE(IntEnum):
     CONNECT = auto()
     ACK = auto()
     LISTWFS = auto()
+    LISTWFSREPLY = auto()
     LISTJOBS = auto()
+    LISTJOBSREPLY = auto()
     DELWF = auto()
     ABORTWF = auto()
     ABORTJOB = auto()
@@ -56,6 +58,20 @@ class Message(object):
     def dict_message(cls, message_type, indict):
         indict["MessageType"] = message_type
         return cls._dumps(indict)
+
+    @classmethod
+    def _empty_dict_with_messagetype(cls, messagetype):
+        return {"MessageType" : messagetype}
+
+    @classmethod
+    def list_wfs_message(cls):
+        return cls._dumps(cls._empty_dict_with_messagetype(SSS_MESSAGETYPE.LISTWFS))
+
+    @classmethod
+    def list_wfs_reply_message(cls, wf_info_list):
+        mydict = cls._empty_dict_with_messagetype(SSS_MESSAGETYPE.LISTWFSREPLY)
+        mydict["workflows"] = wf_info_list
+        return cls._dumps(mydict)
 
     @classmethod
     def submit_wf_message(cls, filename):
