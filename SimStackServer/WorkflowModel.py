@@ -592,7 +592,7 @@ class DirectedGraph(object):
         return outnodes
 
     def get_success_jobs(self):
-        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "success"]
+        outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "success" and node != 0]
         return outnodes
 
     def get_failed_jobs(self):
