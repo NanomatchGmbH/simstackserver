@@ -263,7 +263,11 @@ class ClusterManager(object):
     def get_workflow_job_list(self, workflow):
         self._socket.send(Message.list_jobs_of_wf_message(workflow_submit_name=workflow))
         messagetype, message = self._recv_message()
-        print(message)
+        if not "list_of_jobs" in message:
+            raise ConnectionError("Could not read message in workflow job list update %s"%message)
+
+        files = message["list_of_jobs"]
+        return files
 
     def is_connected(self):
         """

@@ -752,11 +752,13 @@ class Workflow(XMLYMLInstantiationBase):
                     continue
                 jobobj = self.elements.get_element_by_uid(job)
                 jobobj : WorkflowExecModule
+                commonpath = path.commonpath(jobobj.runtime_directory, self.storage)
+                jobdir = jobobj.runtime_directory[len(commonpath):]
                 jobdict = {
                     'id': jobobj.given_name,
                     'name': jobobj.given_name,
                     'type': 'j',
-                    'path': jobobj.runtime_directory,
+                    'path': jobdir,
                     'status': status
                 }
                 files.append(jobdict)
