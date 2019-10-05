@@ -198,7 +198,7 @@ class SimStackServer(object):
             toabort = message["workflow_submit_name"]
             self._logger.debug("Receive workflow abort message %s" % toabort)
             self._workflow_manager.abort_workflow(toabort)
-            self.send(Message.ack_message())
+            sock.send(Message.ack_message())
         elif message_type == MessageTypes.LISTJOBS:
             # Arg is associated workflow
             pass
