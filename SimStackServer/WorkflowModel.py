@@ -17,6 +17,7 @@ from lxml import etree
 import numpy as np
 import networkx as nx
 
+from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Util.FileUtilities import mkdir_p
 
 
@@ -663,7 +664,7 @@ class Workflow(XMLYMLInstantiationBase):
         ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a"),
         ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
         ("submit_name", str, "${SUBMIT_NAME}", "The name this workflow was submitted as. This has to be unique on the cluster (per user). The workflow will be rejected if its not.", "a"),
-        ("status", str, "READY", "Last checked status of the workflow", "a"),
+        ("status", int, JobStatus.READY, "Last checked status of the workflow", "a"),
         ("queueing_system",str, "unset", "Name of the queueing system. Might move into WFEM in case of split jobs.", "a")
     ]
 

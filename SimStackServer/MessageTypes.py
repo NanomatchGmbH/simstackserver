@@ -7,6 +7,24 @@ mypacker = msgpack
 class InvalidMessageError(Exception):
     pass
 
+class JobStatus(IntEnum):
+    """
+    List of Job states:
+
+    * QUEUED
+    * RUNNING
+    * READY
+    * FAILED
+    * SUCCESSFUL
+    * ABORTED
+    """
+    QUEUED      = auto()
+    RUNNING     = auto()
+    READY       = auto()
+    FAILED      = auto()
+    SUCCESSFUL  = auto()
+    ABORTED     = auto()
+
 class SSS_MESSAGETYPE(IntEnum):
     CONNECT = auto()
     ACK = auto()
