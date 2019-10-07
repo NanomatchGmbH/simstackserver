@@ -464,6 +464,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("resources", Resources, None, "Computational resources", "m"),
         ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
         ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
+        ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m")
     ]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -509,7 +510,19 @@ cd $CLUSTERJOB_WORKDIR
     def _recreate_asyncresult_from_jobid(self, jobid):
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
-        return self._async_result_workaround
+        from clusterjob import AsyncResult
+        ar = AsyncResult(self.queueing_system)
+        ar.job_id = self.jobid
+        from clusterjob.status import RUNNING, PENDING
+        ar._status = PENDING
+        return ar
+
+    def set_queueing_system(self, queueing_system):
+        self._field_values["queueing_system"] = queueing_system
+
+    @property
+    def queueing_system(self):
+        return self._field_values["queueing_system"]
 
     def completed_or_aborted(self):
         asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
@@ -733,6 +746,7 @@ class Workflow(XMLYMLInstantiationBase):
         for rdjob in ready_jobs:
             tostart = self.elements.get_element_by_uid(rdjob)
             tostart : WorkflowExecModule
+            tostart.set_queueing_system(self.queueing_system)
             if not self._prepare_job(tostart):
                 raise WorkflowAbort("Could not prepare job.")
             else:
