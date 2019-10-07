@@ -185,7 +185,7 @@ class WorkflowManager(object):
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
 
     def backup_and_save(self):
-        for mywfmodel in self._inprogress_models:
+        for mywfmodel in self._inprogress_models.values():
             mywfmodel: Workflow
             mywfmodel.dump_xml_to_file(mywfmodel.get_filename())
 
