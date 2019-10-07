@@ -152,7 +152,10 @@ class XMLYMLInstantiationBase(object):
 
             childtype = self._field_types[field]
             if _is_basetype(childtype):
-                self._field_values[field] = childtype(child.text)
+                if childtype == JobStatus:
+                    self._field_values[field] = childtype(int(child.text))
+                else:
+                    self._field_values[field] = childtype(child.text)
             else:
                 insert_element = childtype()
                 insert_element.from_xml(child)
@@ -161,7 +164,11 @@ class XMLYMLInstantiationBase(object):
         for field, value in in_xml.attrib.items():
             if not field in self._field_values:
                 continue
-            self._field_values[field] = self._field_types[field](value)
+            childtype = self._field_types[field]
+            if childtype == JobStatus:
+                self._field_values[field] = childtype(int(value))
+            else:
+                self._field_values[field] = self._field_types[field](value)
 
     def from_dict(self, in_dict):
         """
@@ -175,7 +182,10 @@ class XMLYMLInstantiationBase(object):
             childtype = self._field_types[field]
 
             if _is_basetype(childtype):
-                self._field_values[field] = childtype(value)
+                if childtype == JobStatus:
+                    self._field_values[field] = childtype(int(value))
+                else:
+                    self._field_values[field] = childtype(value)
             else:
                 insert_ele = childtype()
                 insert_ele.from_dict(value)
@@ -698,7 +708,7 @@ class Workflow(XMLYMLInstantiationBase):
         ("storage", str, "",            "Path to the storage directory assigned by the workflow client.", "a"),
         ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
         ("submit_name", str, "${SUBMIT_NAME}", "The name this workflow was submitted as. This has to be unique on the cluster (per user). The workflow will be rejected if its not.", "a"),
-        ("status", int, JobStatus.READY, "Last checked status of the workflow", "a"),
+        ("status", int , JobStatus.READY, "Last checked status of the workflow", "a"),
         ("queueing_system",str, "unset", "Name of the queueing system. Might move into WFEM in case of split jobs.", "a")
     ]
 
@@ -832,6 +842,14 @@ class Workflow(XMLYMLInstantiationBase):
 
     def get_filename(self):
         return path.join(self.storage, "rendered_workflow.xml")
+
+    def to_xml(self, parent_element):
+        self._field_values["status"] = int(self._field_values["status"])
+        super().to_xml(parent_element)
+
+    def to_dict(self, parent_dict):
+        self._field_values["status"] = int(self._field_values["status"])
+        super().to_dict(parent_dict)
 
     def _prepare_job(self, wfem : WorkflowExecModule):
         """ Sanity check to check if all files are there """
