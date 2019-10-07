@@ -199,6 +199,7 @@ class WorkflowManager(object):
     def restore(self):
         appdirs = SimStackServer.get_appdirs()
         infile = os.path.join(appdirs.user_data_dir, "workflow_manager_state.json")
+        self._logger.debug("Trying to read %s"%infile)
         if os.path.isfile(infile):
             # We only try to restore, if it's present, otherwise we try to start from backup, otherwise
             try:
