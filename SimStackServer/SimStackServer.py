@@ -1,9 +1,11 @@
 import json
 import os
+import shutil
 import signal
 import time
 from pathlib import Path
 from queue import Queue, Empty
+
 
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message
 
@@ -18,6 +20,7 @@ import threading
 from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
+from SimStackServer.Util.FileUtilities import mkdir_p
 from SimStackServer.WorkflowModel import Workflow
 
 class AlreadyRunningException(Exception):
@@ -55,16 +58,21 @@ class WorkflowError(Exception):
 class WorkflowManager(object):
     def __init__(self):
         self._logger = logging.getLogger("WorkflowManager")
-        self._inprogress = []
-        self._finished = []
         self._inprogress_models = {}
         self._finished_models = {}
 
     def from_json(self, filename):
         with open(filename, 'rt') as infile:
             mydict = json.load(infile)
-        self._inprogress = mydict["inprogress"]
-        self._finished = mydict["finished"]
+        inprogress = mydict["inprogress"]
+        finished = mydict["finished"]
+        self._recreate_models_from_filenames(inprogress,finished)
+
+    def _recreate_models_from_filenames(self, inprogress_filenames, finished_filenames):
+        for inprogress_fn in inprogress_filenames:
+            self._add_workflow(inprogress_fn, self._inprogress_models)
+        for finished_fn in finished_filenames:
+            self._add_workflow(finished_fn, self._finished_models)
 
     @staticmethod
     def _parse_xml(filename):
@@ -125,19 +133,22 @@ class WorkflowManager(object):
         target_dict[newwf.submit_name] = newwf
         return newwf
 
-    def _recreate_models(self):
-        for source,target_models in zip([self._inprogress,self._finished],[self._inprogress_models,self._finished_models]):
-            for mydict in source:
-                filename = mydict["filename"]
-                xml = self._parse_xml(filename)
-                wf = Workflow()
-                wf.from_xml(xml)
-                target_models.append(wf)
-
     def to_json(self, filename):
+        inprogress = []
+        finished = []
+        for wf in self._inprogress_models:
+            wf: Workflow
+            fn = wf.get_filename()
+            inprogress.append(fn)
+
+        for wf in self._finished_models:
+            wf: Workflow
+            fn = wf.get_filename()
+            finished.append(fn)
+
         mydict = {
-            "inprogress":self._inprogress,
-            "finished": self._finished
+            "inprogress": inprogress,
+            "finished": finished
         }
         with open(filename, 'wt') as outfile:
             json.dump(mydict, outfile)
@@ -151,6 +162,10 @@ class WorkflowManager(object):
                 move_to_finished.append(wfsubmit_name)
 
         for key in move_to_finished:
+            wf = self._inprogress_models[key]
+            wf: Workflow
+            # We dump the finished workflow one last time.
+            wf.dump_xml_to_file(wf.get_filename())
             self._finished_models[key] = self._inprogress_models[key]
             del self._inprogress_models[key]
 
@@ -169,6 +184,37 @@ class WorkflowManager(object):
         workflow = self.add_inprogress_workflow(workflow_file)
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
 
+    def backup_and_save(self):
+        for mywfmodel in self._inprogress_models:
+            mywfmodel: Workflow
+            mywfmodel.dump_xml_to_file(mywfmodel.get_filename())
+
+        appdirs = SimStackServer.get_appdirs()
+        mkdir_p(appdirs.user_data_dir)
+        outfile = os.path.join(appdirs.user_data_dir, "workflow_manager_state.json")
+        if os.path.isfile(outfile):
+            shutil.move(outfile, outfile+ ".bak")
+        self.to_json(outfile)
+
+    def restore(self):
+        appdirs = SimStackServer.get_appdirs()
+        infile = os.path.join(appdirs.user_data_dir, "workflow_manager_state.json")
+        if os.path.isfile(infile):
+            # We only try to restore, if it's present, otherwise we try to start from backup, otherwise
+            try:
+                self.from_json(infile)
+            except Exception as e:
+                self._logger.exception("Tried to recreate workflow manager from infile, which could not be read.")
+                bakfile = infile+ ".bak"
+                if os.path.exists(bakfile):
+                    try:
+                        self._logger.info("Trying to recreate workflow info from backup config")
+                        self.from_json(bakfile)
+                    except Exception as e:
+                        self._logger.exception("Backup config could also not be read")
+        else:
+            self._logger.info("Generating new workflow manager")
+
 class SimStackServer(object):
     def __init__(self, my_executable):
         self._setup_root_logger()
@@ -176,9 +222,9 @@ class SimStackServer(object):
         self._logger = logging.getLogger("SimStackServer")
         if not self._register(my_executable):
             self._logger.debug("Already running, should exit here.")
-            
             raise AlreadyRunningException("Already running, please discard silently.")
         self._workflow_manager = WorkflowManager()
+        self._workflow_manager.restore()
         self._zmq_context = None
         self._auth = None
         self._communication_timeout = 4.0
@@ -337,8 +383,12 @@ class SimStackServer(object):
             # However: term can hang and leave the Server dangling. Therefore: destory
             # I will gladly take an error message over deadlock.
             # If term ever gets a timeout argument, please switch over.
+            # Note, maybe with the current setup, where we set linger on all ports this would be a non-issue.
             self._zmq_context.destroy()
             self._logger.debug("ZMQ context terminated.")
+        
+        #Now that nothing is running anymore, we save WorkflowManagers runtime information and all workflows (inside WFM)
+        self._workflow_manager.backup_and_save()
 
     def _shutdown(self, remove_crontab = True):
         if self._config is None:

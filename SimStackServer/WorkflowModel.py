@@ -201,7 +201,15 @@ class XMLYMLInstantiationBase(object):
             myxml = etree.parse(infile).getroot()
         a = cls()
         a.from_xml(myxml)
-        return a 
+        return a
+
+    def dump_xml_to_file(self, filename):
+        me = etree.Element(self.name)
+        self.to_xml(me)
+        with open(filename, 'wt') as infile:
+            infile.write(etree.tostring(me,encoding="utf8",pretty_print=True).decode()+"\n")
+
+
 
 
 
@@ -804,7 +812,8 @@ class Workflow(XMLYMLInstantiationBase):
             shutil.copyfile(absfile, tofile)
         return True
 
-
+    def get_filename(self):
+        return path.join(self.storage, self.submit_name, "rendered_workflow.xml")
 
     def _prepare_job(self, wfem : WorkflowExecModule):
         """ Sanity check to check if all files are there """
