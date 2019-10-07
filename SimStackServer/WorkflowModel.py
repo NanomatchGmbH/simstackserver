@@ -813,7 +813,7 @@ class Workflow(XMLYMLInstantiationBase):
         return True
 
     def get_filename(self):
-        return path.join(self.storage, self.submit_name, "rendered_workflow.xml")
+        return path.join(self.storage, "rendered_workflow.xml")
 
     def _prepare_job(self, wfem : WorkflowExecModule):
         """ Sanity check to check if all files are there """
