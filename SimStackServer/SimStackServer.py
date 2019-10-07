@@ -136,12 +136,12 @@ class WorkflowManager(object):
     def to_json(self, filename):
         inprogress = []
         finished = []
-        for wf in self._inprogress_models:
+        for wf in self._inprogress_models.values():
             wf: Workflow
             fn = wf.get_filename()
             inprogress.append(fn)
 
-        for wf in self._finished_models:
+        for wf in self._finished_models.values():
             wf: Workflow
             fn = wf.get_filename()
             finished.append(fn)
