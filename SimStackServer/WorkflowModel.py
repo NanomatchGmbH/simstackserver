@@ -510,8 +510,12 @@ cd $CLUSTERJOB_WORKDIR
     def _recreate_asyncresult_from_jobid(self, jobid):
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
-        from clusterjob import AsyncResult
-        ar = AsyncResult(self.queueing_system)
+        from clusterjob import AsyncResult, Job
+        if len(Job.backends) == 0:
+            a = Job("DummyJob","DEF")
+            assert len(Job.backends) > 0
+
+        ar = AsyncResult(Job.backends[self.queueing_system])
         ar.job_id = self.jobid
         from clusterjob.status import RUNNING, PENDING
         ar._status = PENDING
