@@ -249,6 +249,7 @@ class SimStackServer(object):
 
     def _message_handler(self, message_type, message, sock):
         # Every message here MUST absolutely have a send after, otherwise the client will hang.
+        # All code, which is not a deadfire send has to be in try except
         if message_type == MessageTypes.CONNECT:
             #Simply acknowledge connection, no args
             sock.send(Message.connect_message())
@@ -256,40 +257,61 @@ class SimStackServer(object):
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
             sock.send(Message.ack_message())
-            toabort = message["workflow_submit_name"]
-            self._logger.debug("Receive workflow abort message %s" % toabort)
-            self._workflow_manager.abort_workflow(toabort)
+            try:
+                toabort = message["workflow_submit_name"]
+                self._logger.debug("Receive workflow abort message %s" % toabort)
+                self._workflow_manager.abort_workflow(toabort)
+            except Exception as e:
+                self._logger.exception("Error aborting workflow %s."%(toabort))
 
         elif message_type == MessageTypes.LISTWFJOBS:
             # Arg is associated workflow
             tolistwf = message["workflow_submit_name"]
-            self._logger.error("LWFJ not implemented. Wanted to list jobs of %s"%tolistwf)
-            list_of_jobs = self._workflow_manager.list_jobs_of_workflow(tolistwf)
+            try:
+                list_of_jobs = self._workflow_manager.list_jobs_of_workflow(tolistwf)
+            except Exception as e:
+                self._logger.exception("Error listing jobs of workflow %s" %tolistwf)
+                list_of_jobs = []
             sock.send(Message.list_jobs_of_wf_message_reply(tolistwf,list_of_jobs))
+
 
         elif message_type == MessageTypes.DELWF:
             sock.send(Message.ack_message())
-            toabort = message["workflow_submit_name"]
-            self._logger.debug("Receive workflow delete message %s" % toabort)
-            self._workflow_manager.abort_workflow(toabort)
+            try:
+                toabort = message["workflow_submit_name"]
+                self._logger.debug("Receive workflow delete message %s" % toabort)
+                self._workflow_manager.abort_workflow(toabort)
+            except Exception as e:
+                self._logger.exception("Error deleting workflow %s." %toabort)
 
         elif message_type == MessageTypes.DELJOB:
-            workflow_submit_name = message["workflow_submit_name"]
-            job_submit_name = message["job_submit_name"]
-            self._logger.error("DELWF not implemented, however I would like to delete %s from %s"%(job_submit_name, workflow_submit_name))
             sock.send(Message.ack_message())
+            try:
+                workflow_submit_name = message["workflow_submit_name"]
+                job_submit_name = message["job_submit_name"]
+                self._logger.error("DELWF not implemented, however I would like to delete %s from %s"%(job_submit_name, workflow_submit_name))
+            except Exception as e:
+                self._logger.exception("Error during job deletion.")
 
         elif message_type == MessageTypes.LISTWFS:
             # No Args, returns stringlist of Workflow submit names
-            self._logger.debug("Received LISTWFS message")
-            workflows = self._workflow_manager.get_inprogress_workflows() + self._workflow_manager.get_finished_workflows()
+            try:
+                self._logger.debug("Received LISTWFS message")
+                workflows = self._workflow_manager.get_inprogress_workflows() + self._workflow_manager.get_finished_workflows()
+            except Exception as e:
+                self._logger.exception("Error listing workflows.")
+                workflows = []
+
             sock.send(Message.list_wfs_reply_message(workflows))
 
         elif message_type == MessageTypes.SUBMITWF:
             sock.send(Message.ack_message())
-            workflow_filename = message["filename"]
-            self._logger.debug("Received SUBMITWF message, submitting %s" % workflow_filename)
-            self._submitted_job_queue.put(workflow_filename)
+            try:
+                workflow_filename = message["filename"]
+                self._logger.debug("Received SUBMITWF message, submitting %s" % workflow_filename)
+                self._submitted_job_queue.put(workflow_filename)
+            except Exception as e:
+                self._logger.exception("Error submitting workflow.")
 
 
     def _zmq_worker_loop(self, port):
