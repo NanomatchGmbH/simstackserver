@@ -498,7 +498,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         # The file we are in might be compiled. We need a definitely uncompiled module.
         import SimStackServer.Data as data
 
-        datadir = path.realpath(data.__path__)
+        datadir = path.realpath(data.__path__[0])
         #datadir is:
         # '/home/nanomatch/nanomatch/V2/SimStackServer/SimStackServer/Data'
         # we want: /home/nanomatch/nanomatch
