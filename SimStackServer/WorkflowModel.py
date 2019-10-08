@@ -749,7 +749,7 @@ class Workflow(XMLYMLInstantiationBase):
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
-            myjob = self.elements[job]
+            myjob = self.elements.get_element_by_uid(job)
             myjob:WorkflowExecModule
             myjob.abort_job()
 
