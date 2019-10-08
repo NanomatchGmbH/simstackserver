@@ -60,6 +60,7 @@ class WorkflowManager(object):
         self._logger = logging.getLogger("WorkflowManager")
         self._inprogress_models = {}
         self._finished_models = {}
+        self._deletion_queue = Queue()
 
     def from_json(self, filename):
         with open(filename, 'rt') as infile:
@@ -84,7 +85,7 @@ class WorkflowManager(object):
         if workflow_submitname in self._inprogress_models:
             self._inprogress_models[workflow_submitname].abort()
         else:
-            self._logger.warning("Tried to abort workflow, which was not found.")
+            self._logger.warning("Tried to abort workflow, which was not found in inprogress workflows.")
 
     def _get_workflows(self, which_ones):
         """
@@ -154,12 +155,22 @@ class WorkflowManager(object):
             json.dump(mydict, outfile)
 
     def check_status_submit(self):
+        while not self._deletion_queue.empty():
+            myitem = self._deletion_queue.get()
+            self._delete_workflow_and_folder(myitem)
+
         move_to_finished = []
         for wfsubmit_name, wfmodel in self._inprogress_models.items():
             wfmodel: Workflow
-            if wfmodel.jobloop():
-                self._logger.debug("Moving %s to finished workflows"%wfsubmit_name)
+            try:
+                if wfmodel.jobloop():
+                    self._logger.debug("Moving %s to finished workflows"%wfsubmit_name)
+                    move_to_finished.append(wfsubmit_name)
+            except Exception as e:
+                self._logger.exception("Uncaught exception during jobloop of workflow %s. Aborting."%wfsubmit_name)
+                wfmodel.abort()
                 move_to_finished.append(wfsubmit_name)
+
 
         for key in move_to_finished:
             wf = self._inprogress_models[key]
@@ -215,6 +226,33 @@ class WorkflowManager(object):
                         self._logger.exception("Backup config could also not be read")
         else:
             self._logger.info("Generating new workflow manager")
+
+    def _delete_workflow_and_folder(self, workflow_submitname):
+        if workflow_submitname in self._inprogress_models:
+            target_dict = self._inprogress_models
+        elif workflow_submitname in self._finished_models:
+            target_dict = self._finished_models
+        else:
+            self._logger.warning("Did not find workflow in running models.")
+            return
+        mywf = target_dict[workflow_submitname]
+        mywf: Workflow
+        mywf.all_job_abort()
+        mywf.delete_storage()
+        # Forbid model access here
+        del target_dict[workflow_submitname]
+        # Release model access here
+
+    def delete_workflow(self, workflow_submitname):
+        if workflow_submitname in self._inprogress_models:
+            self._inprogress_models[workflow_submitname].delete()
+            self._deletion_queue.put(workflow_submitname)
+        elif workflow_submitname in self._finished_models:
+            self._finished_models[workflow_submitname].delete()
+            self._deletion_queue.put(workflow_submitname)
+        else:
+            self._logger.error("Did not find workflow %s in model lists." %workflow_submitname)
+
 
 class SimStackServer(object):
     def __init__(self, my_executable):
@@ -281,6 +319,7 @@ class SimStackServer(object):
                 toabort = message["workflow_submit_name"]
                 self._logger.debug("Receive workflow delete message %s" % toabort)
                 self._workflow_manager.abort_workflow(toabort)
+                self._workflow_manager.delete_workflow(toabort)
             except Exception as e:
                 self._logger.exception("Error deleting workflow %s." %toabort)
 
@@ -434,16 +473,22 @@ class SimStackServer(object):
         while not self._stop_main:
             counter+=1
             if self._submitted_job_queue.empty():
-                self._workflow_manager.check_status_submit()
+                try:
+                    self._workflow_manager.check_status_submit()
+                except Exception as e:
+                    self._logger.exception("Ran into problem during workflow manager loop.")
                 time.sleep(3)
             else:
                 try:
-                    tostart = self._submitted_job_queue.get(timeout = 5)
-                    tostart_abs = self._remote_relative_to_absolute_filename(tostart)
-                    self._logger.info("Starting workflow %s"%tostart_abs)
-                    self._workflow_manager.start_wf(tostart_abs)
-                except Empty as e:
-                    self._logger.error("Another thread consumed a workflow from the queue, although we should be the only thread.")
+                    try:
+                        tostart = self._submitted_job_queue.get(timeout = 5)
+                        tostart_abs = self._remote_relative_to_absolute_filename(tostart)
+                        self._logger.info("Starting workflow %s"%tostart_abs)
+                        self._workflow_manager.start_wf(tostart_abs)
+                    except Empty as e:
+                        self._logger.error("Another thread consumed a workflow from the queue, although we should be the only thread.")
+                except Exception as e:
+                    self._logger.exception("Exception in Workflow starting.")
             if counter % 30 == 0:
                 self._logger.debug("Main Thread heartbeat")
 

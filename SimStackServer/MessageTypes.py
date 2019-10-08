@@ -24,6 +24,7 @@ class JobStatus(IntEnum):
     FAILED      = auto()
     SUCCESSFUL  = auto()
     ABORTED     = auto()
+    MARKED_FOR_DELETION = auto()
 
 class SSS_MESSAGETYPE(IntEnum):
     CONNECT = auto()

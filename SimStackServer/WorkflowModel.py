@@ -1,11 +1,13 @@
 import datetime
 import logging
+import os
 import shutil
 import sys
 import uuid
 from abc import abstractmethod, abstractclassmethod
 from enum import Flag, auto
 from io import StringIO
+from os.path import join
 
 from pathlib import Path
 
@@ -483,7 +485,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._name = "WorkflowExecModule"
 
         # This one has to be hacked out again. It is currently clusterjob dependent and we really don't want that.
-        self._async_result_workaround = None
+        #self._async_result_workaround = None
 
     @classmethod
     def fields(cls):
@@ -514,8 +516,13 @@ cd $CLUSTERJOB_WORKDIR
         #    outfile.write(str(jobscript)+ '\n')
 
         asyncresult = jobscript.submit()
-        self._async_result_workaround = asyncresult
+        #self._async_result_workaround = asyncresult
         self.set_jobid(asyncresult.job_id)
+
+    def abort_job(self):
+        asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
+        asyncresult.status
+        asyncresult.cancel()
 
     def _recreate_asyncresult_from_jobid(self, jobid):
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
@@ -737,6 +744,37 @@ class Workflow(XMLYMLInstantiationBase):
     def abort(self):
         self._field_values["status"] = JobStatus.ABORTED
 
+    def delete(self):
+        self._field_values["status"] = JobStatus.MARKED_FOR_DELETION
+
+    def all_job_abort(self):
+        for job in self.graph.get_running_jobs():
+            myjob = self.elements[job]
+            myjob:WorkflowExecModule
+            myjob.abort_job()
+
+    def delete_storage(self):
+        """
+        This routine deletes all files this workflow has generated.
+        It must not delete storage with a rm -r.
+        It must only delete subfolder with rm -r, as otherwise a user could set storage = '/' and screw himself.
+        :return:
+        """
+
+        exec_dir_path = join(self.storage,"exec_directories")
+        workflow_data_path = join(self.storage,"workflow_data")
+        rendered_workflow_path = join(self.storage,"rendered_workflow.xml")
+        shutil.rmtree(exec_dir_path,ignore_errors=True)
+        shutil.rmtree(workflow_data_path, ignore_errors=True)
+        try:
+            os.remove(rendered_workflow_path)
+        except FileNotFoundError as e:
+            pass
+        try:
+            os.rmdir(self.storage)
+        except FileNotFoundError as e:
+            pass
+
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
 
@@ -752,8 +790,18 @@ class Workflow(XMLYMLInstantiationBase):
             running = self.elements.get_element_by_uid(running_job)
             running : WorkflowExecModule
             if running.completed_or_aborted():
-                self._postjob_care(running)
-                self.graph.finish(running_job)
+                try:
+                    self._postjob_care(running)
+                    self.graph.finish(running_job)
+                except WorkflowAbort as e:
+                    self._logger.error(str(e))
+                    self._logger.error("Aborting workflow %s due to error in Job."%self.submit_name)
+                    self.abort()
+                    return True
+                except Exception as e:
+                    self._logger.exception("Exception during postjob care. Aborting workflow.")
+                    self.abort()
+                    return True
 
         ready_jobs = self.graph.get_next_ready()
         #self.graph.traverse()
@@ -761,13 +809,20 @@ class Workflow(XMLYMLInstantiationBase):
             tostart = self.elements.get_element_by_uid(rdjob)
             tostart : WorkflowExecModule
             tostart.set_queueing_system(self.queueing_system)
-            if not self._prepare_job(tostart):
-                raise WorkflowAbort("Could not prepare job.")
-            else:
-                self._field_values["status"] = JobStatus.RUNNING
-                tostart.run_jobfile(self.queueing_system)
-                self.graph.start(rdjob)
-                self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
+            try:
+                if not self._prepare_job(tostart):
+                    self._logger.error("Error during job preparation. Aborting workflow %s"%self.submit_name)
+                    self.abort()
+                    return True
+                else:
+                    self._field_values["status"] = JobStatus.RUNNING
+                    tostart.run_jobfile(self.queueing_system)
+                    self.graph.start(rdjob)
+                    self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
+            except Exception as e:
+                self._logger.exception("Uncaught exception during job preparation. Aborting workflow %s"%self.submit_name)
+                self.abort()
+                return True
         if self.graph.is_workflow_finished():
             self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." %self.name)
