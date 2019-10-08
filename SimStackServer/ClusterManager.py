@@ -5,6 +5,7 @@ import time
 import paramiko
 from os import path
 import posixpath
+from pathlib import Path
 
 import zmq
 from paramiko import SFTPAttributes
@@ -40,7 +41,6 @@ class ClusterManager(object):
         self._default_mode = 770
         self._context = zmq.Context.instance()
         self._socket = None
-
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """

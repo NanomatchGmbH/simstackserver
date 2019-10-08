@@ -483,6 +483,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         if not "uid" in kwargs:
             self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
+        self._nmdir = self._init_nanomatch_directory()
 
         # This one has to be hacked out again. It is currently clusterjob dependent and we really don't want that.
         #self._async_result_workaround = None
@@ -490,6 +491,34 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     @classmethod
     def fields(cls):
         return cls._fields
+
+
+
+    def _init_nanomatch_directory(self):
+        # The file we are in might be compiled. We need a definitely uncompiled module.
+        import SimStackServer.Data as data
+
+        datadir = path.realpath(data.__path__)
+        #datadir is:
+        # '/home/nanomatch/nanomatch/V2/SimStackServer/SimStackServer/Data'
+        # we want: /home/nanomatch/nanomatch
+        datadirpath = Path(datadir[0])
+        nmdir = str(datadirpath.parent.parent.parent.parent)
+        return nmdir
+
+    def _get_prolog_unicore_compatibility(self, resources):
+        """
+
+        :param resources:
+        :return:
+        """
+        return """#!/bin/bash
+UC_NODES=%d; export UC_NODES;
+UC_PROCESSORS_PER_NODE=%d; export UC_PROCESSORS_PER_NODE;
+UC_TOTAL_PROCESSORS=%d; export UC_TOTAL_PROCESSORS;
+export NANOMATCH=%s
+"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self._nmdir)
+
 
     def run_jobfile(self, queueing_system):
         import clusterjob
@@ -501,10 +530,10 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         if queue == "default" and queueing_system == "pbs":
             del kwargs["queue"]
 
-        toexec = """
+        toexec = """%s
 cd $CLUSTERJOB_WORKDIR
 %s
-"""%self.exec_command
+"""%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
         jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
                                          time = self.resources.walltime, nodes = self.resources.nodes,
                                          threads = self.resources.cpus_per_node, mem = self.resources.memory,
