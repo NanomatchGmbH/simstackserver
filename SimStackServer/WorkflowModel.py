@@ -562,7 +562,7 @@ cd $CLUSTERJOB_WORKDIR
 
         ar = AsyncResult(JobScript._backends[self.queueing_system])
         ar.job_id = self.jobid
-        from clusterjob.status import RUNNING, PENDING
+        from clusterjob.status import PENDING
         ar._status = PENDING
         return ar
 
@@ -679,6 +679,9 @@ class DirectedGraph(object):
     def finish(self, node):
         assert self._graph.nodes[node]["status"] == "running"
         self._graph.nodes[node]["status"] = "success"
+
+    def fail(self, node):
+        self._graph.nodes[node]["status"] = "failed"
 
     def is_workflow_finished(self):
         outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] != "success" ]
