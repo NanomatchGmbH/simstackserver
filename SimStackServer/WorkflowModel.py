@@ -514,8 +514,9 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
 UC_NODES=%d; export UC_NODES;
 UC_PROCESSORS_PER_NODE=%d; export UC_PROCESSORS_PER_NODE;
 UC_TOTAL_PROCESSORS=%d; export UC_TOTAL_PROCESSORS;
+UC_MEMORY_PER_NODE=%d; export UC_MEMORY_PER_NODE;
 export NANOMATCH=%s
-"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self._nmdir)
+"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self.resources.memory, self._nmdir)
 
 
     def run_jobfile(self, queueing_system):
