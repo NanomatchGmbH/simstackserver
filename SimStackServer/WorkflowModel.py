@@ -413,12 +413,12 @@ class Resources(XMLYMLInstantiationBase):
     Class to store computational resources. Used to create jobs. Host refers to the HPC master this is running on.
     """
     _fields = [
-        ("walltime", np.uint64, 1, "Walltime in seconds", "a"),
+        ("walltime", np.uint64, 86399, "Walltime in seconds", "a"),
         ("cpus_per_node", np.uint64, 1, "Number of CPUs per Node", "a"),
         ("nodes",np.uint64, 1, "Number of Nodes", "a"),
         ("queue", str, "default", "String representation of queue", "m"),
         ("host", str, "localhost", "String representation of host, might include port with :, might be ipv4 or ipv6","m"),
-        ("memory", np.uint64, 1,  "Memory in Megabytes", "a")
+        ("memory", np.uint64, 4096,  "Memory in Megabytes", "a")
     ]
 
     def __init__(self, *args, **kwargs):
