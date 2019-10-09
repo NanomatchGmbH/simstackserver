@@ -826,7 +826,7 @@ class Workflow(XMLYMLInstantiationBase):
                     self._postjob_care(running)
                     self.graph.finish(running_job)
                 except WorkflowAbort as e:
-                    self.graph.fail(running)
+                    self.graph.fail(running_job)
                     self._logger.error(str(e))
                     self._logger.error("Aborting workflow %s due to error in Job."%self.submit_name)
                     self.abort()
