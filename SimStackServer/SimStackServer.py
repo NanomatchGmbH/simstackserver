@@ -7,7 +7,7 @@ from pathlib import Path
 from queue import Queue, Empty
 
 
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message
+from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message, JobStatus
 
 import zmq
 
@@ -164,6 +164,9 @@ class WorkflowManager(object):
             wfmodel: Workflow
             try:
                 if wfmodel.jobloop():
+                    if wfmodel.status == JobStatus.ABORTED:
+                        self._logger.info("Aborting all jobs of %s." % wfsubmit_name)
+                        wfmodel.all_job_abort()
                     self._logger.debug("Moving %s to finished workflows"%wfsubmit_name)
                     move_to_finished.append(wfsubmit_name)
             except Exception as e:
