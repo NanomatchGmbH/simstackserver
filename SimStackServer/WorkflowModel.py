@@ -783,6 +783,7 @@ class Workflow(XMLYMLInstantiationBase):
             myjob = self.elements.get_element_by_uid(job)
             myjob:WorkflowExecModule
             myjob.abort_job()
+            self.graph.fail(job)
 
     def delete_storage(self):
         """
@@ -825,6 +826,7 @@ class Workflow(XMLYMLInstantiationBase):
                     self._postjob_care(running)
                     self.graph.finish(running_job)
                 except WorkflowAbort as e:
+                    self.graph.fail(running)
                     self._logger.error(str(e))
                     self._logger.error("Aborting workflow %s due to error in Job."%self.submit_name)
                     self.abort()
