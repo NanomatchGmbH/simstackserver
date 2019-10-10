@@ -1,4 +1,7 @@
+import logging
 import os
+from functools import wraps
+
 from lxml import etree
 
 class PathSplitError(Exception):
@@ -64,3 +67,16 @@ def file_to_xml(path):
     with sserver_open(path,'r') as infile:
         xml = etree.parse(infile)
     return xml.getroot()
+
+
+def trace_to_logger(f):
+    @wraps(f)
+    def wrapper(*args,**kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            logger = logging.getLogger("TraceLogger")
+            logger.exception("Exception occured:")
+            raise e
+
+    return wrapper
