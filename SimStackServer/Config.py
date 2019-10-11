@@ -175,6 +175,7 @@ class Config(object):
         :param filename (str): Relative filename
         :return (str): Filename in directory
         """
+        mkdir_p(cls._dirs.user_config_dir)
         return path.join(cls._dirs.user_config_dir, filename)
 
     def _parse(self):
