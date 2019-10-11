@@ -42,6 +42,101 @@ class SSS_MESSAGETYPE(IntEnum):
     DISCONNECT = auto()
     SUBMITWF = auto()
 
+class ResourceStatus(IntEnum):
+    """
+    List of Resource states:
+
+    * READY
+    * UNAVAILABLE
+    """
+    READY = auto()
+    UNAVAILABLE = auto()
+
+class ErrorCodes(IntEnum):
+    """
+    List of Errors:
+
+    * NO_ERROR
+    * NOT_CONNECTED
+    * DECODE_ERROR
+    * MALFORMED_JSON
+    * EMPTY_RESPONSE
+    * NOT_A_FILE
+    * INVALID_QUERY
+    * INVALID_SETUP
+    * HTTP_ERROR
+    * CONN_TIMEOUT
+    * REQ_TIMEOUT
+    * SSL_ERROR
+    * CONN_ERROR
+    * UNKONWN_EXCPTION
+    * FILE_IO_ERROR
+    * REMOTE_FILE_NOT_FOUND
+    * RESOURCE_DOES_NOT_EXIST
+    """
+
+    NO_ERROR                    = auto()
+    NOT_CONNECTED               = auto()
+    DECODE_ERROR                = auto()
+    MALFORMED_JSON              = auto()
+    EMPTY_RESPONSE              = auto()
+    NOT_A_FILE                  = auto()
+    INVALID_QUERY               = auto()
+    INVALID_SETUP               = auto()
+    HTTP_ERROR                  = auto()
+    CONN_TIMEOUT                = auto()
+    REQ_TIMEOUT                 = auto()
+    SSL_ERROR                   = auto()
+    CONN_ERROR                  = auto()
+    UNKONWN_EXCPTION            = auto()
+    FILE_IO_ERROR               = auto()
+    REMOTE_FILE_NOT_FOUND       = auto()
+    RESOURCE_DOES_NOT_EXIST     = auto()
+    INVALID_CREDENTIALS         = auto()
+
+class ConnectionState(IntEnum):
+    """
+    Connection state machine:
+        NOT_SETUP
+            |
+            | - setup
+            |/---------- setup ----\------\
+            |                        \     \
+        DISCONNECTED------------\     |     |
+            |  \                 \    |     |
+            |   \---------------------/     |
+            |                     |         |
+            | - connect           |         |
+            |/--------- connect -------- FAILED
+        CONNECTING                |         |
+            |                     |         |
+            |--[fail]-----------------------|
+            |                     |         |
+        [success]                 |         |
+            |                     |         |
+        CONNECTED                 |         |
+            |                     |         |
+            |--[fail]----------------------/
+            | - disconnect        |
+            |                     |
+        DISCONNECTING             |
+            |                     |
+             \___________________/
+    """
+
+    #TODO implement missing transitions, ensure only the above transitions are
+    # allowed
+
+    CONNECTED       = auto()
+    CONNECTING      = auto()
+    DISCONNECTED    = auto()
+    DISCONNECTING   = auto()
+    NOT_SETUP       = auto()
+    FAILED          = auto()
+
+
+
+
 class Message(object):
     @classmethod
     def connect_message(cls):
