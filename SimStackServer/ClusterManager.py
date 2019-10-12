@@ -63,6 +63,7 @@ class ClusterManager(object):
         self._ssh_client.connect(self._url,self._port, username=self._user)
         self._should_be_connected = True
         self._sftp_client = self._ssh_client.open_sftp()
+        self._sftp_client.get_channel().settimeout(1.0)
         self.mkdir_p(self._calculation_basepath,basepath_override="")
 
     def disconnect(self):
@@ -212,9 +213,13 @@ class ClusterManager(object):
         print("Connecting to ZMQ serve at %d with password %s"%(port, password))
 
         self._socket = self._context.socket(zmq.REQ)
+
         socket = self._socket
         socket.plain_username = b"simstack_client"
         socket.plain_password = password.encode("utf8").strip()
+        socket.setsockopt(zmq.LINGER, True)
+        socket.setsockopt(zmq.SNDTIMEO, 2000)
+        socket.setsockopt(zmq.RCVTIMEO, 2000)
 
         from zmq import ssh
         ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url())
