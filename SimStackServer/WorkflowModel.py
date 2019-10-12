@@ -754,9 +754,8 @@ class Workflow(XMLYMLInstantiationBase):
         super().__init__(*args, **kwargs)
         self._name = "Workflow"
         self._logger = logging.getLogger("Workflow")
-        self._abs_resolve_storage()
 
-    def _abs_resolve_storage(self):
+    def abs_resolve_storage(self):
         if not self.storage.startswith('/'):
             home = str(Path.home())
             self._field_values["storage"] = home + '/' + self._field_values["storage"]
