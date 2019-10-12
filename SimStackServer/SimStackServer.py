@@ -127,6 +127,7 @@ class WorkflowManager(object):
         """
         newwf = Workflow.new_instance_from_xml(workflow_filename)
         newwf: Workflow
+        newwf.abs_resolve_storage()
         if newwf.submit_name in self._inprogress_models or newwf.submit_name in self._finished_models:
             errormessage = "Discarding workflow with submit_name: %s as it was already present." %newwf.submit_name
             self._logger.error(errormessage)
@@ -196,7 +197,6 @@ class WorkflowManager(object):
 
     def start_wf(self, workflow_file):
         workflow = self.add_inprogress_workflow(workflow_file)
-        workflow.abs_resolve_storage()
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
 
     def backup_and_save(self):
