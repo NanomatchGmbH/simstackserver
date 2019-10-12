@@ -765,11 +765,9 @@ class Workflow(XMLYMLInstantiationBase):
 
     def from_xml(self, in_xml):
         super().from_xml(in_xml)
-        self._abs_resolve_storage()
 
     def from_dict(self, in_dict):
         super().from_dict(in_dict)
-        self._abs_resolve_storage()
 
     def abort(self):
         self._field_values["status"] = JobStatus.ABORTED
