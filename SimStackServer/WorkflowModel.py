@@ -510,7 +510,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         :param resources:
         :return:
         """
-        return """#!/bin/bash
+        return """
 UC_NODES=%d; export UC_NODES;
 UC_PROCESSORS_PER_NODE=%d; export UC_PROCESSORS_PER_NODE;
 UC_TOTAL_PROCESSORS=%d; export UC_TOTAL_PROCESSORS;
@@ -526,7 +526,7 @@ export NANOMATCH=%s
         queue = self.resources.queue
         kwargs = {}
         kwargs["queue"] = self.resources.queue
-        if queue == "default" and queueing_system == "pbs":
+        if queue == "default" and queueing_system in ["pbs","slurm"]:
             del kwargs["queue"]
 
         toexec = """%s
@@ -549,8 +549,12 @@ cd $CLUSTERJOB_WORKDIR
 
     def abort_job(self):
         asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
-        asyncresult.status
-        asyncresult.cancel()
+        try:
+            asyncresult.status
+            asyncresult.cancel()
+        except ValueError as e:
+            # In this case the job was most probably not known by the queueing system anymore.
+            pass
 
     def _recreate_asyncresult_from_jobid(self, jobid):
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
@@ -574,8 +578,12 @@ cd $CLUSTERJOB_WORKDIR
         return self._field_values["queueing_system"]
 
     def completed_or_aborted(self):
-        asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
-        return asyncresult.status >= 0
+        try:
+            asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
+            return asyncresult.status >= 0
+        except ValueError as e:
+            # In this case the queueing system did not know about our job anymore. Return True
+            return True # The job will be checked for actual completion anyways
 
     @property
     def uid(self):
