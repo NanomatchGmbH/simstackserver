@@ -122,6 +122,17 @@ class TestWorkflowModel(unittest.TestCase):
         a.jobloop()
 
 
+    def test_time_from_seconds_to_clusterjob_timestring(self):
+        mytime = 5*86400 + 3*3600 + 12*60 + 14
+        outstring = WorkflowExecModule._time_from_seconds_to_clusterjob_timestring(mytime)
+        self.assertEqual(outstring, "5-3:12:14")
+        mytime = 5
+        outstring = WorkflowExecModule._time_from_seconds_to_clusterjob_timestring(mytime)
+        self.assertEqual(outstring,"05")
+        mytime = 2*60 + 4
+        outstring = WorkflowExecModule._time_from_seconds_to_clusterjob_timestring(mytime)
+        self.assertEqual(outstring, "02:04")
+
     def testWorkflowElement(self):
         a = WorkflowExecModule()
         test_xml_str = """

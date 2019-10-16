@@ -518,6 +518,27 @@ UC_MEMORY_PER_NODE=%d; export UC_MEMORY_PER_NODE;
 export NANOMATCH=%s
 """%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self.resources.memory, self._nmdir)
 
+    @staticmethod
+    def _time_from_seconds_to_clusterjob_timestring(time_in_seconds):
+        days = int(time_in_seconds // 86400)
+        rest = time_in_seconds - days* 86400
+        hours = int(rest // 3600)
+        rest = rest - hours * 3600
+        minutes = rest // 60
+        rest = rest - minutes*60
+        seconds = rest
+
+
+        timestring = ""
+        if days > 0:
+            timestring += "%d-"%days
+        if hours > 0:
+            timestring += "%d:"%hours
+        if minutes > 0:
+            timestring += "%02d:"%minutes
+        timestring += "%02d"%seconds
+        return timestring
+
 
     def run_jobfile(self, queueing_system):
         import clusterjob
@@ -528,6 +549,13 @@ export NANOMATCH=%s
         kwargs["queue"] = self.resources.queue
         if queue == "default" and queueing_system in ["pbs","slurm"]:
             del kwargs["queue"]
+
+        mytime = self.resources.walltime
+        if mytime < 61:
+            # We have to allocate at least 61 seconds
+            # to work around the specificities of clusterjob.
+            mytime = 61
+        mytimestring = self._time_from_seconds_to_clusterjob_timestring(mytime)
 
         toexec = """%s
 cd $CLUSTERJOB_WORKDIR
