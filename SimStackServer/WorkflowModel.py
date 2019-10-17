@@ -563,7 +563,7 @@ cd $CLUSTERJOB_WORKDIR
 """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
         jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
                                          time = self.resources.walltime, nodes = self.resources.nodes,
-                                         threads = self.resources.cpus_per_node, mem = self.resources.memory,
+                                         ppn = self.resources.cpus_per_node, mem = self.resources.memory,
                                          stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                          workdir = self.runtime_directory, **kwargs
         )
