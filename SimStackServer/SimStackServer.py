@@ -534,6 +534,7 @@ class SimStackServer(object):
 
             if time.time() > terminationtime:
                 # We have been idling for maxidleduration. Terminating.
+                self._logger.info("Server has been idle for %d minutes. Terminating server."%(maxidleduration//60))
                 work_done = True
                 self._stop_main = True
 
