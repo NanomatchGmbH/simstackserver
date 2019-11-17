@@ -107,6 +107,13 @@ class WorkflowManager(object):
 
         return output
 
+    def workflows_running(self):
+        """
+        Returns number of running workflows. The main thread can terminate if this is 0.
+        :return (int): Number of running workflows.
+        """
+        return len(self._inprogress_models)
+
     def get_inprogress_workflows(self):
         return self._get_workflows(self._inprogress_models)
 
@@ -276,6 +283,7 @@ class SimStackServer(object):
         self._stop_thread = False
         self._stop_main = False
         self._submitted_job_queue = Queue()
+        self._filetime_on_init = self._get_module_mtime()
 
     @classmethod
     def _setup_root_logger(cls):
@@ -284,6 +292,18 @@ class SimStackServer(object):
     @staticmethod
     def register_pidfile():
         return Config.register_pid()
+
+    def _get_module_mtime(self):
+        """
+        This gets the last modification time of the data directory in the
+        SimStackServer Codebase. We will use this to see, if there was an update. If
+        there was, we terminate (and hope that cron revives us).
+        :return (time):
+        """
+        import SimStackServer.Data as data
+        datadir = os.path.abspath(os.path.realpath(data.__path__[0]))
+        mtime = os.path.getmtime(datadir)
+        return mtime
 
     @staticmethod
     def get_appdirs():
@@ -474,8 +494,12 @@ class SimStackServer(object):
                 time.sleep(3)
 
         counter = 0
+        maxidleduration = 1200 # After 20 minutes idle (i.e. no running workflow and nobody doing anything) we quit.
+        terminationtime = time.time() + maxidleduration
         while not self._stop_main:
             counter+=1
+            timeextension = False
+            #Submitted job queue
             if self._submitted_job_queue.empty():
                 try:
                     self._workflow_manager.check_status_submit()
@@ -485,6 +509,7 @@ class SimStackServer(object):
             else:
                 try:
                     try:
+                        timeextension = True
                         tostart = self._submitted_job_queue.get(timeout = 5)
                         tostart_abs = self._remote_relative_to_absolute_filename(tostart)
                         self._logger.info("Starting workflow %s"%tostart_abs)
@@ -493,11 +518,24 @@ class SimStackServer(object):
                         self._logger.error("Another thread consumed a workflow from the queue, although we should be the only thread.")
                 except Exception as e:
                     self._logger.exception("Exception in Workflow starting.")
+
+            if self._workflow_manager.workflows_running() > 0:
+                timeextension = True
+
+            if timeextension:
+                terminationtime = time.time() + maxidleduration
+
             if counter % 30 == 0:
                 self._logger.debug("Main Thread heartbeat")
+                # We also check whether there is an update.
+                if self._get_module_mtime() != self._filetime_on_init:
+                    self._logger.info("Found updated SimStackServer files. Stopping server for update.")
+                    self._stop_main = True
 
+            if time.time() > terminationtime:
+                # We have been idling for maxidleduration. Terminating.
+                work_done = True
+                self._stop_main = True
 
-
-        work_done = True
         self.terminate()
         self._shutdown(remove_crontab=work_done)
