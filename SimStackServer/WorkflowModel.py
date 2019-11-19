@@ -216,13 +216,11 @@ class XMLYMLInstantiationBase(object):
         return a
 
     def dump_xml_to_file(self, filename):
-        me = etree.Element(self.name)
+        me = etree.Element("Workflow")
+        me.attrib["wfname"] = self.name
         self.to_xml(me)
         with open(filename, 'wt') as infile:
             infile.write(etree.tostring(me,encoding="utf8",pretty_print=True).decode()+"\n")
-
-
-
 
 
 def workflow_element_factory(name):
