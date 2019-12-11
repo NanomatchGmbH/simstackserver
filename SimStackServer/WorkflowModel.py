@@ -924,7 +924,8 @@ class Workflow(XMLYMLInstantiationBase):
 
     def _get_job_directory(self, wfem: WorkflowExecModule):
         now = datetime.datetime.now()
-        nowstr = now.strftime("%Y-%m-%d-%H:%M:%S")
+        nowstr = now.strftime("%Y-%m-%d-%Hh%Mm%Ss")
+
         submitname = "%s-%s" %(nowstr, wfem.given_name)
         return submitname
 
