@@ -1,3 +1,4 @@
+import abc
 import datetime
 import logging
 import os
@@ -771,7 +772,8 @@ class DirectedGraph(object):
 class WorkflowAbort(Exception):
     pass
 
-class Workflow(XMLYMLInstantiationBase):
+
+class WorkflowBase(XMLYMLInstantiationBase):
     _fields = [
         ("elements", WorkflowElementList, None, "List of Linear Workflow Elements (this can also be fors or splits)", "m"),
         ("graph", DirectedGraph, None, "Directed Graph of all Elements. All elements in elements have to be referenced here."
@@ -789,7 +791,7 @@ class Workflow(XMLYMLInstantiationBase):
         self._name = "Workflow"
         self._logger = logging.getLogger("Workflow")
 
-    def abs_resolve_storage(self):
+    def _abs_resolve_storage(self):
         if not self.storage.startswith('/'):
             home = str(Path.home())
             self._field_values["storage"] = home + '/' + self._field_values["storage"]
@@ -803,11 +805,91 @@ class Workflow(XMLYMLInstantiationBase):
     def from_dict(self, in_dict):
         super().from_dict(in_dict)
 
+    @abc.abstractmethod
     def abort(self):
         self._field_values["status"] = JobStatus.ABORTED
+        #This function has to be called from the child class
 
+    @abc.abstractmethod
     def delete(self):
         self._field_values["status"] = JobStatus.MARKED_FOR_DELETION
+        #This function has to be called from the child class
+
+    def _stage_file(self,fromfile,tofile):
+        # At the moment this should only be a cp, but later it can also be a scp
+        shutil.copyfile(fromfile, tofile)
+
+
+    def _get_job_directory(self, wfem: WorkflowExecModule):
+        now = datetime.datetime.now()
+        nowstr = now.strftime("%Y-%m-%d-%Hh%Mm%Ss")
+
+        submitname = "%s-%s" %(nowstr, wfem.given_name)
+        return submitname
+
+    def get_filename(self):
+        return path.join(self.storage, "rendered_workflow.xml")
+
+    def to_xml(self, parent_element):
+        self._field_values["status"] = int(self._field_values["status"])
+        super().to_xml(parent_element)
+
+    def to_dict(self, parent_dict):
+        self._field_values["status"] = int(self._field_values["status"])
+        super().to_dict(parent_dict)
+
+    @property
+    def elements(self) -> WorkflowElementList:
+        return self._field_values["elements"]
+
+    @property
+    def graph(self) -> DirectedGraph:
+        return self._field_values["graph"]
+
+    @property
+    def storage(self) -> str:
+        return self._field_values["storage"]
+
+    @property
+    def name(self) -> str:
+        return self._field_values["name"]
+
+    @property
+    def submit_name(self) -> str:
+        return self._field_values["submit_name"]
+
+    @property
+    def queueing_system(self) -> str:
+        return self._field_values["queueing_system"]
+
+    @property
+    def status(self) -> str:
+        return self._field_values["status"]
+
+    def set_queueing_system(self, queueing_system):
+        self._field_values["queueing_system"] = queueing_system
+
+    @abc.abstractmethod
+    def all_job_abort(self):
+        raise NotImplementedError("Has to be implemented in child class")
+
+    @abc.abstractmethod
+    def delete_storage(self):
+        raise NotImplementedError("Has to be implemented in child class")
+
+    @abc.abstractmethod
+    def jobloop(self):
+        raise NotImplementedError("Has to be implemented in child class")
+
+    @abc.abstractmethod
+    def get_running_finished_job_list_formatted(self):
+        raise NotImplementedError("Has to be implemented in child class")
+
+class Workflow(WorkflowBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._name = "Workflow"
+        self._logger = logging.getLogger("Workflow")
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -893,84 +975,6 @@ class Workflow(XMLYMLInstantiationBase):
             return True
         return False
 
-    def _stage_file(self,fromfile,tofile):
-        # At the moment this should only be a cp, but later it can also be a scp
-        shutil.copyfile(fromfile, tofile)
-
-    def get_running_finished_job_list_formatted(self):
-        files = []
-        success, failed, running = self.graph.get_success_failed_running_jobs()
-        for joblist, status in zip([running,failed,success],[JobStatus.RUNNING,JobStatus.FAILED, JobStatus.SUCCESSFUL]):
-            for job in joblist:
-                if job == '0':
-                    # 0 is start node, skip over it.
-                    continue
-                jobobj = self.elements.get_element_by_uid(job)
-                jobobj : WorkflowExecModule
-                commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
-                jobdir = jobobj.runtime_directory[len(commonpath):]
-                if jobdir.startswith('/'):
-                    jobdir = jobdir[1:]
-                jobdir = self.submit_name + '/' + jobdir
-                jobdict = {
-                    'id': jobobj.given_name,
-                    'name': jobobj.given_name,
-                    'type': 'j',
-                    'path': jobdir,
-                    'status': status
-                }
-                files.append(jobdict)
-        return files
-
-    def _get_job_directory(self, wfem: WorkflowExecModule):
-        now = datetime.datetime.now()
-        nowstr = now.strftime("%Y-%m-%d-%Hh%Mm%Ss")
-
-        submitname = "%s-%s" %(nowstr, wfem.given_name)
-        return submitname
-
-    def _postjob_care(self, wfem : WorkflowExecModule):
-        jobdirectory = wfem.runtime_directory
-        """ Sanity check to check if all files are there """
-        for myoutput in wfem.outputs:
-            # tofile = myinput[0]
-            output = myoutput[0]
-            absfile = jobdirectory + '/' + output
-
-            if not path.isfile(absfile):
-                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
-                self._logger.error(mystdout)
-                raise WorkflowAbort(mystdout)
-
-
-        """ Same loop again this time copying files """
-
-        for myoutput in wfem.outputs:
-            tofile = self.storage + '/' + myoutput[1]
-            output = myoutput[0]
-            absfile = jobdirectory + '/' + output
-
-            tofiledir = path.dirname(tofile)
-            mkdir_p(tofiledir)
-            if not path.isfile(absfile):
-                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
-                self._logger.error(mystdout)
-                raise WorkflowAbort(mystdout)
-
-            shutil.copyfile(absfile, tofile)
-        return True
-
-    def get_filename(self):
-        return path.join(self.storage, "rendered_workflow.xml")
-
-    def to_xml(self, parent_element):
-        self._field_values["status"] = int(self._field_values["status"])
-        super().to_xml(parent_element)
-
-    def to_dict(self, parent_dict):
-        self._field_values["status"] = int(self._field_values["status"])
-        super().to_dict(parent_dict)
-
     def _prepare_job(self, wfem : WorkflowExecModule):
         """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
@@ -1007,48 +1011,59 @@ class Workflow(XMLYMLInstantiationBase):
         wfem.set_runtime_directory(jobdirectory)
         return True
 
-    """
-    Sobald gestaged: 
-        Check auf id mit clusterjob
-        Delay Loop, auch mit expo backoff
-        Sobald fertig, stageout genau wie stagein machen
-        digraph finish aufrufen
-        get_next_ready und von vorn
-        
-    WF API
-        zeromq api schreiben
-        ssh transport auf zeromq port anheben 
-            irgendwie drauf achten, dass nur user mit zmq kommunizieren können
-        Server vom client aus starten
-    """
+    def _postjob_care(self, wfem : WorkflowExecModule):
+        jobdirectory = wfem.runtime_directory
+        """ Sanity check to check if all files are there """
+        for myoutput in wfem.outputs:
+            # tofile = myinput[0]
+            output = myoutput[0]
+            absfile = jobdirectory + '/' + output
 
-    @property
-    def elements(self) -> WorkflowElementList:
-        return self._field_values["elements"]
+            if not path.isfile(absfile):
+                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                self._logger.error(mystdout)
+                raise WorkflowAbort(mystdout)
 
-    @property
-    def graph(self) -> DirectedGraph:
-        return self._field_values["graph"]
 
-    @property
-    def storage(self) -> str:
-        return self._field_values["storage"]
+        """ Same loop again this time copying files """
 
-    @property
-    def name(self) -> str:
-        return self._field_values["name"]
+        for myoutput in wfem.outputs:
+            tofile = self.storage + '/' + myoutput[1]
+            output = myoutput[0]
+            absfile = jobdirectory + '/' + output
 
-    @property
-    def submit_name(self) -> str:
-        return self._field_values["submit_name"]
+            tofiledir = path.dirname(tofile)
+            mkdir_p(tofiledir)
+            if not path.isfile(absfile):
+                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                self._logger.error(mystdout)
+                raise WorkflowAbort(mystdout)
+            shutil.copyfile(absfile, tofile)
 
-    @property
-    def queueing_system(self) -> str:
-        return self._field_values["queueing_system"]
+        return True
 
-    @property
-    def status(self) -> str:
-        return self._field_values["status"]
+    def get_running_finished_job_list_formatted(self):
+        files = []
+        success, failed, running = self.graph.get_success_failed_running_jobs()
+        for joblist, status in zip([running,failed,success],[JobStatus.RUNNING,JobStatus.FAILED, JobStatus.SUCCESSFUL]):
+            for job in joblist:
+                if job == '0':
+                    # 0 is start node, skip over it.
+                    continue
+                jobobj = self.elements.get_element_by_uid(job)
+                jobobj : WorkflowExecModule
+                commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
+                jobdir = jobobj.runtime_directory[len(commonpath):]
+                if jobdir.startswith('/'):
+                    jobdir = jobdir[1:]
+                jobdir = self.submit_name + '/' + jobdir
+                jobdict = {
+                    'id': jobobj.given_name,
+                    'name': jobobj.given_name,
+                    'type': 'j',
+                    'path': jobdir,
+                    'status': status
+                }
+                files.append(jobdict)
+        return files
 
-    def set_queueing_system(self, queueing_system) -> str:
-        self._field_values["queueing_system"] = queueing_system
