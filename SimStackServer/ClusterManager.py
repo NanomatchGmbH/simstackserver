@@ -7,6 +7,7 @@ from os import path
 import posixpath
 from pathlib import Path
 
+import sshtunnel
 import zmq
 from paramiko import SFTPAttributes
 
@@ -41,6 +42,12 @@ class ClusterManager(object):
         self._default_mode = 770
         self._context = zmq.Context.instance()
         self._socket = None
+        self._http_server_tunnel : sshtunnel.SSHTunnelForwarder
+        self._http_server_tunnel = None
+        self._http_user = None
+        self._http_pass = None
+        self._http_base_address = None
+
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -61,6 +68,7 @@ class ClusterManager(object):
         :return: Nothing
         """
         self._ssh_client.connect(self._url,self._port, username=self._user)
+        self._ssh_client.get_transport().set_keepalive(30)
         self._should_be_connected = True
         self._sftp_client = self._ssh_client.open_sftp()
         self._sftp_client.get_channel().settimeout(1.0)
@@ -192,6 +200,7 @@ class ClusterManager(object):
         :return: Nothing (currently)
         """
         stdin, stdout, stderr = self._ssh_client.exec_command(command)
+        stderrmessage = None
         password = None
         port = None
         for line in stdout:
@@ -208,6 +217,9 @@ class ClusterManager(object):
                 raise ConnectionError(errstring)
 
             break
+        stderrmessage = " - ".join(stderr)
+        if stderrmessage != "":
+            raise ConnectionError("Stderr was not empty during connect. Message was: %s"%stderrmessage)
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
         print("Connecting to ZMQ serve at %d with password %s"%(port, password))
@@ -235,10 +247,22 @@ class ClusterManager(object):
         else:
             raise ConnectionError("Received message different from connect: %s"%message)
 
+        try:
+            self._http_base_address = self.get_http_server_address()
+            print("Connected HTTP",self._http_base_address)
+
+        except Exception as e:
+            print(e)
+            pass
+
+
     def _recv_ack_message(self):
         messagetype, message = self._recv_message()
         if not messagetype == MTS.ACK:
             raise ConnectionAbortedError("Did not receive acknowledge after workflow submission.")
+
+    def get_url_for_workflow(self, workflow):
+        return self._http_base_address + '/' + workflow
 
     def _recv_message(self):
         messagetype, message = Message.unpack(self._socket.recv())
@@ -296,6 +320,41 @@ class ClusterManager(object):
         if stat.S_ISDIR(sftpa.st_mode):
             return True
         return False
+
+    def get_http_server_address(self):
+        """
+        Function, which communicates with the server asking for the server port and setting up the
+        server tunnel if it is not present.
+        :return:
+        """
+        self._http_server_tunnel:sshtunnel.SSHTunnelForwarder
+
+        if self._http_server_tunnel is None or not self._http_server_tunnel.is_alive:
+            if self._http_server_tunnel is not None:
+                self._http_server_tunnel.stop()
+            """ Reconnect starting here """
+            self._socket.send(Message.get_http_server_request_message(basefolder=self.get_calculation_basepath()))
+            messagetype, message = self._recv_message()
+            if not "http_port" in message:
+                raise ConnectionError("Could not read message in http job starter.")
+            print(message)
+            myport = int(message["http_port"])
+            self._http_user = message["http_user"]
+            self._http_pass = message["http_pass"]
+
+            self._http_server_tunnel = sshtunnel.SSHTunnelForwarder((self._url, self._port),
+                                                                    ssh_username=self._user,
+                                                                    remote_bind_address=("127.0.0.1",myport))
+            self._http_server_tunnel.start()
+
+        if not self._http_server_tunnel.is_alive:
+            raise sshtunnel.BaseSSHTunnelForwarderError("Cannot start ssh tunnel.")
+
+        return "http://%s:%s@localhost:%d"%(
+            self._http_user,
+            self._http_pass,
+            self._http_server_tunnel.local_bind_port
+        )
 
     def exists_as_directory(self, path):
         """
@@ -357,8 +416,10 @@ class ClusterManager(object):
         We make sure that the connections are closed on destruction.
         :return:
         """
-        self._ssh_client.close()
         if self._sftp_client != None:
             self._sftp_client.close()
+        self._ssh_client.close()
+        if self._http_server_tunnel is not None:
+            self._http_server_tunnel.stop()
 
 

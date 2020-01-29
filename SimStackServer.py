@@ -3,14 +3,13 @@ import signal
 import sys, os
 import time
 import lockfile
-import socket
 import logging
 import zmq
 
 
 from os.path import join
 
-from zmq.auth.thread import ThreadAuthenticator
+from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 
 if __name__ == '__main__':
     base_path = os.path.dirname(os.path.realpath(__file__))
@@ -38,22 +37,9 @@ def get_my_runtime():
     me = sys.executable + " " + sys.argv[0]
     return me
 
-def random_pass():
-    random_bytes=os.urandom(48)
-    import base64
-    return base64.b64encode(random_bytes).decode("utf8")[:-2]
-
 def setup_pid():
     from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
     return NoEnterPIDLockFile(Config._get_config_file("SimStackServer_setup.pid"), timeout = 0.0)
-
-def get_open_port():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(("",0))
-    s.listen(1)
-    port = s.getsockname()[1]
-    s.close()
-    return port
 
 def flush_port_and_password_to_stdout(appdirs, other_process_setup = False):
     myfile = join(appdirs.user_config_dir,"portconfig.txt")

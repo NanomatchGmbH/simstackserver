@@ -8,6 +8,8 @@ from queue import Queue, Empty
 
 
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MessageTypes, Message, JobStatus
+from SimStackServer.HTTPServer.HTTPServer import CustomHTTPServerThread
+
 
 import zmq
 
@@ -21,6 +23,7 @@ from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
 from SimStackServer.Util.FileUtilities import mkdir_p
+from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 from SimStackServer.WorkflowModel import Workflow
 
 class AlreadyRunningException(Exception):
@@ -276,6 +279,12 @@ class SimStackServer(object):
         self._workflow_manager = WorkflowManager()
         self._workflow_manager.restore()
         self._zmq_context = None
+        self._http_server = None
+
+        self._http_user = None
+        self._http_pass = None
+        self._http_port = None
+
         self._auth = None
         self._communication_timeout = 4.0
         self._polling_time = 500 # We check every half second for new message
@@ -308,6 +317,16 @@ class SimStackServer(object):
     @staticmethod
     def get_appdirs():
         return Config._dirs
+
+    def _start_http_server(self, directory):
+        myport = get_open_port()
+        mypass = random_pass()
+        user = "simstack"
+        self._http_server = CustomHTTPServerThread(('', myport), 150.0, directory=self._remote_relative_to_absolute_filename(directory))
+        self._logger.info("Starting HTTP server in directory %s"%directory)
+        self._http_server.set_auth(user, mypass)
+        self._http_server.start()
+        return user, mypass, myport
 
     def _message_handler(self, message_type, message, sock):
         # Every message here MUST absolutely have a send after, otherwise the client will hang.
@@ -366,6 +385,22 @@ class SimStackServer(object):
                 workflows = []
 
             sock.send(Message.list_wfs_reply_message(workflows))
+
+        elif message_type == MessageTypes.GETHTTPSERVER:
+            # In case http server is not started, we start it here.
+            assert "basefolder" in message, "Basefolder not found in message."
+            basefolder = message["basefolder"]
+            if not self._http_server or not self._http_server.is_alive():
+                user,mypass,port = self._start_http_server(directory=basefolder)
+                self._http_user = user
+                self._http_pass = mypass
+                self._http_port = port
+            else:
+                user = self._http_user
+                mypass = self._http_pass
+                port = self._http_port
+
+            sock.send(Message.get_http_server_ack_message(port,user,mypass))
 
         elif message_type == MessageTypes.SUBMITWF:
             sock.send(Message.ack_message())
