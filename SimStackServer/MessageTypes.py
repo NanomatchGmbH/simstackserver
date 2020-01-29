@@ -41,6 +41,7 @@ class SSS_MESSAGETYPE(IntEnum):
     DELJOB = auto()
     DISCONNECT = auto()
     SUBMITWF = auto()
+    GETHTTPSERVER = auto()
 
 class ResourceStatus(IntEnum):
     """
@@ -196,6 +197,22 @@ class Message(object):
             "workflow_submit_name": workflow_submit_name
         }
         return cls.dict_message(SSS_MESSAGETYPE.LISTWFJOBS, mydict)
+
+    @classmethod
+    def get_http_server_request_message(cls, basefolder):
+        mydict = {
+            "basefolder": basefolder
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.GETHTTPSERVER, mydict)
+
+    @classmethod
+    def get_http_server_ack_message(cls, port, user, password):
+        mydict = {
+            "http_port": port,
+            "http_user": user,
+            "http_pass": password
+        }
+        return cls.dict_message(SSS_MESSAGETYPE.GETHTTPSERVER, mydict)
 
     @classmethod
     def list_jobs_of_wf_message_reply(cls, workflow_submit_name, list_of_jobs):
