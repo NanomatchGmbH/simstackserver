@@ -322,7 +322,8 @@ class SimStackServer(object):
         myport = get_open_port()
         mypass = random_pass()
         user = "simstack"
-        self._http_server = CustomHTTPServerThread(('', myport), 150.0, directory=self._remote_relative_to_absolute_filename(directory))
+        self._http_server = CustomHTTPServerThread(('', myport),
+                                                   directory=self._remote_relative_to_absolute_filename(directory))
         self._logger.info("Starting HTTP server in directory %s"%directory)
         self._http_server.set_auth(user, mypass)
         self._http_server.start()
@@ -494,6 +495,19 @@ class SimStackServer(object):
 
     def terminate(self):
         self._stop_thread = True
+        count = 0
+        if self._http_server is not None:
+            while self._http_server.is_alive() and count < 10:
+                print("Stopping HTTP server thread, try %d of 10" %(count+1))
+                self._http_server.do_graceful_shutdown()
+                count += 1
+
+                if count == 1:
+                    time.sleep(1.3)
+                else:
+                    time.sleep(0.02)
+                if self._http_server.is_alive():
+                    print("HTTP server should not be alive anymore.")
         time.sleep(2.0 * self._polling_time / 1000.0)
         if not self._auth is None:
             self._auth.stop()

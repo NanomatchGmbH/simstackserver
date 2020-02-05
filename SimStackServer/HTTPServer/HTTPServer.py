@@ -2,6 +2,7 @@ import http.server
 import cgi
 import base64
 import json
+import time
 import urllib
 from functools import partial
 from urllib.parse import urlparse, parse_qs
@@ -179,15 +180,22 @@ class GracefulShutdownHTTPServerException(Exception):
 class CustomHTTPServer(http.server.HTTPServer):
     key = random_string(100)
 
-    def __init__(self, address, linger_time, directory, handlerClass=CustomServerHandler):
-        self.timeout = linger_time
+    def __init__(self, address, directory, handlerClass=CustomServerHandler):
+        self.timeout = 1.0
         self.directory = directory
+        self._do_shutdown = False
         handlerClass = partial(handlerClass, directory = self.directory)
         super().__init__(address, handlerClass)
 
     def set_auth(self, username, password):
         self.key = base64.b64encode(
             bytes('%s:%s' % (username, password), 'utf-8')).decode('ascii')
+
+    def do_graceful_shutdown(self):
+        # By default, we do a graceful shutdown after timeout anyways, so we really do that.
+        self.timeout = 0.01
+        # In case we are being hammered with requests, we also explicitly shutdown here:
+        self._do_shutdown = True
 
     def get_auth_key(self):
         return self.key
@@ -196,23 +204,23 @@ class CustomHTTPServer(http.server.HTTPServer):
         try:
             while True:
                 self.handle_request()
+                if self._do_shutdown:
+                    break
         except GracefulShutdownHTTPServerException:
             pass
 
     def handle_timeout(self):
         super().handle_timeout()
-        raise GracefulShutdownHTTPServerException("Shutting down HTTP server after linger time.")
-
 
 class CustomHTTPServerThread(Thread, CustomHTTPServer):
-    def __init__(self, address, linger_time, directory, *args, **kwargs):
+    def __init__(self, address, directory, *args, **kwargs):
         Thread.__init__(self, target=self.serve_for_duration, *args, **kwargs)
         handlerClass = kwargs["handlerClass"] if "handlerClass" in kwargs else CustomServerHandler
-        CustomHTTPServer.__init__(self, address, linger_time, directory, handlerClass)
+        CustomHTTPServer.__init__(self, address, directory, handlerClass)
 
 
 if __name__ == '__main__':
-    server = CustomHTTPServerThread(('', 8888), 150.0, ".")
+    server = CustomHTTPServerThread(('', 8888), ".")
     server.set_auth('demo', 'demo')
     server.start()
     server.join()
