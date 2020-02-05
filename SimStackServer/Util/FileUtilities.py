@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 from functools import wraps
@@ -80,3 +81,11 @@ def trace_to_logger(f):
             raise e
 
     return wrapper
+
+class StringLoggingHandler(logging.StreamHandler):
+    def __init__(self):
+        self._stringstream = io.StringIO()
+        super().__init__(stream=self._stringstream)
+
+    def getvalue(self):
+        return self._stringstream.getvalue()

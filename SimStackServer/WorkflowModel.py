@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import sys
+import traceback
 import uuid
 from abc import abstractmethod, abstractclassmethod
 from enum import Flag, auto
@@ -20,10 +21,14 @@ import numpy as np
 import networkx as nx
 
 from SimStackServer.MessageTypes import JobStatus
-from SimStackServer.Util.FileUtilities import mkdir_p
+from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
+from external.clusterjob.clusterjob import FAILED
 
 
 class ParserError(Exception):
+    pass
+
+class JobSubmitException(Exception):
     pass
 
 class Status(Flag):
@@ -484,7 +489,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
             self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
         self._nmdir = self._init_nanomatch_directory()
-        self._logger = logging.getLogger("WorkflowExecModule")
+        self._logger = logging.getLogger(self.uid)
 
         # This one has to be hacked out again. It is currently clusterjob dependent and we really don't want that.
         #self._async_result_workaround = None
@@ -542,49 +547,66 @@ export NANOMATCH=%s
 
 
     def run_jobfile(self, queueing_system):
-        import clusterjob
-        #Sanity checks
-        # check if runtime directory is not unset
-        queue = self.resources.queue
-        kwargs = {}
-        kwargs["queue"] = self.resources.queue
-        if queue == "default" and queueing_system in ["pbs","slurm"]:
-            del kwargs["queue"]
+        temphandler = StringLoggingHandler()
+        self._logger.addHandler(temphandler)
+        try:
+            import clusterjob
+            #Sanity checks
+            # check if runtime directory is not unset
+            queue = self.resources.queue
+            kwargs = {}
+            kwargs["queue"] = self.resources.queue
+            if queue == "default" and queueing_system in ["pbs","slurm"]:
+                del kwargs["queue"]
 
-        mytime = self.resources.walltime
-        if mytime < 61:
-            # We have to allocate at least 61 seconds
-            # to work around the specificities of clusterjob.
-            mytime = 61
-        mytimestring = self._time_from_seconds_to_clusterjob_timestring(mytime)
+            mytime = self.resources.walltime
+            if mytime < 61:
+                # We have to allocate at least 61 seconds
+                # to work around the specificities of clusterjob.
+                mytime = 61
+            mytimestring = self._time_from_seconds_to_clusterjob_timestring(mytime)
 
-        toexec = """%s
-cd $CLUSTERJOB_WORKDIR
-%s
-"""%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
-        #In case somebody uploaded report_template.html, we render it:
+            toexec = """%s
+    cd $CLUSTERJOB_WORKDIR
+    %s
+    """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
+            #In case somebody uploaded report_template.html, we render it:
 
-        report_template = join(self.runtime_directory,"report_template.body")
-        if os.path.isfile(report_template):
-            self._logger.debug("Looking for %s" % report_template)
-            import SimStackServer.Reporting as Reporting
-            reporting_path = os.path.dirname(os.path.realpath(Reporting.__file__))
-            toexec += "%s %s\n"%(sys.executable, join(reporting_path,"ReportRenderer.py"))
+            report_template = join(self.runtime_directory,"report_template.body")
+            if os.path.isfile(report_template):
+                self._logger.debug("Looking for %s" % report_template)
+                import SimStackServer.Reporting as Reporting
+                reporting_path = os.path.dirname(os.path.realpath(Reporting.__file__))
+                toexec += "%s %s\n"%(sys.executable, join(reporting_path,"ReportRenderer.py"))
 
-        jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
-                                         time = self.resources.walltime, nodes = self.resources.nodes,
-                                         ppn = self.resources.cpus_per_node, mem = self.resources.memory,
-                                         stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
-                                         workdir = self.runtime_directory, **kwargs
-        )
+            try:
+                jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
+                                                 time = self.resources.walltime, nodes = self.resources.nodes,
+                                                 ppn = self.resources.cpus_per_node, mem = self.resources.memory,
+                                                 stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
+                                                 workdir = self.runtime_directory, **kwargs
+                )
 
 
-        #with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
-        #    outfile.write(str(jobscript)+ '\n')
+                #with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
+                #    outfile.write(str(jobscript)+ '\n')
 
-        asyncresult = jobscript.submit()
-        #self._async_result_workaround = asyncresult
-        self.set_jobid(asyncresult.job_id)
+                asyncresult = jobscript.submit()
+                if asyncresult.status == FAILED:
+                    raise JobSubmitException("Job failed immediately after submission.")
+                #self._async_result_workaround = asyncresult
+                self.set_jobid(asyncresult.job_id)
+            except Exception as e:
+                server_submit_stderr = join(self.runtime_directory, "submission_failed.stderr")
+                self._logger.error("Exception: %s. Writing traceback to: %s"%(e, server_submit_stderr))
+                with open(server_submit_stderr,'wt') as outfile:
+                    traceback.print_exc(file=outfile)
+                    outfile.write(temphandler.getvalue())
+                raise e from e
+        finally:
+            # We remove the handler
+            self._logger.removeHandler(temphandler)
+
 
     def abort_job(self):
         asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
@@ -593,6 +615,9 @@ cd $CLUSTERJOB_WORKDIR
             asyncresult.cancel()
         except ValueError as e:
             # In this case the job was most probably not known by the queueing system anymore.
+            pass
+        except FileNotFoundError as e:
+            # In this case the queueing system was most probably wrong.
             pass
 
     def _recreate_asyncresult_from_jobid(self, jobid):
@@ -974,10 +999,11 @@ class Workflow(WorkflowBase):
                     return True
                 else:
                     self._field_values["status"] = JobStatus.RUNNING
-                    tostart.run_jobfile(self.queueing_system)
                     self.graph.start(rdjob)
+                    tostart.run_jobfile(self.queueing_system)
                     self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
             except Exception as e:
+                self.graph.fail(rdjob)
                 self._logger.exception("Uncaught exception during job preparation. Aborting workflow %s"%self.submit_name)
                 self.abort()
                 return True

@@ -22,6 +22,10 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args,**kwargs)
 
         super().extensions_map.update({
+            '.lsf': 'text/plain',
+            '.ini': 'text/plain',
+            '.stderr': 'text/plain',
+            '.stdout': 'text/plain',
             '.yml': 'text/plain',
             '.json': 'text/plain',
             '.script': 'text/plain',

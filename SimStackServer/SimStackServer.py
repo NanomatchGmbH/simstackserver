@@ -500,7 +500,6 @@ class SimStackServer(object):
         count = 0
         if self._http_server is not None:
             while self._http_server.is_alive() and count < 10:
-                print("Stopping HTTP server thread, try %d of 10" %(count+1))
                 self._http_server.do_graceful_shutdown()
                 count += 1
 
@@ -509,7 +508,8 @@ class SimStackServer(object):
                 else:
                     time.sleep(0.02)
                 if self._http_server.is_alive():
-                    print("HTTP server should not be alive anymore.")
+                    self._logger.debug("HTTP server should not be alive anymore.")
+                    self._logger.debug("Stopping HTTP server thread, try %d of 10" % (count + 1))
         time.sleep(2.0 * self._polling_time / 1000.0)
         if not self._auth is None:
             self._auth.stop()
