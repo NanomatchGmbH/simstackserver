@@ -82,6 +82,8 @@ class ClusterManager(object):
         self._ssh_client.close()
         if self._sftp_client != None:
             self._sftp_client.close()
+        if self._http_server_tunnel is not None:
+            self._http_server_tunnel.stop()
 
     def _resolve_file_in_basepath(self,filename, basepath_override):
         if basepath_override is None:
@@ -337,7 +339,7 @@ class ClusterManager(object):
             messagetype, message = self._recv_message()
             if not "http_port" in message:
                 raise ConnectionError("Could not read message in http job starter.")
-            print(message)
+            #print(message)
             myport = int(message["http_port"])
             self._http_user = message["http_user"]
             self._http_pass = message["http_pass"]
@@ -419,7 +421,7 @@ class ClusterManager(object):
         if self._sftp_client != None:
             self._sftp_client.close()
         self._ssh_client.close()
-        if self._http_server_tunnel is not None:
+        if self._http_server_tunnel is not None and not self._http_server_tunnel.is_alive:
             self._http_server_tunnel.stop()
 
 
