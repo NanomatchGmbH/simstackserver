@@ -264,7 +264,9 @@ class ClusterManager(object):
             raise ConnectionAbortedError("Did not receive acknowledge after workflow submission.")
 
     def get_url_for_workflow(self, workflow):
-        return self._http_base_address + '/' + workflow
+        if not workflow.startswith("/"):
+            workflow = "/%s"%workflow
+        return self._http_base_address + workflow
 
     def _recv_message(self):
         messagetype, message = Message.unpack(self._socket.recv())
