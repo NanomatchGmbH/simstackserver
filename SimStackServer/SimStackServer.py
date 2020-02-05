@@ -291,6 +291,7 @@ class SimStackServer(object):
         self._commthread = None
         self._stop_thread = False
         self._stop_main = False
+        self._signal_termination = False
         self._submitted_job_queue = Queue()
         self._filetime_on_init = self._get_module_mtime()
 
@@ -481,6 +482,7 @@ class SimStackServer(object):
         assert signum in [signal.SIGTERM, signal.SIGINT]
         self._stop_main = True
         self._stop_thread = True
+        self._signal_termination = True
 
     def _remote_relative_to_absolute_filename(self, infilename):
         """
@@ -588,4 +590,4 @@ class SimStackServer(object):
                 self._stop_main = True
 
         self.terminate()
-        self._shutdown(remove_crontab=work_done)
+        self._shutdown(remove_crontab=(work_done or self._signal_termination))

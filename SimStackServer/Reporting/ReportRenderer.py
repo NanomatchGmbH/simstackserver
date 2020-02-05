@@ -23,8 +23,12 @@ class ReportRenderer():
 </body>
 </html>
 """
-    def __init__(self, report_filename, export_dictionaries):
-        self._parse_report(report_filename)
+    def __init__(self, html_parts, export_dictionaries):
+        self._body = None
+        self._style = ""
+        self._title = None
+        self._parse_html_parts(html_parts)
+
         self._export_dictionaries = {}
         for dict_name, filename in export_dictionaries.items():
             if filename.endswith(".ini"):
@@ -54,19 +58,40 @@ class ReportRenderer():
                 the_dict[section][key] = val
         return the_dict
 
-    def _parse_report(self, report_filename):
-        with open(report_filename,'rt') as infile:
-            self._report_template = infile.read()
+    def _parse_html_parts(self, html_parts):
+
+        assert "body" in html_parts, "Every report requires a body"
+        assert "title" in html_parts, "Every report requires a title"
+        self._title = html_parts["title"]
+        bodyfilename = html_parts["body"]
+
+        with open(bodyfilename,'rt') as infile:
+            self._body = infile.read()
+
+        if "style" in html_parts:
+            stylefilename = html_parts["style"]
+            with open(stylefilename,'rt') as infile:
+                self._style = infile.read()
 
     def render(self):
-        tm = Template(self._report_template)
+        torender = self.render_string%(self._title,self._style,self._body)
+        tm = Template(torender)
         outstring = tm.render(**self._export_dictionaries)
         return outstring
     
     @staticmethod
     def render_everything():
-        if not os.path.isfile("report_template.html"):
+        html_parts_dict = {}
+        if not os.path.isfile("report_template.body"):
             return
+
+        html_parts_dict["body"] = "report_template.body"
+        title = os.path.basename(os.path.dirname(os.path.realpath(".")))
+
+        html_parts_dict["title"] = title
+        if os.path.isfile("report_style.css"):
+            html_parts_dict["style"] = "report_style.css"
+
 
         export_dictionaries = {}
         if os.path.isfile("output_config.ini"):
@@ -74,8 +99,9 @@ class ReportRenderer():
         if os.path.isfile("output_dict.yml"):
             export_dictionaries["output_dict"] = "output_dict.yml"
 
-        a = ReportRenderer("report_template.html", export_dictionaries)
+        a = ReportRenderer(html_parts_dict, export_dictionaries)
         report = a.render()
+
         with open("report.html",'wt') as outfile:
             outfile.write(report)
 

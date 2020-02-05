@@ -473,6 +473,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
         ("resources", Resources, None, "Computational resources", "m"),
+
         ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
         ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
         ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m")
@@ -483,6 +484,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
             self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
         self._nmdir = self._init_nanomatch_directory()
+        self._logger = logging.getLogger("WorkflowExecModule")
 
         # This one has to be hacked out again. It is currently clusterjob dependent and we really don't want that.
         #self._async_result_workaround = None
@@ -560,12 +562,22 @@ export NANOMATCH=%s
 cd $CLUSTERJOB_WORKDIR
 %s
 """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
+        #In case somebody uploaded report_template.html, we render it:
+
+        report_template = join(self.runtime_directory,"report_template.body")
+        if os.path.isfile(report_template):
+            self._logger.debug("Looking for %s" % report_template)
+            import SimStackServer.Reporting as Reporting
+            reporting_path = os.path.dirname(os.path.realpath(Reporting.__file__))
+            toexec += "%s %s\n"%(sys.executable, join(reporting_path,"ReportRenderer.py"))
+
         jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
                                          time = self.resources.walltime, nodes = self.resources.nodes,
                                          ppn = self.resources.cpus_per_node, mem = self.resources.memory,
                                          stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                          workdir = self.runtime_directory, **kwargs
         )
+
 
         #with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
         #    outfile.write(str(jobscript)+ '\n')
@@ -1066,4 +1078,3 @@ class Workflow(WorkflowBase):
                 }
                 files.append(jobdict)
         return files
-
