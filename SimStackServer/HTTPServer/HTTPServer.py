@@ -2,9 +2,12 @@ import http.server
 import cgi
 import base64
 import json
+import logging
+import os
 import time
 import urllib
 from functools import partial
+from http import HTTPStatus
 from urllib.parse import urlparse, parse_qs
 import string
 import random
@@ -19,6 +22,10 @@ def random_string(stringLength=10):
 
 class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs):
+        self._logger = logging.getLogger("HTTPServerHandler")
+        self._favicon = None
+        self._read_favicon_to_memory()
+
         super().__init__(*args,**kwargs)
 
         super().extensions_map.update({
@@ -32,6 +39,14 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             '.pbs': 'text/plain',
             '.slr': 'text/plain'
         })
+
+
+    def _read_favicon_to_memory(self):
+        import SimStackServer.Data as Data
+        data_dir = os.path.dirname(os.path.realpath(Data.__file__))
+        favpath = os.path.join(data_dir,"favicon.ico")
+        with open(favpath,'rb') as infile:
+            self._favicon = infile.read()
 
     def do_HEAD(self):
         self.send_response(200)
@@ -64,6 +79,7 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
+            
 
             getvars = self._parse_GET()
 
@@ -71,9 +87,8 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
                 'path': self.path,
                 'get_vars': str(getvars)
             }
-
-            base_path = urlparse(self.path).path
-            print(base_path)
+            """
+            """
             if base_path == '/path1':
                 # Do some work
                 pass
@@ -83,6 +98,15 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             """
 
             """Serve a GET request."""
+            if self.path == "/favicon.ico":
+                ctype = self.guess_type(self.path)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-type", ctype)
+                self.send_header("Content-Length", len(self._favicon)-1)
+                self.end_headers()
+                self.wfile.write(self._favicon)
+                return
+
             f = self.send_head()
             if f:
                 try:
