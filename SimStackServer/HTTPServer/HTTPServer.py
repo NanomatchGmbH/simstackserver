@@ -43,6 +43,10 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             '.stdout': 'text/plain',
             '.yml': 'text/plain',
             '.json': 'text/plain',
+            '.dat': 'text/plain',
+            '.txt': 'text/plain',
+            '.sge': 'text/plain',
+            '.log': 'text/plain',
             '.script': 'text/plain',
             '.pbs': 'text/plain',
             '.slr': 'text/plain'
