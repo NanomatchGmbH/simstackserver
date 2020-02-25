@@ -38,6 +38,7 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
 
         super().extensions_map.update({
             '.lsf': 'text/plain',
+            '.body': 'text/plain',
             '.ini': 'text/plain',
             '.stderr': 'text/plain',
             '.stdout': 'text/plain',
