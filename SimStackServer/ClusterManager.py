@@ -318,6 +318,24 @@ class ClusterManager(object):
         except SSHExpectedDirectoryError:
             return True
 
+    def get_newest_version_directory(self, path):
+        VDIRS=[]
+        largest_version = 2 # we started using this server with V2
+        for entry in self._sftp_client.listdir_attr(path):
+            mode = entry.st_mode
+            if stat.S_ISDIR(mode):
+                fn = entry.filename
+                if fn[0] == "V":
+                    try:
+                        myint = int(fn[1:])
+                        if myint > largest_version:
+                            largest_version = myint
+                        VDIRS.append(myint)
+                    except ValueError:
+                        pass
+
+        return "V%d"%largest_version
+
     def is_directory(self, path, basepath_override = None):
         resolved = self._resolve_file_in_basepath(path, basepath_override)
         sftpa : SFTPAttributes = self._sftp_client.stat(resolved)
