@@ -22,5 +22,6 @@ OLD_PWD=$PWD
 MY_PATH="`dirname \"$0\"`/../"
 echo $MY_PATH
 cd $MY_PATH
-git-archive-all --prefix=nanomatch/$NANOVER/SimStackServer/ $OLD_PWD/simstackserver.zip
+TODAY=$(date "+%F")
+git-archive-all --prefix=nanomatch/$NANOVER/SimStackServer/ $OLD_PWD/$TODAY-simstackserver.zip
 cd -
