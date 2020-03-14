@@ -21,19 +21,22 @@ class SSHExpectedDirectoryError(Exception):
     pass
 
 class ClusterManager(object):
-    def __init__(self, url, port, calculation_basepath, user, queueing_system):
+    def __init__(self, url, port, calculation_basepath, user, queueing_system, default_queue):
         """
 
+        :param default_queue:
         :param url (str): URL to connect to (int-nanomatchcluster.int.kit.edu, ipv4, ipv6)
         :param port (int): Port to connect to, i.e. 22
         :param calculation_basepath (str): Where everything will be stored by default. "" == home directory.
         :param user (str): Username on the respective server.
+        :param default_queue (str): Jobs will be submitted to this queue, if none is given.
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
-        self._port = port
+        self._port = int(port)
         self._calculation_basepath = calculation_basepath
         self._user = user
+        self._default_queue = default_queue
         self._ssh_client = paramiko.SSHClient()
         self._ssh_client.load_system_host_keys()
         self._should_be_connected = False
@@ -165,6 +168,12 @@ class ClusterManager(object):
                 }
             )
         return files
+
+    def get_default_queue(self):
+        """
+        :return (str): Name of default queue
+        """
+        return self._default_queue
 
     def get_file(self, from_file, to_file, basepath_override = None, optional_callback = None):
         """
