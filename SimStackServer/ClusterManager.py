@@ -21,7 +21,7 @@ class SSHExpectedDirectoryError(Exception):
     pass
 
 class ClusterManager(object):
-    def __init__(self, url, port, calculation_basepath, user, queueing_system, default_queue):
+    def __init__(self, url, port, calculation_basepath, user, sshprivatekey, queueing_system, default_queue):
         """
 
         :param default_queue:
@@ -29,6 +29,7 @@ class ClusterManager(object):
         :param port (int): Port to connect to, i.e. 22
         :param calculation_basepath (str): Where everything will be stored by default. "" == home directory.
         :param user (str): Username on the respective server.
+        :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
         """
         self._logger = logging.getLogger("ClusterManager")
@@ -36,6 +37,7 @@ class ClusterManager(object):
         self._port = int(port)
         self._calculation_basepath = calculation_basepath
         self._user = user
+        self._sshprivatekeyfilename = sshprivatekey
         self._default_queue = default_queue
         self._ssh_client = paramiko.SSHClient()
         self._ssh_client.load_system_host_keys()
@@ -65,12 +67,25 @@ class ClusterManager(object):
     def get_ssh_url(self):
         return "%s@%s:%d"%(self._user,self._url,self._port)
 
+    def load_extra_host_keys(self, filename):
+        """
+        Loads extra host keys into ssh_client
+        :param filename (str): Filename of the extra hostkey db
+        :return:
+        """
+        assert self._ssh_client is not None, "SSH Client not yet initialized"
+        self._ssh_client.load_host_keys(filename)
+
     def connect(self):
         """
         Connect the ssh_client and setup the sftp tunnel.
         :return: Nothing
         """
-        self._ssh_client.connect(self._url,self._port, username=self._user)
+        key_filename = None
+        if self._sshprivatekeyfilename != "UseSystemDefault":
+            key_filename = self._sshprivatekeyfilename
+
+        self._ssh_client.connect(self._url,self._port, username=self._user, key_filename=key_filename)
         self._ssh_client.get_transport().set_keepalive(30)
         self._should_be_connected = True
         self._sftp_client = self._ssh_client.open_sftp()
@@ -245,7 +260,10 @@ class ClusterManager(object):
         socket.setsockopt(zmq.RCVTIMEO, 2000)
 
         from zmq import ssh
-        ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url())
+        key_filename = None
+        if self._sshprivatekeyfilename != "UseSystemDefault":
+            key_filename = self._sshprivatekeyfilename
+        ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename)
 
         #print("Tunnel connection done")
 
