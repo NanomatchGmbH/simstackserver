@@ -76,7 +76,16 @@ class ClusterManager(object):
         assert self._ssh_client is not None, "SSH Client not yet initialized"
         self._ssh_client.load_host_keys(filename)
 
-    def connect(self):
+    def save_hostkeyfile(self, filename):
+        """
+        Save the read hostkeys, plus eventual new ones back to disk.
+        :param filename (str): File to save to.
+        :return:
+        """
+        self._ssh_client.save_host_keys(filename)
+
+
+    def connect(self, connect_to_unknown_hosts = False):
         """
         Connect the ssh_client and setup the sftp tunnel.
         :return: Nothing
@@ -85,7 +94,11 @@ class ClusterManager(object):
         if self._sshprivatekeyfilename != "UseSystemDefault":
             key_filename = self._sshprivatekeyfilename
 
+        if connect_to_unknown_hosts:
+            self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
         self._ssh_client.connect(self._url,self._port, username=self._user, key_filename=key_filename)
+        if connect_to_unknown_hosts:
+            self._ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy)
         self._ssh_client.get_transport().set_keepalive(30)
         self._should_be_connected = True
         self._sftp_client = self._ssh_client.open_sftp()
@@ -263,7 +276,7 @@ class ClusterManager(object):
         key_filename = None
         if self._sshprivatekeyfilename != "UseSystemDefault":
             key_filename = self._sshprivatekeyfilename
-        ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename)
+        ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
 
         #print("Tunnel connection done")
 
