@@ -111,15 +111,29 @@ class ClusterManager(object):
         disconnect the ssh client
         :return: Nothing
         """
-        self._ssh_client.close()
+        if self._socket is not None:
+            self._socket.close()
+        
         if self._sftp_client != None:
             self._sftp_client.close()
+        
+        self._ssh_client.close()
+        
         if self._http_server_tunnel is not None:
+            #This handling here is purely for windows. Somehow, the transport is not closed, if not set.
+            for _srv in self._http_server_tunnel._server_list:
+                _srv.timeout = 0.01
+
+            self._http_server_tunnel._transport.close()
             self._http_server_tunnel.stop()
+            #print("http server stopped")
+            
+        #print("Killing ZMQ tunnel")
         if self._zmq_ssh_tunnel is not None:
             if hasattr(self._zmq_ssh_tunnel,"kill"):
                 #This is because it can be that the tunnel was not done via paramiko subprocess
                 self._zmq_ssh_tunnel.kill()
+                #print("Killed zmq tunnel")
 
     def _resolve_file_in_basepath(self,filename, basepath_override):
         if basepath_override is None:
@@ -414,6 +428,7 @@ class ClusterManager(object):
             self._http_server_tunnel = sshtunnel.SSHTunnelForwarder((self._url, self._port),
                                                                     ssh_username=self._user,
                                                                     ssh_pkey=key_filename,
+                                                                    threaded=False,
                                                                     remote_bind_address=("127.0.0.1",myport))
             self._http_server_tunnel.start()
 
@@ -486,6 +501,8 @@ class ClusterManager(object):
         We make sure that the connections are closed on destruction.
         :return:
         """
+        if self._socket is not None:
+            self._socket.close()
         if self._sftp_client != None:
             self._sftp_client.close()
         self._ssh_client.close()
