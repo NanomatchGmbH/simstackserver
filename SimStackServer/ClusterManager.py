@@ -49,6 +49,7 @@ class ClusterManager(object):
         self._socket = None
         self._http_server_tunnel : sshtunnel.SSHTunnelForwarder
         self._http_server_tunnel = None
+        self._zmq_ssh_tunnel = None
         self._http_user = None
         self._http_pass = None
         self._http_base_address = None
@@ -115,6 +116,10 @@ class ClusterManager(object):
             self._sftp_client.close()
         if self._http_server_tunnel is not None:
             self._http_server_tunnel.stop()
+        if self._zmq_ssh_tunnel is not None:
+            if hasattr(self._zmq_ssh_tunnel,"kill"):
+                #This is because it can be that the tunnel was not done via paramiko subprocess
+                self._zmq_ssh_tunnel.kill()
 
     def _resolve_file_in_basepath(self,filename, basepath_override):
         if basepath_override is None:
@@ -276,7 +281,7 @@ class ClusterManager(object):
         key_filename = None
         if self._sshprivatekeyfilename != "UseSystemDefault":
             key_filename = self._sshprivatekeyfilename
-        ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
+        self._zmq_ssh_tunnel = ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
 
         #print("Tunnel connection done")
 
@@ -487,4 +492,8 @@ class ClusterManager(object):
         if self._http_server_tunnel is not None and not self._http_server_tunnel.is_alive:
             self._http_server_tunnel.stop()
 
+        if self._zmq_ssh_tunnel is not None:
+            if hasattr(self._zmq_ssh_tunnel, "kill"):
+                # This is because it can be that the tunnel was not done via paramiko subprocess
+                self._zmq_ssh_tunnel.kill()
 
