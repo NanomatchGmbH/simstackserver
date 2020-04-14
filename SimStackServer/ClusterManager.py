@@ -403,9 +403,12 @@ class ClusterManager(object):
             myport = int(message["http_port"])
             self._http_user = message["http_user"]
             self._http_pass = message["http_pass"]
-
+            key_filename = None
+            if self._sshprivatekeyfilename != "UseSystemDefault":
+                key_filename = self._sshprivatekeyfilename
             self._http_server_tunnel = sshtunnel.SSHTunnelForwarder((self._url, self._port),
                                                                     ssh_username=self._user,
+                                                                    ssh_pkey=key_filename,
                                                                     remote_bind_address=("127.0.0.1",myport))
             self._http_server_tunnel.start()
 
