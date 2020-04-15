@@ -295,13 +295,19 @@ class ClusterManager(object):
         key_filename = None
         if self._sshprivatekeyfilename != "UseSystemDefault":
             key_filename = self._sshprivatekeyfilename
+        
         self._zmq_ssh_tunnel = ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
-
-        #print("Tunnel connection done")
-
         socket.send(Message.connect_message())
-
-        data = socket.recv()
+        # Windows somehow needs this amount of time before the socket is ready:
+        time.sleep(0.25)
+        for i in range(0,10):
+            try:
+                data = socket.recv()
+                break
+            except zmq.error.Again as e:
+                print("Port was not setup in time. Trying to connect again. Trial %d of 10."%i)
+                time.sleep(0.15)
+            
         messagetype, message = Message.unpack(data)
         if messagetype == MTS.CONNECT:
             self._should_be_connected = True
