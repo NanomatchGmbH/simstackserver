@@ -50,7 +50,8 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             '.log': 'text/plain',
             '.script': 'text/plain',
             '.pbs': 'text/plain',
-            '.slr': 'text/plain'
+            '.slr': 'text/plain',
+            '': 'text/plain'
         })
 
     def _get_static_http_path(self):
