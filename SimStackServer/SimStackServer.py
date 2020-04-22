@@ -74,9 +74,15 @@ class WorkflowManager(object):
 
     def _recreate_models_from_filenames(self, inprogress_filenames, finished_filenames):
         for inprogress_fn in inprogress_filenames:
-            self._add_workflow(inprogress_fn, self._inprogress_models)
+            try:
+                self._add_workflow(inprogress_fn, self._inprogress_models)
+            except WorkflowError as e:
+                self._logger.exception(str(e))
         for finished_fn in finished_filenames:
-            self._add_workflow(finished_fn, self._finished_models)
+            try:
+                self._add_workflow(finished_fn, self._finished_models)
+            except WorkflowError as e:
+                self._logger.exception(str(e))
 
     @staticmethod
     def _parse_xml(filename):
@@ -135,7 +141,10 @@ class WorkflowManager(object):
         :param workflow_filename (str): Path to the new file
         :return:
         """
-        newwf = Workflow.new_instance_from_xml(workflow_filename)
+        try:
+            newwf = Workflow.new_instance_from_xml(workflow_filename)
+        except FileNotFoundError as e:
+            raise WorkflowError("Workflow was not found at file <%s>. Discarding Workflow.") from e
         newwf: Workflow
         newwf._abs_resolve_storage()
         if newwf.submit_name in self._inprogress_models or newwf.submit_name in self._finished_models:
