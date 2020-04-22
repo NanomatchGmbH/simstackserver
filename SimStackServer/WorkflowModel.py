@@ -833,7 +833,8 @@ class SubGraph(XMLYMLInstantiationBase):
 class ForEachGraph(XMLYMLInstantiationBase):
     _fields = [
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
-        ("iterator_spec", str, "", "Specification to iterate over", "a"),
+        ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
+        ("iterator_name", str, "", "Name of my iterator", "a"),
         ("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
         ("uid", str, None, "UID of this Foreach","a")
     ]
@@ -845,8 +846,12 @@ class ForEachGraph(XMLYMLInstantiationBase):
         self._logger = logging.getLogger("ForEachGraph")
 
     @property
-    def iterator_spec(self) -> str:
-        return self._field_values["iterator_spec"]
+    def iterator_name(self) -> str:
+        return self._field_values["iterator_name"]
+
+    @property
+    def iterator_files(self) -> StringList:
+        return self._field_values["iterator_files"]
 
     @property
     def parent_ids(self) -> str:
