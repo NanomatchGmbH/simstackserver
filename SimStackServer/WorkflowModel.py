@@ -491,9 +491,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._nmdir = self._init_nanomatch_directory()
         self._logger = logging.getLogger(self.uid)
 
-        # This one has to be hacked out again. It is currently clusterjob dependent and we really don't want that.
-        #self._async_result_workaround = None
-
     @classmethod
     def fields(cls):
         return cls._fields
@@ -809,6 +806,62 @@ class DirectedGraph(object):
 class WorkflowAbort(Exception):
     pass
 
+class SubGraph(XMLYMLInstantiationBase):
+    _fields = [
+        ("elements", WorkflowElementList, None, "List of Linear Workflow Elements (this can also be fors or splits)","m"),
+        ("graph", DirectedGraph, None,
+         "Directed Graph of all Elements. All elements in elements have to be referenced here."
+         "There must not be cycles (we should check this). In case an element is a ForEach or "
+         "another workflow this workflow does not need to be encoded here.", "m")
+    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._name = "SubGraph"
+        self._logger = logging.getLogger("SubGraph")
+
+    def fields(cls):
+        return cls._fields
+
+    @property
+    def elements(self) -> WorkflowElementList:
+        return self._field_values["elements"]
+
+    @property
+    def graph(self) -> DirectedGraph:
+        return self._field_values["graph"]
+
+class ForEachGraph(XMLYMLInstantiationBase):
+    _fields = [
+        ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
+        ("iterator_spec", str, "", "Specification to iterate over", "a"),
+        ("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
+        ("uid", str, None, "UID of this Foreach","a")
+    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not "uid" in kwargs:
+            self._field_values["uid"] = str(uuid.uuid4())
+        self._name = "ForEachGraph"
+        self._logger = logging.getLogger("ForEachGraph")
+
+    @property
+    def iterator_spec(self) -> str:
+        return self._field_values["iterator_spec"]
+
+    @property
+    def parent_ids(self) -> str:
+        return self._field_values["parent_ids"]
+
+    @property
+    def uid(self):
+        return self._field_values["uid"]
+
+    @property
+    def subgraph(self) -> SubGraph:
+        return self._field_values["subgraph"]
+
+    def fields(cls):
+        return cls._fields
 
 class WorkflowBase(XMLYMLInstantiationBase):
     _fields = [
