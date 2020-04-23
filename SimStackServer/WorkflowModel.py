@@ -296,8 +296,6 @@ class WorkflowElementList(object):
         for seqnum,element in enumerate(self._storage):
             if hasattr(element,"uid"):
                 self._uid_to_seqnum[element.uid] = seqnum
-            else:
-                raise WorkflowAbort("Element type %s does not have uid."%type(element))
 
     def _add_to_list(self, mytype, actual_object):
         self._typelist.append(mytype)
@@ -530,7 +528,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
             raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
-
 
     def _init_nanomatch_directory(self):
         # The file we are in might be compiled. We need a definitely uncompiled module.
@@ -896,11 +893,14 @@ class SubGraph(XMLYMLInstantiationBase):
 
     def rename_all_nodes(self) -> dict:
         rename_dict = self.graph.rename_all_nodes()
+        for val in rename_dict.keys():
+            assert val not in self.graph._graph.nodes, "Found reference to old node in graph, which should not be there."
+
         for element in self.elements:
             if hasattr(element, "rename"):
                 element.rename(rename_dict)
             else:
-                print("Element",type(element),"does not have explicit rename function yet. Please add even if empty.")
+                self._logger.warning("Element %s does not have explicit rename function yet. Please add even if empty."%type(element))
         return rename_dict
 
 class ForEachGraph(XMLYMLInstantiationBase):
