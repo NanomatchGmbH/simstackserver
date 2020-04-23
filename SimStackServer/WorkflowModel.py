@@ -1301,7 +1301,7 @@ class Workflow(WorkflowBase):
                 if doglob:
                     basename = os.path.basename(tocopy)
                     tofile = join(tofiledir,basename)
-                shutil.copyfile(absfile, tofile)
+                shutil.copyfile(tocopy, tofile)
 
         return True
 
