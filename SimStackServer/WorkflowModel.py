@@ -973,6 +973,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 allfiles += glob(myfile)
             else:
                 allfiles += [myfile]
+        base_store_len = len(base_storage)
+        # We want to resolve this iterator relative to base_storage:
+        allfiles = [myfile[base_store_len:] for myfile in allfiles]
         return allfiles
 
     def _multiply_connect_subgraph(self, resolved_files):
