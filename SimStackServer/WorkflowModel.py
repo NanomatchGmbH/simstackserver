@@ -730,7 +730,6 @@ class DirectedGraph(object):
         #    # All nodes have to be reached via a DFS
         # The code above was removed, because of the ForEach implementation. Now the graph will have breaks on each foreach
 
-        assert len(all_node_ids) == 0
         self._init_graph_to_unstarted()
 
     def _init_graph_to_unstarted(self):
