@@ -293,7 +293,7 @@ class WorkflowElementList(object):
 
     def _recreate_uid_to_seqnum(self):
         self._uid_to_seqnum = {}
-        for seqnum,element in self._storage:
+        for seqnum,element in enumerate(self._storage):
             if hasattr(element,"uid"):
                 self._uid_to_seqnum[element.uid] = seqnum
 
