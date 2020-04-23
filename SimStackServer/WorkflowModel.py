@@ -927,14 +927,15 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def subgraph_final_ids(self) -> StringList:
         return self._field_values["subgraph_final_ids"]
 
-    def resolve_connect(self):
-        allfiles = self._resolve_iterator()
+    def resolve_connect(self, base_storage):
+        allfiles = self._resolve_iterator(base_storage)
         return self._multiply_connect_subgraph(allfiles)
 
-    def _resolve_iterator(self):
+    def _resolve_iterator(self, base_storage):
         relfiles = self.iterator_files
         allfiles = []
-        for myfile in relfiles:
+        for myfile_rel in relfiles:
+            myfile = join(base_storage,myfile_rel)
             isglob = "*" in myfile
             if isglob:
                 allfiles += glob(myfile)
@@ -1206,7 +1207,7 @@ class Workflow(WorkflowBase):
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph):
                 print("Reached ForEachGraph")
-                new_connections, new_activity_elementlists = tostart.resolve_connect()
+                new_connections, new_activity_elementlists = tostart.resolve_connect(base_storage=self.storage)
                 for new_elementlist in new_activity_elementlists:
                     self.elements.merge_other_list(new_elementlist)
 
