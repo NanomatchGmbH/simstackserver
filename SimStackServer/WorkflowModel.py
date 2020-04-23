@@ -1,4 +1,5 @@
 import abc
+import copy
 import datetime
 import logging
 import os
@@ -8,6 +9,7 @@ import traceback
 import uuid
 from abc import abstractmethod, abstractclassmethod
 from enum import Flag, auto
+from glob import glob
 from io import StringIO
 from os.path import join
 
@@ -495,6 +497,14 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def fields(cls):
         return cls._fields
 
+    def rename(self, renamedict):
+        myuid = self.uid
+        if not myuid in renamedict:
+            raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
+        newuid = renamedict[myuid]
+        self._field_values["uid"] = newuid
+
+
     def _init_nanomatch_directory(self):
         # The file we are in might be compiled. We need a definitely uncompiled module.
         import SimStackServer.Data as data
@@ -715,9 +725,10 @@ class DirectedGraph(object):
         #    status_dict[node] = "unstarted"
         #    nx.set_node_attributes(self._graph, status_dict, "status")
 
-        for node in nx.dfs_tree(self._graph):
-            all_node_ids.remove(node)
-            # All nodes have to be reached via a DFS
+        #for node in nx.dfs_tree(self._graph):
+        #   all_node_ids.remove(node)
+        #    # All nodes have to be reached via a DFS
+        # The code above was removed, because of the ForEach implementation. Now the graph will have breaks on each foreach
 
         assert len(all_node_ids) == 0
         self._init_graph_to_unstarted()
@@ -725,6 +736,30 @@ class DirectedGraph(object):
     def _init_graph_to_unstarted(self):
         for node in self._graph:
             self._graph.nodes[node]["status"] = "unstarted"
+
+    def add_new_unstarted_connection(self, connection_tuple):
+        """
+
+        :param connection_tuple tuple(int,int): From To, nodes will be added if not present. Nodes will be unstarted, if not new
+        :return:
+        """
+        nodefrom = connection_tuple[0]
+        nodeto = connection_tuple[1]
+        for node in [nodefrom,nodeto]:
+            if not self._graph.has_node(node):
+                self._graph.add_node(node)
+                self._graph.nodes[node]["status"] = "unstarted"
+        self._graph.add_edge(nodefrom,nodeto)
+
+    def rename_all_nodes(self):
+        allnodename = list(self._graph.nodes)
+        newnames = []
+        rename_dict = {}
+        for i,oldnodename in enumerate(allnodename):
+            rename_dict[oldnodename] = str(uuid.uuid4())
+        #inplace relabel nodes
+        nx.relabel_nodes(self._graph,rename_dict,copy=False)
+        return rename_dict
 
     def get_running_jobs(self):
         outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "running"]
@@ -830,12 +865,24 @@ class SubGraph(XMLYMLInstantiationBase):
     def graph(self) -> DirectedGraph:
         return self._field_values["graph"]
 
+    def rename_all_nodes(self) -> dict:
+        rename_dict = self.graph.rename_all_nodes()
+        for element in self.elements:
+            if hasattr(element, "rename"):
+                element.rename(rename_dict)
+            else:
+                print("Element",type(element),"does not have explicit rename function yet. Please add even if empty.")
+        return rename_dict
+
 class ForEachGraph(XMLYMLInstantiationBase):
     _fields = [
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
         ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
         ("iterator_name", str, "", "Name of my iterator", "a"),
         ("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
+        ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.",
+         "m"),
+        ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
         ("uid", str, None, "UID of this Foreach","a")
     ]
     def __init__(self, *args, **kwargs):
@@ -854,6 +901,53 @@ class ForEachGraph(XMLYMLInstantiationBase):
         return self._field_values["iterator_files"]
 
     @property
+    def subgraph_final_ids(self) -> StringList:
+        return self._field_values["subgraph_final_ids"]
+
+    def resolve_connect(self):
+        allfiles = self._resolve_iterator()
+        return self._multiply_connect_subgraph(allfiles)
+
+    def _resolve_iterator(self):
+        relfiles = self.iterator_files
+        allfiles = []
+        for myfile in relfiles:
+            isglob = "*" in myfile
+            if isglob:
+                allfiles += glob(myfile)
+            else:
+                allfiles += [myfile]
+        return allfiles
+
+    def _multiply_connect_subgraph(self, resolved_files):
+        new_connections = []
+        new_activities = []
+        for myfile in resolved_files:
+            mygraph = copy.deepcopy(self.subgraph)
+            rename_dict = mygraph.rename_all_nodes()
+            if not "0" in rename_dict:
+                raise WorkflowAbort("mygraph did not contain start id 0. Renamed keys were: %s"%(",".join(rename_dict.keys())))
+            # Now we have to attach new 0 to parent_ids and connect all drains.
+            start_connect = (self.uid, rename_dict["0"])
+            new_connections.append(start_connect)
+            for uid in self.subgraph_final_ids:
+                if not uid in rename_dict:
+                    raise WorkflowAbort(
+                        "mygraph did not contain final id %s. Renamed keys were: %s" % (uid,",".join(rename_dict.keys())))
+            for uid in self.subgraph_final_ids:
+                new_connections.append((rename_dict[uid],self.finish_uid))
+
+            self._logger.error("We still have to implement the var replacement here")
+            new_activities += mygraph.elements
+            # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
+            # we need to return all subgraph.elements and all connections and somehow get this communicated into the base graph
+        return new_connections, new_activities
+
+    @property
+    def finish_uid(self) -> str:
+        return self._field_values["finish_uid"]
+
+    @property
     def parent_ids(self) -> str:
         return self._field_values["parent_ids"]
 
@@ -867,6 +961,24 @@ class ForEachGraph(XMLYMLInstantiationBase):
 
     def fields(cls):
         return cls._fields
+
+class WFPass(XMLYMLInstantiationBase):
+    _fields = [
+        ("uid", str, None, "uid of this WorkflowExecModule.", "a")
+    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args,**kwargs)
+        if not "uid" in kwargs:
+            self._field_values["uid"] = str(uuid.uuid4())
+        self.name = "WFPass"
+
+    def fields(cls):
+        return cls._fields
+
+    @property
+    def uid(self):
+        return self._field_values["uid"]
+
 
 class WorkflowBase(XMLYMLInstantiationBase):
     _fields = [
@@ -913,7 +1025,6 @@ class WorkflowBase(XMLYMLInstantiationBase):
     def _stage_file(self,fromfile,tofile):
         # At the moment this should only be a cp, but later it can also be a scp
         shutil.copyfile(fromfile, tofile)
-
 
     def _get_job_directory(self, wfem: WorkflowExecModule):
         now = datetime.datetime.now()
@@ -1048,23 +1159,49 @@ class Workflow(WorkflowBase):
         #self.graph.traverse()
         for rdjob in ready_jobs:
             tostart = self.elements.get_element_by_uid(rdjob)
-            tostart : WorkflowExecModule
-            tostart.set_queueing_system(self.queueing_system)
-            try:
-                if not self._prepare_job(tostart):
-                    self._logger.error("Error during job preparation. Aborting workflow %s"%self.submit_name)
+            if isinstance(tostart,WorkflowExecModule):
+                tostart : WorkflowExecModule
+                tostart.set_queueing_system(self.queueing_system)
+                try:
+                    if not self._prepare_job(tostart):
+                        self._logger.error("Error during job preparation. Aborting workflow %s"%self.submit_name)
+                        self.abort()
+                        return True
+                    else:
+                        self._field_values["status"] = JobStatus.RUNNING
+                        self.graph.start(rdjob)
+                        tostart.run_jobfile(self.queueing_system)
+                        self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
+                except Exception as e:
+                    self.graph.fail(rdjob)
+                    self._logger.exception("Uncaught exception during job preparation. Aborting workflow %s"%self.submit_name)
                     self.abort()
                     return True
-                else:
-                    self._field_values["status"] = JobStatus.RUNNING
-                    self.graph.start(rdjob)
-                    tostart.run_jobfile(self.queueing_system)
-                    self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
-            except Exception as e:
-                self.graph.fail(rdjob)
-                self._logger.exception("Uncaught exception during job preparation. Aborting workflow %s"%self.submit_name)
-                self.abort()
-                return True
+            elif isinstance(tostart, WFPass):
+                # If this is encountered it is just passed on. These can be used as anchors inside the workflow.
+                self.graph.finish(rdjob)
+            elif isinstance(tostart, ForEachGraph):
+                print("Reached ForEachGraph")
+                new_connections, new_activities = tostart.resolve_connect()
+                self._field_values["elements"] += new_activities
+                for connection in new_connections:
+                    self.graph.add_new_unstarted_connection(connection)
+                self.graph.finish(rdjob)
+                # What do we need to do here? We need to extend the graph, because it should be disjunct at the moment.
+                # ForEach has to integrate itself into the main graph, i.e.
+                # ForEach knows its parent id,
+                #    Stage 1:
+                #          For Each has to actually resolve the iterator and make the actual list
+                #    Stage 2:
+                #          For Each iterator value, we need to copy the digraph and connect it to all parent ids
+                #    Stage 3:
+                #          We have to replace all occurences of the iterator name with the actual iterator, this is hard
+                #    Stage 4:
+                #          We have to rename all Elements and all id occurences in the graph. DiGraph has a function for this.
+                #    Stage :
+                #          We need to attach this graph to the WFPass uid. It has to be different from the starter id
+                #    Stage :
+                #          We set the ForEachElement starter id as finished immediately so that the new jobs will be run.
         if self.graph.is_workflow_finished():
             self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." %self.name)
@@ -1109,16 +1246,25 @@ class Workflow(WorkflowBase):
 
     def _postjob_care(self, wfem : WorkflowExecModule):
         jobdirectory = wfem.runtime_directory
+
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
             # tofile = myinput[0]
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
-            if not path.isfile(absfile):
-                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
-                self._logger.error(mystdout)
-                raise WorkflowAbort(mystdout)
+            # In case of a glob pattern, we need special care
+            if "*" in absfile:
+                allfiles = glob(absfile)
+                if len(allfiles) == 0:
+                    mystdout = "Tried staging out multiple files matching %s, but did not find a single file." % absfile
+                    self._logger.error(mystdout)
+                    raise WorkflowAbort(mystdout)
+            else:
+                if not path.isfile(absfile):
+                    mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                    self._logger.error(mystdout)
+                    raise WorkflowAbort(mystdout)
 
 
         """ Same loop again this time copying files """
@@ -1130,11 +1276,22 @@ class Workflow(WorkflowBase):
 
             tofiledir = path.dirname(tofile)
             mkdir_p(tofiledir)
-            if not path.isfile(absfile):
-                mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
-                self._logger.error(mystdout)
-                raise WorkflowAbort(mystdout)
-            shutil.copyfile(absfile, tofile)
+
+            doglob = "*" in absfile
+            if doglob:
+                allfiles = glob(absfile)
+            else:
+                allfiles = [absfile]
+
+            for tocopy in allfiles:
+                if not path.isfile(tocopy):
+                    mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                    self._logger.error(mystdout)
+                    raise WorkflowAbort(mystdout)
+                if doglob:
+                    basename = os.path.basename(tocopy)
+                    tofile = join(tofiledir,basename)
+                shutil.copyfile(absfile, tofile)
 
         return True
 
