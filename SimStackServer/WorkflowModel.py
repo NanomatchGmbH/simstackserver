@@ -296,6 +296,9 @@ class WorkflowElementList(object):
             if isinstance(my_str,str):
                 for key,item in vardict.items():
                     self._storage[myid] = my_str.replace(key,item)
+            else:
+                if not _is_basetype(my_str):
+                    my_str.fill_in_variables(vardict)
 
     def _recreate_uid_to_seqnum(self):
         self._uid_to_seqnum = {}
