@@ -777,12 +777,17 @@ class DirectedGraph(object):
     def merge_other_graph(self, other_graph):
         self._graph = nx.compose(other_graph._graph, self._graph)
 
-    def rename_all_nodes(self):
+    def rename_all_nodes(self, explicit_overrides = None):
+        if explicit_overrides is None:
+            explicit_overrides = {}
         allnodename = list(self._graph.nodes)
         newnames = []
         rename_dict = {}
         for i,oldnodename in enumerate(allnodename):
-            rename_dict[oldnodename] = str(uuid.uuid4())
+            if oldnodename in explicit_overrides:
+                rename_dict[oldnodename] = explicit_overrides[oldnodename]
+            else:
+                rename_dict[oldnodename] = str(uuid.uuid4())
         #inplace relabel nodes
         nx.relabel_nodes(self._graph,rename_dict,copy=False)
         return rename_dict
@@ -891,8 +896,10 @@ class SubGraph(XMLYMLInstantiationBase):
     def graph(self) -> DirectedGraph:
         return self._field_values["graph"]
 
-    def rename_all_nodes(self) -> dict:
-        rename_dict = self.graph.rename_all_nodes()
+    def rename_all_nodes(self, explicit_overrides = None) -> dict:
+        if explicit_overrides is None:
+            explicit_overrides = {}
+        rename_dict = self.graph.rename_all_nodes(explicit_overrides)
         for val in rename_dict.keys():
             assert val not in self.graph._graph.nodes, "Found reference to old node in graph, which should not be there."
 
@@ -908,7 +915,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
         ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
         ("iterator_name", str, "", "Name of my iterator", "a"),
-        ("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
+        #("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
         ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
         ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
         ("uid", str, "", "UID of this Foreach","a")
@@ -954,12 +961,14 @@ class ForEachGraph(XMLYMLInstantiationBase):
         new_graphs = []
         for myfile in resolved_files:
             mygraph = copy.deepcopy(self.subgraph)
+            # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
+            override = {"temporary_connector": self.uid}
             rename_dict = mygraph.rename_all_nodes()
-            if not "0" in rename_dict:
-                raise WorkflowAbort("mygraph did not contain start id 0. Renamed keys were: %s"%(",".join(rename_dict.keys())))
+            if not "temporary_connector" in rename_dict:
+                raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s"%(",".join(rename_dict.keys())))
             # Now we have to attach new 0 to parent_ids and connect all drains.
-            start_connect = (self.uid, rename_dict["0"])
-            new_connections.append(start_connect)
+            #start_connect = (self.uid, rename_dict["0"]) # not required anymore.
+            #new_connections.append(start_connect)
             for uid in self.subgraph_final_ids:
                 if not uid in rename_dict:
                     raise WorkflowAbort(
@@ -978,9 +987,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def finish_uid(self) -> str:
         return self._field_values["finish_uid"]
 
-    @property
-    def parent_ids(self) -> str:
-        return self._field_values["parent_ids"]
+    #@property
+    #def parent_ids(self) -> str:
+    #    return self._field_values["parent_ids"]
 
     @property
     def uid(self):
