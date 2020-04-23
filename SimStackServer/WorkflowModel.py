@@ -1202,6 +1202,7 @@ class Workflow(WorkflowBase):
                     return True
             elif isinstance(tostart, WFPass):
                 # If this is encountered it is just passed on. These can be used as anchors inside the workflow.
+                self.graph.start(rdjob)
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph):
                 print("Reached ForEachGraph")
@@ -1211,6 +1212,7 @@ class Workflow(WorkflowBase):
 
                 for connection in new_connections:
                     self.graph.add_new_unstarted_connection(connection)
+                self.graph.start(rdjob)
                 self.graph.finish(rdjob)
                 # What do we need to do here? We need to extend the graph, because it should be disjunct at the moment.
                 # ForEach has to integrate itself into the main graph, i.e.
