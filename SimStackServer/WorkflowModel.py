@@ -775,6 +775,9 @@ class DirectedGraph(object):
                 self._graph.nodes[node]["status"] = "unstarted"
         self._graph.add_edge(nodefrom,nodeto)
 
+    def merge_other_graph(self, other_graph):
+        self._graph = nx.compose(other_graph._graph, self._graph)
+
     def rename_all_nodes(self):
         allnodename = list(self._graph.nodes)
         newnames = []
@@ -946,6 +949,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def _multiply_connect_subgraph(self, resolved_files):
         new_connections = []
         new_activity_elementlists = []
+        new_graphs = []
         for myfile in resolved_files:
             mygraph = copy.deepcopy(self.subgraph)
             rename_dict = mygraph.rename_all_nodes()
@@ -963,9 +967,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
 
             self._logger.error("We still have to implement the var replacement here")
             new_activity_elementlists.append(mygraph.elements)
+            new_graphs.append(mygraph.graph)
             # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
             # we need to return all subgraph.elements and all connections and somehow get this communicated into the base graph
-        return new_connections, new_activity_elementlists
+        return new_connections, new_activity_elementlists, new_graphs
 
     @property
     def finish_uid(self) -> str:
@@ -1207,10 +1212,11 @@ class Workflow(WorkflowBase):
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph):
                 print("Reached ForEachGraph")
-                new_connections, new_activity_elementlists = tostart.resolve_connect(base_storage=self.storage)
+                new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage)
+                for ng in new_graphs:
+                    self.graph.merge_other_graph(ng)
                 for new_elementlist in new_activity_elementlists:
                     self.elements.merge_other_list(new_elementlist)
-
                 for connection in new_connections:
                     self.graph.add_new_unstarted_connection(connection)
                 self.graph.start(rdjob)
