@@ -296,6 +296,8 @@ class WorkflowElementList(object):
         for seqnum,element in enumerate(self._storage):
             if hasattr(element,"uid"):
                 self._uid_to_seqnum[element.uid] = seqnum
+            else:
+                raise WorkflowAbort("Element type %s does not have uid."%type(element))
 
     def _add_to_list(self, mytype, actual_object):
         self._typelist.append(mytype)
