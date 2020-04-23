@@ -993,9 +993,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
             rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
             if not "temporary_connector" in rename_dict:
                 raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s"%(",".join(rename_dict.keys())))
-            # Now we have to attach new 0 to parent_ids and connect all drains.
-            #start_connect = (self.uid, rename_dict["0"]) # not required anymore.
-            #new_connections.append(start_connect)
+
             for uid in self.subgraph_final_ids:
                 if not uid in rename_dict:
                     raise WorkflowAbort(
@@ -1003,11 +1001,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
             for uid in self.subgraph_final_ids:
                 new_connections.append((rename_dict[uid],self.finish_uid))
 
-            self._logger.error("We still have to implement the var replacement here")
             new_activity_elementlists.append(mygraph.elements)
             new_graphs.append(mygraph.graph)
             # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
-            # we need to return all subgraph.elements and all connections and somehow get this communicated into the base graph
+            # we return all subgraph.elements and all connections and get this communicated into the base graph
         return new_connections, new_activity_elementlists, new_graphs
 
     @property
