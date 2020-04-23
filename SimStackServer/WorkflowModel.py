@@ -277,14 +277,27 @@ class WorkflowElementList(object):
             if isinstance(inputvar,list):
                 #print(inputvar)
                 for fieldtype, myobj in inputvar:
-                    self.add_to_list(fieldtype, myobj)
+                    self._add_to_list(fieldtype, myobj)
+        self._recreate_uid_to_seqnum()
 
     def _clear(self):
         self._storage = []
         self._typelist = []
         self._uid_to_seqnum = {}
 
-    def add_to_list(self, mytype, actual_object):
+    def merge_other_list(self, other_list):
+        for st, tp in zip(other_list._storage, other_list._typelist):
+            self._storage.append(st)
+            self._typelist.append(tp)
+        self._recreate_uid_to_seqnum()
+
+    def _recreate_uid_to_seqnum(self):
+        self._uid_to_seqnum = {}
+        for seqnum,element in self._storage:
+            if hasattr(element,"uid"):
+                self._uid_to_seqnum[element.uid] = seqnum
+
+    def _add_to_list(self, mytype, actual_object):
         self._typelist.append(mytype)
         self._storage.append(actual_object)
 
@@ -931,7 +944,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
 
     def _multiply_connect_subgraph(self, resolved_files):
         new_connections = []
-        new_activities = []
+        new_activity_elementlists = []
         for myfile in resolved_files:
             mygraph = copy.deepcopy(self.subgraph)
             rename_dict = mygraph.rename_all_nodes()
@@ -948,10 +961,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 new_connections.append((rename_dict[uid],self.finish_uid))
 
             self._logger.error("We still have to implement the var replacement here")
-            new_activities += mygraph.elements
+            new_activity_elementlists.append(mygraph.elements)
             # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
             # we need to return all subgraph.elements and all connections and somehow get this communicated into the base graph
-        return new_connections, new_activities
+        return new_connections, new_activity_elementlists
 
     @property
     def finish_uid(self) -> str:
@@ -1192,8 +1205,10 @@ class Workflow(WorkflowBase):
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph):
                 print("Reached ForEachGraph")
-                new_connections, new_activities = tostart.resolve_connect()
-                self._field_values["elements"] += new_activities
+                new_connections, new_activity_elementlists = tostart.resolve_connect()
+                for new_elementlist in new_activity_elementlists:
+                    self.elements.merge_other_list(new_elementlist)
+
                 for connection in new_connections:
                     self.graph.add_new_unstarted_connection(connection)
                 self.graph.finish(rdjob)

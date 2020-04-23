@@ -170,7 +170,7 @@ class TestWorkflowModel(unittest.TestCase):
         myxml = etree.Element("TestWFEL")
 
         d = WorkflowElementList()
-        d.add_to_list("np.int64", np.int64(4.0))
+        d._add_to_list("np.int64", np.int64(4.0))
         d.to_xml(myxml)
         ddict = {}
         d.to_dict(ddict)
