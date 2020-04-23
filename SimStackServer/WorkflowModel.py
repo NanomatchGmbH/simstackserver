@@ -879,10 +879,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
         ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
         ("iterator_name", str, "", "Name of my iterator", "a"),
         ("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
-        ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.",
-         "m"),
+        ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
         ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
-        ("uid", str, None, "UID of this Foreach","a")
+        ("uid", str, "", "UID of this Foreach","a")
     ]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
