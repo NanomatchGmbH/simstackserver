@@ -963,7 +963,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
             mygraph = copy.deepcopy(self.subgraph)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
             override = {"temporary_connector": self.uid}
-            rename_dict = mygraph.rename_all_nodes()
+            rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
             if not "temporary_connector" in rename_dict:
                 raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s"%(",".join(rename_dict.keys())))
             # Now we have to attach new 0 to parent_ids and connect all drains.
