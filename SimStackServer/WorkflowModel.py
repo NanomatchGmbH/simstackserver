@@ -243,6 +243,12 @@ def workflow_element_factory(name):
         return StringList
     elif name == "WorkflowElementList":
         return WorkflowElementList
+    elif name == "WFPass":
+        return WFPass
+    elif name == "ForEachGraph":
+        return ForEachGraph
+    elif name == "SubGraph":
+        return SubGraph
     elif name == "int":
         return int
     elif name == "str":
@@ -256,6 +262,7 @@ def workflow_element_factory(name):
             classobj = getattr(globals()["np"],name)
             assert np.issubdtype(classobj, np.number), "Only allowed to import actual numbertypes"
             return classobj
+    raise NotImplementedError("Please add type %s to workflow element factory"%name)
 
 
 class UnknownWFEError(Exception):
