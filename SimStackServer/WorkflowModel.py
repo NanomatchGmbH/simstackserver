@@ -291,6 +291,12 @@ class WorkflowElementList(object):
             self._typelist.append(tp)
         self._recreate_uid_to_seqnum()
 
+    def fill_in_variables(self, vardict):
+        for myid, my_str in enumerate(self._storage):
+            if isinstance(my_str,str):
+                for key,item in vardict.items():
+                    self._storage[myid] = my_str.replace(key,item)
+
     def _recreate_uid_to_seqnum(self):
         self._uid_to_seqnum = {}
         for seqnum,element in enumerate(self._storage):
@@ -521,6 +527,10 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     @classmethod
     def fields(cls):
         return cls._fields
+
+    def fill_in_variables(self, vardict):
+        self._field_values["inputs"].fill_in_variables(vardict)
+        self._field_values["outputs"].fill_in_variables(vardict)
 
     def rename(self, renamedict):
         myuid = self.uid
@@ -892,6 +902,10 @@ class SubGraph(XMLYMLInstantiationBase):
     def elements(self) -> WorkflowElementList:
         return self._field_values["elements"]
 
+    def fill_in_variables(self, vardict):
+        for element in self.elements:
+            element.fill_in_variables(vardict)
+
     @property
     def graph(self) -> DirectedGraph:
         return self._field_values["graph"]
@@ -935,6 +949,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def iterator_files(self) -> StringList:
         return self._field_values["iterator_files"]
 
+    def fill_in_variables(self, vardict):
+        self._field_values["subgraph"].fill_in_variables(vardict)
+
     @property
     def subgraph_final_ids(self) -> StringList:
         return self._field_values["subgraph_final_ids"]
@@ -961,6 +978,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
         new_graphs = []
         for myfile in resolved_files:
             mygraph = copy.deepcopy(self.subgraph)
+            replacedict = {
+                "${%s_VALUE}"%self.iterator_name :myfile
+            }
+            mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
             override = {"temporary_connector": self.uid}
             rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
