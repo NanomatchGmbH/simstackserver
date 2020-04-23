@@ -1331,6 +1331,8 @@ class Workflow(WorkflowBase):
                     # 0 is start node, skip over it.
                     continue
                 jobobj = self.elements.get_element_by_uid(job)
+                if not isinstance(jobobj, WorkflowExecModule):
+                    continue
                 jobobj : WorkflowExecModule
                 commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
                 jobdir = jobobj.runtime_directory[len(commonpath):]
