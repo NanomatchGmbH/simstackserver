@@ -264,6 +264,7 @@ class UnknownWFEError(Exception):
 
 class WorkflowElementList(object):
     def __init__(self, *args, **kwargs):
+        self._logger = logging.getLogger("WorkflowElementList")
         self._clear()
         for inputvar in args:
             if isinstance(inputvar,list):
@@ -332,7 +333,11 @@ class WorkflowElementList(object):
                     myfo = fieldobject()
                     myfo.from_xml(child)
                 else:
-                    myfo = fieldobject(child.text)
+                    try:
+                        myfo = fieldobject(child.text)
+                    except TypeError as e:
+                        self._logger.exception("Could not instantiate object. Type was: %s. Text was: %s"%(type(fieldobject),child.text))
+                        raise e from e
                 self._storage.append(myfo)
                 self._typelist.append(field)
                 if "uid" in child.attrib:
