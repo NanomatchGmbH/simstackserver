@@ -7,3 +7,6 @@
 [submodule "external/python-daemon"]
 	path = external/python-daemon
 	url = https://pagure.io/python-daemon.git
+[submodule "external/threadfarm"]
+	path = external/threadfarm
+	url = ssh://git@gitlab.nanobuild.de:2222/nanomatch/threadfarm.git

@@ -593,6 +593,11 @@ export NANOMATCH=%s
     def run_jobfile(self, queueing_system):
         temphandler = StringLoggingHandler()
         self._logger.addHandler(temphandler)
+        if queueing_system == "Internal":
+            queueing_system = "slurm"
+            do_internal = True
+        else:
+            do_internal = False
         try:
             import clusterjob
             #Sanity checks
@@ -634,12 +639,20 @@ export NANOMATCH=%s
 
                 #with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
                 #    outfile.write(str(jobscript)+ '\n')
-
-                asyncresult = jobscript.submit()
-                if asyncresult.status == FAILED:
-                    raise JobSubmitException("Job failed immediately after submission.")
+                if not do_internal:
+                    asyncresult = jobscript.submit()
+                    if asyncresult.status == FAILED:
+                        raise JobSubmitException("Job failed immediately after submission.")
                 #self._async_result_workaround = asyncresult
-                self.set_jobid(asyncresult.job_id)
+                    self.set_jobid(asyncresult.job_id)
+                else:
+                    from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+                    batchsys, _ = InternalBatchSystem.get_instance()
+                    runscript = self.runtime_directory + "/" + "jobscript.sh"
+                    with open(runscript, 'wt') as outfile:
+                        outfile.write(str(jobscript).replace("$SLURM_SUBMIT_DIR",self.runtime_directory)+ '\n')
+                    batchsys.add_work(self.resources.cpus_per_node,"smp",runscript)
+                    ## In this case we need to grab jobid after submission and
             except Exception as e:
                 server_submit_stderr = join(self.runtime_directory, "submission_failed.stderr")
                 self._logger.error("Exception: %s. Writing traceback to: %s"%(e, server_submit_stderr))
@@ -653,18 +666,24 @@ export NANOMATCH=%s
 
 
     def abort_job(self):
-        asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
-        try:
-            asyncresult.status
-            asyncresult.cancel()
-        except ValueError as e:
-            # In this case the job was most probably not known by the queueing system anymore.
-            pass
-        except FileNotFoundError as e:
-            # In this case the queueing system was most probably wrong.
-            pass
+        if self.queueing_system != "Internal":
+            asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
+            try:
+                asyncresult.status
+                asyncresult.cancel()
+            except ValueError as e:
+                # In this case the job was most probably not known by the queueing system anymore.
+                pass
+            except FileNotFoundError as e:
+                # In this case the queueing system was most probably wrong.
+                pass
+        else:
+            from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+            batchsys, _ = InternalBatchSystem.get_instance()
+            batchsys.abort_job(self.jobid)
 
     def _recreate_asyncresult_from_jobid(self, jobid):
+        assert not self.queueing_system == "Internal", "Recreating asyncresult from jobid not supported for Internal queueing system"
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
         from clusterjob import AsyncResult, JobScript
@@ -686,12 +705,20 @@ export NANOMATCH=%s
         return self._field_values["queueing_system"]
 
     def completed_or_aborted(self):
-        try:
-            asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
-            return asyncresult.status >= 0
-        except ValueError as e:
-            # In this case the queueing system did not know about our job anymore. Return True
-            return True # The job will be checked for actual completion anyways
+        if self.queueing_system != "Internal":
+            try:
+                asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
+                return asyncresult.status >= 0
+            except ValueError as e:
+                # In this case the queueing system did not know about our job anymore. Return True
+                return True # The job will be checked for actual completion anyways
+        else:
+            from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+            batchsys, _ = InternalBatchSystem.get_instance()
+            status = batchsys.jobstatus(self.jobid)
+            if status == "completed" or status == "cancelled":
+                return True
+            return False
 
     @property
     def uid(self):

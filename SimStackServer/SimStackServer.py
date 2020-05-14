@@ -23,6 +23,7 @@ from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
 from SimStackServer.Util.FileUtilities import mkdir_p
+
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 from SimStackServer.WorkflowModel import Workflow
 
@@ -64,6 +65,8 @@ class WorkflowManager(object):
         self._inprogress_models = {}
         self._finished_models = {}
         self._deletion_queue = Queue()
+        self._processfarm_thread = None # This is only used if the internal batch system is to be used.
+        self._processfarm = None
 
     def from_json(self, filename):
         with open(filename, 'rt') as infile:
@@ -135,6 +138,17 @@ class WorkflowManager(object):
     def add_inprogress_workflow(self, workflow_filename):
         return self._add_workflow(workflow_filename, self._inprogress_models)
 
+    def _start_internal_queue(self):
+        if self._processfarm_thread is None:
+            from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+            self._processfarm , self._processfarm_thread =  InternalBatchSystem.get_instance()
+
+    def shutdown(self):
+        if self._processfarm_thread is not None:
+            self._processfarm.abort()
+            time.sleep(0.3)
+            self._processfarm_thread.kill()
+
     def _add_workflow(self, workflow_filename, target_dict):
         """
         The client has just instructed us about the existence of a workflow. We have to add it here.
@@ -143,6 +157,10 @@ class WorkflowManager(object):
         """
         try:
             newwf = Workflow.new_instance_from_xml(workflow_filename)
+            queueing_system = newwf.queueing_system
+            if queueing_system == 'Internal':
+                self._start_internal_queue()
+
         except FileNotFoundError as e:
             raise WorkflowError("Workflow was not found at file <%s>. Discarding Workflow.") from e
         newwf: Workflow
@@ -303,6 +321,7 @@ class SimStackServer(object):
         self._signal_termination = False
         self._submitted_job_queue = Queue()
         self._filetime_on_init = self._get_module_mtime()
+
 
     @classmethod
     def _setup_root_logger(cls):
@@ -535,6 +554,7 @@ class SimStackServer(object):
         
         #Now that nothing is running anymore, we save WorkflowManagers runtime information and all workflows (inside WFM)
         self._workflow_manager.backup_and_save()
+        self._workflow_manager.shutdown()
 
     def _shutdown(self, remove_crontab = True):
         if self._config is None:
