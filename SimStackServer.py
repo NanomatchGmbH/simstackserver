@@ -5,6 +5,7 @@ import time
 import lockfile
 import logging
 import zmq
+import contextlib
 
 
 from os.path import join
@@ -129,13 +130,17 @@ if __name__ == '__main__':
             signal.SIGTERM: ss._signal_handler,
             signal.SIGINT: ss._signal_handler
         }
-        with daemon.DaemonContext(
-            stdout = mystdfileobj,
-            stderr = mystderrfileobj,
-            files_preserve = [logfilehandler.stream],
-            pidfile = mypidfile,
-            signal_map = signal_map
-        ):
+        if "-D" in sys.argv:
+            cm = contextlib.nullcontext()
+        else:
+            cm = daemon.DaemonContext(
+                    stdout = mystdfileobj,
+                    stderr = mystderrfileobj,
+                    files_preserve = [logfilehandler.stream],
+                    pidfile = mypidfile,
+                    signal_map = signal_map
+            )
+        with cm:
             logger = logging.getLogger("Startup")
             logger.info("SimStackServer Daemon Startup")
             mypidfile.update_pid_to_current_process() # "PIDFILE TAKEOVER
@@ -148,7 +153,7 @@ if __name__ == '__main__':
             logger.debug("Releasing setup PID")
 
             try:
-                if len(sys.argv) >= 2:
+                if len(sys.argv) >= 2 and not "-D" in sys.argv:
                     wf_filename = sys.argv[1]
                     ss.main_loop(wf_filename)
                 else:
