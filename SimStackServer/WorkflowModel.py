@@ -651,7 +651,8 @@ export NANOMATCH=%s
                     runscript = self.runtime_directory + "/" + "jobscript.sh"
                     with open(runscript, 'wt') as outfile:
                         outfile.write(str(jobscript).replace("$SLURM_SUBMIT_DIR",self.runtime_directory)+ '\n')
-                    batchsys.add_work(self.resources.cpus_per_node,"smp",runscript)
+                    jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
+                    self.set_jobid(jobid)
                     ## In this case we need to grab jobid after submission and
             except Exception as e:
                 server_submit_stderr = join(self.runtime_directory, "submission_failed.stderr")
@@ -716,7 +717,7 @@ export NANOMATCH=%s
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
             status = batchsys.jobstatus(self.jobid)
-            if status == "completed" or status == "cancelled":
+            if status == "completed" or status == "cancelled" or status == "done":
                 return True
             return False
 
