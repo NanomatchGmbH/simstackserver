@@ -654,7 +654,8 @@ export NANOMATCH=%s
                     with open(hostfile, 'wt') as hoststream:
                         for i in range(0, self.resources.cpus_per_node):
                             hostfile.write("localhost\n")
-                    batchsys.add_work(self.resources.cpus_per_node,"smp",runscript)
+                    jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
+                    self.set_jobid(jobid)
                     ## In this case we need to grab jobid after submission and
             except Exception as e:
                 server_submit_stderr = join(self.runtime_directory, "submission_failed.stderr")
@@ -719,7 +720,7 @@ export NANOMATCH=%s
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
             status = batchsys.jobstatus(self.jobid)
-            if status == "completed" or status == "cancelled":
+            if status == "completed" or status == "cancelled" or status == "done":
                 return True
             return False
 

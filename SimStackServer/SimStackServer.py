@@ -147,7 +147,8 @@ class WorkflowManager(object):
         if self._processfarm_thread is not None:
             self._processfarm.abort()
             time.sleep(0.3)
-            self._processfarm_thread.kill()
+            if self._processfarm_thread.is_alive():
+                self._logger.error("Processfarm thread did not exit in time")
 
     def _add_workflow(self, workflow_filename, target_dict):
         """
