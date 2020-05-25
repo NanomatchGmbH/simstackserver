@@ -618,9 +618,8 @@ export NANOMATCH=%s
             toexec = """%s
     cd $CLUSTERJOB_WORKDIR
     %s
-    """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
+"""%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
             #In case somebody uploaded report_template.html, we render it:
-
             report_template = join(self.runtime_directory,"report_template.body")
             if os.path.isfile(report_template):
                 self._logger.debug("Looking for %s" % report_template)
@@ -651,6 +650,10 @@ export NANOMATCH=%s
                     runscript = self.runtime_directory + "/" + "jobscript.sh"
                     with open(runscript, 'wt') as outfile:
                         outfile.write(str(jobscript).replace("$SLURM_SUBMIT_DIR",self.runtime_directory)+ '\n')
+                    hostfile = self.runtime_directory + "/" + "HOSTFILE"
+                    with open(hostfile, 'wt') as hoststream:
+                        for i in range(0, self.resources.cpus_per_node):
+                            hostfile.write("localhost\n")
                     batchsys.add_work(self.resources.cpus_per_node,"smp",runscript)
                     ## In this case we need to grab jobid after submission and
             except Exception as e:
