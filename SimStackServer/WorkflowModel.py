@@ -642,7 +642,7 @@ export NANOMATCH=%s
                     asyncresult = jobscript.submit()
                     if asyncresult.status == FAILED:
                         raise JobSubmitException("Job failed immediately after submission.")
-                #self._async_result_workaround = asyncresult
+                    #self._async_result_workaround = asyncresult
                     self.set_jobid(asyncresult.job_id)
                 else:
                     from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
