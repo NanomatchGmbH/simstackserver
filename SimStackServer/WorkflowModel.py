@@ -653,7 +653,7 @@ export NANOMATCH=%s
                     hostfile = self.runtime_directory + "/" + "HOSTFILE"
                     with open(hostfile, 'wt') as hoststream:
                         for i in range(0, self.resources.cpus_per_node):
-                            hostfile.write("localhost\n")
+                            hoststream.write("localhost\n")
                     jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
                     self.set_jobid(jobid)
                     ## In this case we need to grab jobid after submission and
