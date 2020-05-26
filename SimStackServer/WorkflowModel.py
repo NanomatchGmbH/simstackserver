@@ -720,7 +720,7 @@ export NANOMATCH=%s
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
             status = batchsys.jobstatus(self.jobid)
-            if status == "completed" or status == "cancelled" or status == "done" or status == "notfound":
+            if status in ["completed","cancelled","done","notfound","crashed","failed"]:
                 return True
             return False
 
