@@ -140,8 +140,11 @@ class WorkflowManager(object):
 
     def _start_internal_queue(self):
         if self._processfarm_thread is None:
+            self._logger.info("Starting internal batch system")
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             self._processfarm , self._processfarm_thread =  InternalBatchSystem.get_instance()
+        assert self._processfarm_thread.is_alive(), "ProcessFarm thread not alive after starting"
+        self._logger.debug("Processfarm is still alive")
 
     def shutdown(self):
         if self._processfarm_thread is not None:
@@ -158,9 +161,6 @@ class WorkflowManager(object):
         """
         try:
             newwf = Workflow.new_instance_from_xml(workflow_filename)
-            queueing_system = newwf.queueing_system
-            if queueing_system == 'Internal':
-                self._start_internal_queue()
 
         except FileNotFoundError as e:
             raise WorkflowError("Workflow was not found at file <%s>. Discarding Workflow.") from e
@@ -235,6 +235,9 @@ class WorkflowManager(object):
 
     def start_wf(self, workflow_file):
         workflow = self.add_inprogress_workflow(workflow_file)
+        queueing_system = workflow.queueing_system
+        if queueing_system == 'Internal':
+            self._start_internal_queue()
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
 
     def backup_and_save(self):

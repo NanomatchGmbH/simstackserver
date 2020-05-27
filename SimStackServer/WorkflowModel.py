@@ -655,6 +655,7 @@ export NANOMATCH=%s
                         for i in range(0, self.resources.cpus_per_node):
                             hoststream.write("localhost\n")
                     jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
+                    self._logger.debug("Submitted as internal job %d"%jobid)
                     self.set_jobid(jobid)
                     ## In this case we need to grab jobid after submission and
             except Exception as e:
