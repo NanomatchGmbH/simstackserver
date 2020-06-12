@@ -257,7 +257,7 @@ class ClusterManager(object):
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
         """
-        stdin, stdout, stderr = self._ssh_client.exec_command(command)
+        stdin, stdout, stderr = self._ssh_client.exec_command("source /etc/profile;" + command)
         stderrmessage = None
         password = None
         port = None
