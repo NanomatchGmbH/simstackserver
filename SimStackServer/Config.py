@@ -7,6 +7,7 @@ import json
 import psutil
 from crontab import CronTab
 import logging
+from logging.handlers import RotatingFileHandler
 
 
 from SimStackServer.Util.FileUtilities import mkdir_p
@@ -48,7 +49,9 @@ class Config(object):
         if not Config._logger_setup:
             mkdir_p(cls._dirs.user_log_dir)
             mypath = path.join(cls._dirs.user_log_dir,"simstack_server.log")
-            handler = logging.FileHandler(mypath)
+            rotate_size = 1024*1024 # 1M
+            handler = RotatingFileHandler(mypath, maxBytes=rotate_size,
+                                  backupCount=5)
             logging.basicConfig(format='%(asctime)s %(message)s',
                                 level=logging.DEBUG,
                                 handlers=[handler]
