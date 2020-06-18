@@ -53,7 +53,7 @@ class Config(object):
             handler = RotatingFileHandler(mypath, maxBytes=rotate_size,
                                   backupCount=5)
             logging.basicConfig(format='%(asctime)s %(message)s',
-                                level=logging.DEBUG,
+                                level=logging.INFO,
                                 handlers=[handler]
             )
             return handler
