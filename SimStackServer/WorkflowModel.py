@@ -23,6 +23,7 @@ import numpy as np
 import networkx as nx
 
 from SimStackServer.MessageTypes import JobStatus
+from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
 from external.clusterjob.clusterjob import FAILED
 
@@ -230,6 +231,12 @@ class XMLYMLInstantiationBase(object):
         with open(filename, 'wt') as infile:
             infile.write(etree.tostring(me,encoding="utf8",pretty_print=True).decode()+"\n")
 
+
+
+# Tomorrow: Modify this factory to play nice with TreeWalker
+#   Override isdict and islist for ForEachGraph
+#   Suddenly everything has a URI
+#
 
 def workflow_element_factory(name):
     """
@@ -619,14 +626,6 @@ export NANOMATCH=%s
     cd $CLUSTERJOB_WORKDIR
     %s
 """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
-            #In case somebody uploaded report_template.html, we render it:
-            report_template = join(self.runtime_directory,"report_template.body")
-            if os.path.isfile(report_template):
-                self._logger.debug("Looking for %s" % report_template)
-                import SimStackServer.Reporting as Reporting
-                reporting_path = os.path.dirname(os.path.realpath(Reporting.__file__))
-                toexec += "%s %s\n"%(sys.executable, join(reporting_path,"ReportRenderer.py"))
-
             try:
                 jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
                                                  time = self.resources.walltime, nodes = self.resources.nodes,
@@ -724,6 +723,27 @@ export NANOMATCH=%s
             if status in ["completed","cancelled","done","notfound","crashed","failed"]:
                 return True
             return False
+
+    def get_output_variables(self, render_report = False):
+        # In case somebody uploaded report_template.html, we render it:
+        report_renderer = None
+        if render_report:
+            report_template = join(self.runtime_directory, "report_template.body")
+            try:
+                self._logger.debug("Rendering output: %s" % report_template)
+                report_renderer = ReportRenderer.render_everything(self.runtime_directory, render_report)
+            except Exception as e:
+                self._logger.exception("Exception during report rendering.")
+
+            pass
+        if report_renderer is None:
+            #This is the case in which rendering did not work or was not requested:
+            try:
+                report_renderer = ReportRenderer.render_everything(self.runtime_directory, False)
+            except Exception as e:
+                self._logger.exception("Could not create report_renderer for variable instruction. Something went very wrong.")
+                raise WorkflowAbort("Could not create report_renderer for variable instruction. Something went very wrong.")
+        return report_renderer.consolidate_export_dictionaries()
 
     @property
     def uid(self):
@@ -958,6 +978,16 @@ class SubGraph(XMLYMLInstantiationBase):
             else:
                 self._logger.warning("Element %s does not have explicit rename function yet. Please add even if empty."%type(element))
         return rename_dict
+
+# DevPlan:
+# Again, the workflow is actually a TreeGraph
+#   Every Element needs to know its uri
+#
+
+# Tomorrow:
+#    Parse the workflow graph into the TreeWalker
+#
+
 
 class ForEachGraph(XMLYMLInstantiationBase):
     _fields = [
@@ -1238,7 +1268,7 @@ class Workflow(WorkflowBase):
             running : WorkflowExecModule
             if running.completed_or_aborted():
                 try:
-                    self._postjob_care(running)
+                    wfvars = self._postjob_care(running)
                     self.graph.finish(running_job)
                 except WorkflowAbort as e:
                     self.graph.fail(running_job)
@@ -1367,6 +1397,7 @@ class Workflow(WorkflowBase):
                     self._logger.error(mystdout)
                     raise WorkflowAbort(mystdout)
 
+        myvars = wfem.get_output_variables()
 
         """ Same loop again this time copying files """
 
@@ -1394,7 +1425,7 @@ class Workflow(WorkflowBase):
                     tofile = join(tofiledir,basename)
                 shutil.copyfile(tocopy, tofile)
 
-        return True
+        return myvars
 
     def get_running_finished_job_list_formatted(self):
         files = []

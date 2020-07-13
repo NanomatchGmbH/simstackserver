@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import configparser
+from os.path import join
+
 import yaml
 import os
 import sys
@@ -23,12 +25,7 @@ class ReportRenderer():
 </body>
 </html>
 """
-    def __init__(self, html_parts, export_dictionaries):
-        self._body = None
-        self._style = ""
-        self._title = None
-        self._parse_html_parts(html_parts)
-
+    def __init__(self, export_dictionaries):
         self._export_dictionaries = {}
         for dict_name, filename in export_dictionaries.items():
             if filename.endswith(".ini"):
@@ -41,7 +38,12 @@ class ReportRenderer():
                 with open(filename, 'rt') as infile:
                    content = yaml.safe_load(infile)
             self._export_dictionaries[dict_name] = content
-            
+
+    def consolidate_export_dictionaries(self):
+        outdict = {}
+        for indict in self._export_dictionaries.values():
+            outdict.update(indict)
+        return outdict
 
     @staticmethod
     def _config_as_dict(config):
@@ -58,55 +60,66 @@ class ReportRenderer():
                 the_dict[section][key] = val
         return the_dict
 
-    def _parse_html_parts(self, html_parts):
-
+    @staticmethod
+    def _parse_html_parts(html_parts):
+        style = ""
         assert "body" in html_parts, "Every report requires a body"
         assert "title" in html_parts, "Every report requires a title"
-        self._title = html_parts["title"]
+        title = html_parts["title"]
         bodyfilename = html_parts["body"]
 
         with open(bodyfilename,'rt') as infile:
-            self._body = infile.read()
+            body = infile.read()
 
         if "style" in html_parts:
             stylefilename = html_parts["style"]
             with open(stylefilename,'rt') as infile:
-                self._style = infile.read()
+                style = infile.read()
+        return title, body, style
 
-    def render(self):
-        torender = self.render_string%(self._title,self._style,self._body)
+    def render(self, html_parts):
+        title, body, style = self._parse_html_parts(html_parts)
+        torender = self.render_string%(title,style,body)
         tm = Template(torender)
         outstring = tm.render(**self._export_dictionaries)
         return outstring
     
     @staticmethod
-    def render_everything():
-        html_parts_dict = {}
-        if not os.path.isfile("report_template.body"):
-            return
-
-        html_parts_dict["body"] = "report_template.body"
-        title = os.path.basename(os.path.dirname(os.path.realpath(".")))
-
-        html_parts_dict["title"] = title
-        if os.path.isfile("report_style.css"):
-            html_parts_dict["style"] = "report_style.css"
+    def render_everything(basepath, do_render = True):
 
 
         export_dictionaries = {}
-        if os.path.isfile("output_config.ini"):
-            export_dictionaries["output_config"] = "output_config.ini"
-        if os.path.isfile("output_dict.yml"):
-            export_dictionaries["output_dict"] = "output_dict.yml"
+        oci = join(basepath, "output_config.ini")
 
-        a = ReportRenderer(html_parts_dict, export_dictionaries)
-        report = a.render()
+        if os.path.isfile(oci):
+            export_dictionaries["output_config"] = oci
+        ody = join(basepath, "output_dict.yml")
+        if os.path.isfile(ody):
+            export_dictionaries["output_dict"] = ody
 
-        with open("report.html",'wt') as outfile:
-            outfile.write(report)
+        a = ReportRenderer(export_dictionaries)
+        if do_render:
+            html_parts_dict = {}
+            rtb = join(basepath, "report_template.body")
+            if not os.path.isfile(rtb):
+                return
+
+            html_parts_dict["body"] = rtb
+            title = os.path.basename(os.path.dirname(os.path.realpath(basepath)))
+
+            html_parts_dict["title"] = title
+            rsc = join(basepath, "report_style.css")
+            if os.path.isfile(rsc):
+                html_parts_dict["style"] = rsc
+
+            report = a.render(html_parts_dict)
+
+            with open("report.html",'wt') as outfile:
+                outfile.write(report)
+        return a
 
 if __name__ == '__main__':
-    ReportRenderer.render_everything()
+    ReportRenderer.render_everything(".")
 
 
 
