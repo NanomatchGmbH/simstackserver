@@ -23,5 +23,14 @@ MY_PATH="`dirname \"$0\"`/../"
 echo $MY_PATH
 cd $MY_PATH
 TODAY=$(date "+%F")
-git-archive-all --prefix=nanomatch/$NANOVER/SimStackServer/ $OLD_PWD/$TODAY-simstackserver.zip
+filename="$OLD_PWD/$TODAY-simstackserver.tar"
+git-archive-all --prefix=nanomatch/$NANOVER/SimStackServer/ $OLD_PWD/$TODAY-simstackserver.tar
+mkdir -p rezip/
+cd rezip/
+tar xf "$filename"
+tar czf $filename.gz --mode='a+rwX' nanomatch/
 cd -
+rm -r rezip
+rm $filename
+
+cd $OLD_PWD
