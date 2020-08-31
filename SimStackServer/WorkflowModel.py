@@ -517,6 +517,8 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
         ("given_name", str, "WFEM", "Name of this WorkflowExecModule.", "a"),
+        ("path", str, "unset", "Path to this WFEM in the workflow.", "a"),
+        ("outputpath", str, "unset", "Path to the output directory of this wfem in the workflow.", "a"),
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
@@ -703,6 +705,20 @@ export NANOMATCH=%s
 
     def set_queueing_system(self, queueing_system):
         self._field_values["queueing_system"] = queueing_system
+
+    def set_path(self, path):
+        self._field_values["path"] = path
+
+    @property
+    def path(self):
+        return self._field_values["path"]
+
+    def set_outputpath(self, outputpath):
+        self._field_values["outputpath"] = outputpath
+
+    @property
+    def outputpath(self):
+        return self._field_values["outputpath"]
 
     @property
     def queueing_system(self):
@@ -978,15 +994,6 @@ class SubGraph(XMLYMLInstantiationBase):
             else:
                 self._logger.warning("Element %s does not have explicit rename function yet. Please add even if empty."%type(element))
         return rename_dict
-
-# DevPlan:
-# Again, the workflow is actually a TreeGraph
-#   Every Element needs to know its uri
-#
-
-# Tomorrow:
-#    Parse the workflow graph into the TreeWalker
-#
 
 
 class ForEachGraph(XMLYMLInstantiationBase):
