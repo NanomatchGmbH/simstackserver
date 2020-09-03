@@ -17,6 +17,7 @@ from pathlib import Path
 
 from os import path
 
+import yaml
 from lxml import etree
 
 import numpy as np
@@ -25,6 +26,7 @@ import networkx as nx
 from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
+from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 from external.clusterjob.clusterjob import FAILED
 
 
@@ -518,6 +520,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
         ("given_name", str, "WFEM", "Name of this WorkflowExecModule.", "a"),
         ("path", str, "unset", "Path to this WFEM in the workflow.", "a"),
+        ("wano_xml", str, "unset", "Name of the WaNo XML.", "a"),
         ("outputpath", str, "unset", "Path to the output directory of this wfem in the workflow.", "a"),
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
@@ -712,6 +715,10 @@ export NANOMATCH=%s
     @property
     def path(self):
         return self._field_values["path"]
+
+    @property
+    def wano_xml(self):
+        return self._field_values["wano_xml"]
 
     def set_outputpath(self, outputpath):
         self._field_values["outputpath"] = outputpath
@@ -1347,6 +1354,24 @@ class Workflow(WorkflowBase):
         return False
 
     def _prepare_job(self, wfem : WorkflowExecModule):
+
+        jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
+
+        wfxml = join(wfem.path, wfem.wano_xml)
+        from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
+        wmr = wano_without_view_constructor_helper(wfxml)
+        with open(wfxml, 'rt') as infile:
+            xml = etree.parse(infile)
+        wano_dir_root = os.path.dirname(wfem.path)
+        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root)
+        wmr = wano_without_view_constructor_helper(wmr)
+        rendered_wano = wmr.wano_walker()
+        # We do two render passes, in case the rendering reset some values:
+        fvl = []
+        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None)
+        with open(join(jobdirectory, "rendered_wano.yml"), 'wt') as outfile:
+            yaml.safe_dump(rendered_wano, outfile)
+
         """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
             #tofile = myinput[0]
@@ -1357,7 +1382,6 @@ class Workflow(WorkflowBase):
                 self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
                 return False
 
-        jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
 
         counter = 0
         while path.isdir(jobdirectory):
@@ -1405,11 +1429,15 @@ class Workflow(WorkflowBase):
                     raise WorkflowAbort(mystdout)
 
         myvars = wfem.get_output_variables()
-
         """ Same loop again this time copying files """
 
         for myoutput in wfem.outputs:
-            tofile = self.storage + '/' + myoutput[1]
+            if wfem.outputpath == 'unset':
+                # Legacy behaviour in case of wfem missing outputpath
+                tofile = self.storage + '/' + myoutput[1]
+            else:
+                tofile = join(wfem.outputpath, myoutput[1])
+
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
