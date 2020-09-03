@@ -1358,15 +1358,23 @@ class Workflow(WorkflowBase):
     def _prepare_job(self, wfem : WorkflowExecModule):
 
         jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
+        counter = 0
+        while path.isdir(jobdirectory):
+            jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem) + "%d"%counter
+            counter += 1
+            if counter == 20:
+                raise WorkflowAbort("Job directory could not be generated even after 20 attempts.")
+        mkdir_p(jobdirectory)
 
-        wfxml = join(wfem.path, wfem.wano_xml)
+
+        wfxml = join(self.storage, "workflow_data",wfem.path,"inputs",wfem.wano_xml)
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
-        wmr = wano_without_view_constructor_helper(wfxml)
         with open(wfxml, 'rt') as infile:
             xml = etree.parse(infile)
         wano_dir_root = os.path.dirname(wfem.path)
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
+        wmr.parse_from_xml(xml)
         wmr = wano_without_view_constructor_helper(wmr)
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
@@ -1385,14 +1393,6 @@ class Workflow(WorkflowBase):
                 self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
                 return False
 
-
-        counter = 0
-        while path.isdir(jobdirectory):
-            jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem) + "%d"%counter
-            counter += 1
-            if counter == 20:
-                raise WorkflowAbort("Job directory could not be generated even after 20 attempts.")
-        mkdir_p(jobdirectory)
 
 
         """ Same loop again this time copying files """
@@ -1439,7 +1439,7 @@ class Workflow(WorkflowBase):
                 # Legacy behaviour in case of wfem missing outputpath
                 tofile = self.storage + '/' + myoutput[1]
             else:
-                tofile = join(wfem.outputpath, myoutput[1])
+                tofile = join(self.storage, "workflow_data", wfem.outputpath,"outputs", myoutput[1])
 
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
@@ -1477,6 +1477,7 @@ class Workflow(WorkflowBase):
                 if not isinstance(jobobj, WorkflowExecModule):
                     continue
                 jobobj : WorkflowExecModule
+                self._logger.debug("Looking for commonpath between %s and %s"%(jobobj.runtime_directory,self.storage))
                 commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
                 jobdir = jobobj.runtime_directory[len(commonpath):]
                 if jobdir.startswith('/'):
