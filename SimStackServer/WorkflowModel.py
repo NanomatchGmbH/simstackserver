@@ -720,6 +720,9 @@ export NANOMATCH=%s
     def wano_xml(self):
         return self._field_values["wano_xml"]
 
+    def set_wano_xml(self, wano_xml):
+        self._field_values["wano_xml"] = wano_xml
+
     def set_outputpath(self, outputpath):
         self._field_values["outputpath"] = outputpath
 
