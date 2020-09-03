@@ -138,10 +138,14 @@ class WaNoFactory(object):
             MultipleOfModel, WaNoItemFileModel, WaNoItemIntModel, WaNoItemScriptFileModel, \
             WaNoMatrixModel, WaNoThreeRandomLetters, WaNoSwitchModel, WaNoDynamicChoiceModel, \
             WaNoNoneModel
-        from WaNo.view.WaNoViews import WaNoItemFloatView, WaNoBoxView, WaNoItemStringView, \
-            WaNoItemBoolView, WaNoItemFileView, WaNoChoiceView, MultipleOfView, WaNoItemIntView, \
-            WaNoTabView, WaNoGroupView, WaNoScriptView, WaNoDropDownView, WaNoMatrixFloatView, \
-            WaNoSwitchView, WaNoInvisibleBoxView, WaNoNone
+        try:
+            from WaNo.view.WaNoViews import WaNoItemFloatView, WaNoBoxView, WaNoItemStringView, \
+                WaNoItemBoolView, WaNoItemFileView, WaNoChoiceView, MultipleOfView, WaNoItemIntView, \
+                WaNoTabView, WaNoGroupView, WaNoScriptView, WaNoDropDownView, WaNoMatrixFloatView, \
+                WaNoSwitchView, WaNoInvisibleBoxView, WaNoNone
+        except ImportError as e:
+            #Workaround to make this work from within SimStackServer
+            return None
 
         wano_list = {  # kwargs['xml'] = self.full_xml.find("WaNoRoot")
             "WaNoFloat": (WaNoItemFloatModel, WaNoItemFloatView),
