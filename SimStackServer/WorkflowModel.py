@@ -1363,7 +1363,7 @@ class Workflow(WorkflowBase):
         with open(wfxml, 'rt') as infile:
             xml = etree.parse(infile)
         wano_dir_root = os.path.dirname(wfem.path)
-        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root)
+        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
         wmr = wano_without_view_constructor_helper(wmr)
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
