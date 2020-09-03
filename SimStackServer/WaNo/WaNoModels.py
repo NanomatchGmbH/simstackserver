@@ -588,6 +588,8 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._wano_dir_root = kwargs["wano_dir_root"]
 
         if "model_only" in kwargs and kwargs["model_only"] is True:
+            pass
+        else:
             # We want to allow construction without QT view imports, which are happening here
             from WaNo.view.PropertyListView import ResourceTableModel, ImportTableModel, ExportTableModel
             self.resources = ResourceTableModel(parent=None,wano_parent=self)

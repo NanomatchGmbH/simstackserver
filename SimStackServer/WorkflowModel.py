@@ -26,7 +26,6 @@ import networkx as nx
 from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
-from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 from external.clusterjob.clusterjob import FAILED
 
 
@@ -1366,6 +1365,7 @@ class Workflow(WorkflowBase):
         with open(wfxml, 'rt') as infile:
             xml = etree.parse(infile)
         wano_dir_root = os.path.dirname(wfem.path)
+        from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
         wmr = wano_without_view_constructor_helper(wmr)
         rendered_wano = wmr.wano_walker()
