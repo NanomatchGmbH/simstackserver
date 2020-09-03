@@ -880,7 +880,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         mkdir_p(basefolder)
         raw_xml = os.path.join(basefolder, self._name + ".xml")
         with open(raw_xml, 'wt') as outfile:
-            outfile.write(etree.tounicode(self.xml, pretty_print=True))
+            outfile.write(etree.tounicode(self.full_xml, pretty_print=True))
         #render_wano_filename = os.path.join(basefolder,"rendered_wano.yml")
         #with open(render_wano_filename,'w',newline='\n') as outfile:
         #    outfile.write(yaml.safe_dump(rendered_wano,default_flow_style=False))
@@ -970,7 +970,8 @@ class WaNoModelRoot(WaNoModelDictLike):
 
 
         for filename in self.output_files + [ a[0] for a in self.export_model.get_contents() ]:
-            runtime_stageout_files.append([filename,"${STORAGE}/workflow_data/%s/outputs/%s"%(stageout_basedir,filename)])
+            #runtime_stageout_files.append([filename,"${STORAGE}/workflow_data/%s/outputs/%s"%(stageout_basedir,filename)])
+            runtime_stageout_files.append([filename, filename])
 
         _runtime_stagein_files = []
         for ft in runtime_stagein_files:
