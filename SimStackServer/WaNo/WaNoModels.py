@@ -1043,9 +1043,21 @@ class WaNoModelRoot(WaNoModelDictLike):
                   subdict_visitor_function=None,
                   data_visitor_function=None)
 
-
         return pc.paths
 
+    def get_paths_and_data_dict(self):
+        outdict = {}
+        self.model_to_dict(outdict)
+        tw = TreeWalker(outdict)
+        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel,
+                             data_visitor_function=None)
+        tw = TreeWalker(skipdict)
+        pc = PathCollector()
+        tw.walker(capture=False, path_visitor_function=None,
+                  subdict_visitor_function=None,
+                  data_visitor_function=pc.assemble_paths_and_values)
+
+        return pc.path_to_value
 
     def get_dir_root(self):
         return self._wano_dir_root

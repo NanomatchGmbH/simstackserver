@@ -3,10 +3,15 @@ from TreeWalker.TreeWalker import TreeWalker
 class PathCollector:
     def __init__(self):
         self._paths = []
+        self._path_to_value = {}
 
     @property
     def paths(self):
         return self._paths
+
+    @property
+    def path_to_value(self):
+        return self._path_to_value
 
     def assemble_paths(self,twpath):
         if twpath is None:
@@ -14,6 +19,16 @@ class PathCollector:
         mypath = ".".join([str(p) for p in twpath])
         self._paths.append(mypath)
         return twpath
+
+    def assemble_paths_and_values(self, data, call_info):
+        tw_paths = call_info["treewalker_paths"]
+        abspath = tw_paths.abspath
+        if abspath is None:
+            return
+        mypath = ".".join([str(p) for p in abspath])
+        self._path_to_value[mypath] = data
+
+
 
 class WaNoTreeWalker(TreeWalker):
     @staticmethod
