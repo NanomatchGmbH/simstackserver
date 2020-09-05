@@ -1,6 +1,7 @@
 import abc
 import copy
 import datetime
+import time
 import logging
 import os
 import shutil
@@ -80,6 +81,7 @@ class XMLYMLInstantiationBase(object):
         self._field_attribute_or_member = {}
         self._field_names = set()
         self._setup_empty_field_values()
+        self._last_dump_time = time.time()
 
         for key,value in kwargs.items():
             if self.contains(key):
@@ -807,6 +809,9 @@ export NANOMATCH=%s
     def exec_command(self):
         return self._field_values["exec_command"]
 
+    def set_exec_command(self, exec_command):
+        self._field_values["exec_command"] = exec_command
+
     @property
     def jobid(self):
         return self._field_values["jobid"]
@@ -1238,6 +1243,8 @@ class Workflow(WorkflowBase):
         super().__init__(*args, **kwargs)
         self._name = "Workflow"
         self._logger = logging.getLogger("Workflow")
+        self._input_variables = {}
+        self._output_variables = {}
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -1278,7 +1285,7 @@ class Workflow(WorkflowBase):
                 running_job.cancel()
             """
             return True
-
+ 
         for running_job in running_jobs:
             running = self.elements.get_element_by_uid(running_job)
             running : WorkflowExecModule
@@ -1353,6 +1360,15 @@ class Workflow(WorkflowBase):
             self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." %self.name)
             return True
+        current_time = time.time()
+        if current_time - self._last_dump_time > 20:
+            self._last_dump_time = time.time()
+            outfile1 = join(self.storage, "input_variables.yml")
+            with open(outfile1,'w') as outfile:
+                yaml.safe_dump(self._input_variables)
+            outfile2 = join(self.storage, "input_variables.yml")
+            with open(outfile2,'w') as outfile:
+                yaml.safe_dump(self._output_variables)
         return False
 
     def _prepare_job(self, wfem : WorkflowExecModule):
@@ -1380,8 +1396,21 @@ class Workflow(WorkflowBase):
         # We do two render passes, in case the rendering reset some values:
         fvl = []
         rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None)
+        input_vars = wmr.get_paths_and_data_dict()
+        topath = wfem.path.replace('/','.')
+        rendered_exec_command = wmr.render_exec_command(rendered_wano)
+        wfem.set_exec_command(rendered_exec_command)
+        self._logger.info("Preparing job with exec command: %s"%wfem.exec_command)
+        for key,value in input_vars.items():
+            self._input_variables["%s.%s"%(topath,key)] = value
+
         with open(join(jobdirectory, "rendered_wano.yml"), 'wt') as outfile:
             yaml.safe_dump(rendered_wano, outfile)
+
+        # Debug dump
+        #with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
+        #    #yaml.safe_dump(rendered_wano, outfile)
+        #    yaml.safe_dump(self._input_variables,outfile)
 
         """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
@@ -1427,7 +1456,7 @@ class Workflow(WorkflowBase):
                     raise WorkflowAbort(mystdout)
             else:
                 if not path.isfile(absfile):
-                    mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                    mystdout = "Could not find outputfile %s on disk (requested at %s). Canceling workflow." % (output,absfile)
                     self._logger.error(mystdout)
                     raise WorkflowAbort(mystdout)
 
