@@ -801,7 +801,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         return listlike, dictlike
 
-    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="", flat_variable_list = None):
+    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="", flat_variable_list = None, input_var_db = None, output_var_db = None):
         if (parent == None):
             parent = self
         #print(type(parent))
@@ -825,7 +825,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list))
+                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db))
             return my_list
         elif dictlike:
             my_dict = {}
@@ -839,13 +839,20 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath="%s" %(key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list)
+                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db)
             return my_dict
         else:
             # We should avoid merging and splitting. It's useless, we only need splitpath anyways
             splitpath = path.split(".")
             #path is complete here, return path
             rendered_parent =  parent.render(rendered_wano,splitpath, submitdir=submitdir)
+            if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
+                varname = rendered_parent[2:-1]
+                if varname.startswith("input:"):
+                    rendered_parent = input_var_db[varname[6:]]
+                if varname.startswith("output:"):
+                    rendered_parent = output_var_db[varname[7:]]
+
             if flat_variable_list is not None:
                 rendered_parent_jsdl = rendered_parent
                 if parent.get_type_str() == "File":
@@ -996,6 +1003,11 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.rendered_exec_command = self.exec_command
         jsdl, wem, local_stagein_files = self.flat_variable_list_to_jsdl(fvl, submitdir,stageout_basedir)
         return rendered_wano,jsdl, wem, local_stagein_files
+    
+    def render_exec_command(self, rendered_wano):
+        rendered_exec_command = Template(self.exec_command,newline_sequence='\n').render(wano = rendered_wano)
+        rendered_exec_command = rendered_exec_command.strip(' \t\n\r')
+        return rendered_exec_command + '\n'
 
     #@trace_to_logger
     def render_and_write_input_files(self,basefolder,stageout_basedir = ""):
@@ -1221,7 +1233,8 @@ class WaNoItemFileModel(AbstractWanoModel):
         return self.logical_name
 
     def render(self, rendered_wano, path, submitdir):
-        self.view.line_edited()
+        if self.view is not None:
+            self.view.line_edited()
         rendered_logical_name = Template(self.logical_name,newline_sequence='\n').render(wano=rendered_wano, path=path)
         if not self.visible():
             if sys.version_info >= (3, 0):
@@ -1284,11 +1297,12 @@ class WaNoItemScriptFileModel(WaNoItemFileModel):
 
     def render(self, rendered_wano, path, submitdir):
         rendered_logical_name = Template(self.logical_name,newline_sequence='\n').render(wano=rendered_wano, path=path)
-        destdir = os.path.join(submitdir, "inputs")
-        mkdir_p(destdir)
-        destfile = os.path.join(destdir, rendered_logical_name)
-        with open(destfile,'wt',newline='\n') as out:
-            out.write(self.get_as_text())
+        if submitdir is not None:
+            destdir = os.path.join(submitdir, "inputs")
+            mkdir_p(destdir)
+            destfile = os.path.join(destdir, rendered_logical_name)
+            with open(destfile,'wt',newline='\n') as out:
+                out.write(self.get_as_text())
         return rendered_logical_name
 
 
