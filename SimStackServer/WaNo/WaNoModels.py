@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 #from pyura.pyura.helpers import trace_to_logger
+from os.path import join
+
 from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
 
 import collections
@@ -849,13 +851,14 @@ class WaNoModelRoot(WaNoModelDictLike):
                 if parent.get_type_str() == "File":
                     filename = parent.get_data()
                     if parent.get_local():
-                        to_upload = os.path.join(submitdir, "workflow_data")
-                        cp = os.path.commonprefix([to_upload, filename])
-                        relpath = os.path.relpath(filename, cp)
+                        pass
+                        #to_upload = os.path.join(submitdir, "workflow_data")
+                        #cp = os.path.commonprefix([to_upload, filename])
+                        #relpath = os.path.relpath(filename, cp)
                         #print("relpath was: %s"%relpath)
                         #filename= "c9m:${WORKFLOW_ID}/%s" % relpath
                         #filename = "BFT:${STORAGE_ID}/%s" % relpath
-                        filename = os.path.join("inputs",relpath)
+                        #filename = os.path.join("inputs",relpath)
                         #Absolute filenames will be replace with BFT:STORAGEID etc. below.
                     elif not filename.endswith("_VALUE}"):
                         if "outputs/" in filename:
@@ -881,43 +884,24 @@ class WaNoModelRoot(WaNoModelDictLike):
         raw_xml = os.path.join(basefolder, self._name + ".xml")
         with open(raw_xml, 'wt') as outfile:
             outfile.write(etree.tounicode(self.full_xml, pretty_print=True))
-        #render_wano_filename = os.path.join(basefolder,"rendered_wano.yml")
-        #with open(render_wano_filename,'w',newline='\n') as outfile:
-        #    outfile.write(yaml.safe_dump(rendered_wano,default_flow_style=False))
-
-        #submit_script_filename = os.path.join(basefolder,"submit_command.sh")
-        #with open(submit_script_filename, 'w',newline='\n') as outfile:
-        #    outfile.write(self.rendered_exec_command)
-
-
 
         for remote_file,local_file in self.input_files:
             comp_filename = os.path.join(self.wano_dir_root,local_file)
             comp_filename = os.path.abspath(comp_filename)
             comp_dir = os.path.dirname(comp_filename)
             comp_basename = os.path.basename(comp_filename)
-            #template_loader = FileSystemLoader(searchpath=comp_dir)
-            #template_env = Environment(loader = template_loader,newline_sequence='\n')
+
             joined_filename = os.path.join(comp_dir,comp_basename)
-            #print(joined_filename)
+
             if not os.path.exists(os.path.join(joined_filename)):
                 print("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
                 raise OSError("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
-            #print(remote_file)
-            #template = template_env.get_template(local_file)
+
             outfile = os.path.join(basefolder,remote_file)
-            #print(outfile, "AFTER")
             dirn=os.path.dirname(outfile)
-            #print(dirn,"DIRNAME")
             mkdir_p(dirn)
+            print("Copying from %s to %s"%(comp_filename, dirn))
             shutil.copy(comp_filename, dirn)
-            #with open(outfile,'w',newline='\n') as outfile:
-            #    try:
-            #        outfile.write(template.render(wano = rendered_wano))
-            #    except UndefinedError as e:
-            #        with open(joined_filename,'rt') as infile:
-            #            mytext = infile.read()
-            #        outfile.write(mytext)
 
     def flat_variable_list_to_jsdl(self,fvl,basedir,stageout_basedir):
         files = []
@@ -940,7 +924,8 @@ class WaNoModelRoot(WaNoModelDictLike):
 
                     runtime_stagein_files.append([var[0], log_path_on_cluster])
                 else:
-                    runtime_stagein_files.append([var[0], "${STORAGE}/workflow_data/%s/inputs/%s"% (stageout_basedir, var[0])])
+                    runtime_stagein_files.append([var[0], "${STORAGE}/workflow_data/%s/inputs/%s"% (stageout_basedir, var[1])])
+                    print(runtime_stagein_files,var)
             else:
                 #These should be NON posix arguments in the end
                 varname.replace(".","_")
@@ -1302,8 +1287,6 @@ class WaNoItemScriptFileModel(WaNoItemFileModel):
         destdir = os.path.join(submitdir, "inputs")
         mkdir_p(destdir)
         destfile = os.path.join(destdir, rendered_logical_name)
-
-
         with open(destfile,'wt',newline='\n') as out:
             out.write(self.get_as_text())
         return rendered_logical_name
