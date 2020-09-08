@@ -28,6 +28,7 @@ from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
 from external.clusterjob.clusterjob import FAILED
+from TreeWalker.flatten_dict import flatten_dict
 
 
 class ParserError(Exception):
@@ -1356,19 +1357,20 @@ class Workflow(WorkflowBase):
                 #          We need to attach this graph to the WFPass uid. It has to be different from the starter id
                 #    Stage :
                 #          We set the ForEachElement starter id as finished immediately so that the new jobs will be run.
-        if self.graph.is_workflow_finished():
-            self._field_values["status"] = JobStatus.SUCCESSFUL
-            self._logger.info("Workflow %s has been finished." %self.name)
-            return True
         current_time = time.time()
-        if current_time - self._last_dump_time > 20:
+        #if current_time - self._last_dump_time > 2:
+        if True:
             self._last_dump_time = time.time()
             outfile1 = join(self.storage, "input_variables.yml")
             with open(outfile1,'w') as outfile:
                 yaml.safe_dump(self._input_variables)
-            outfile2 = join(self.storage, "input_variables.yml")
+            outfile2 = join(self.storage, "output_variables.yml")
             with open(outfile2,'w') as outfile:
                 yaml.safe_dump(self._output_variables)
+        if self.graph.is_workflow_finished():
+            self._field_values["status"] = JobStatus.SUCCESSFUL
+            self._logger.info("Workflow %s has been finished." %self.name)
+            return True
         return False
 
     def _prepare_job(self, wfem : WorkflowExecModule):
@@ -1395,7 +1397,7 @@ class Workflow(WorkflowBase):
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
-        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None)
+        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None, input_var_db = self._input_variables, output_var_db = self._output_variables)
         input_vars = wmr.get_paths_and_data_dict()
         topath = wfem.path.replace('/','.')
         rendered_exec_command = wmr.render_exec_command(rendered_wano)
@@ -1408,18 +1410,20 @@ class Workflow(WorkflowBase):
             yaml.safe_dump(rendered_wano, outfile)
 
         # Debug dump
-        #with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
-        #    #yaml.safe_dump(rendered_wano, outfile)
-        #    yaml.safe_dump(self._input_variables,outfile)
+        with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
+            yaml.safe_dump(self._input_variables,outfile)
+
+        with open(join(jobdirectory, "outputvardb.yml"), 'wt') as outfile:
+            yaml.safe_dump(self._output_variables,outfile)
 
         """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
-            #tofile = myinput[0]
+            tofile = myinput[0]
             source = myinput[1]
             absfile = self.storage + '/' + source
 
             if not path.isfile(absfile):
-                self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
+                self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                 return False
 
 
@@ -1431,7 +1435,7 @@ class Workflow(WorkflowBase):
             absfile = self.storage + '/' + source
 
             if not path.isfile(absfile):
-                self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
+                self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                 return False
             shutil.copyfile(absfile, tofile)
 
@@ -1461,8 +1465,13 @@ class Workflow(WorkflowBase):
                     raise WorkflowAbort(mystdout)
 
         myvars = wfem.get_output_variables()
-        """ Same loop again this time copying files """
+        if isinstance(myvars, dict):
+            flattened_output_variables = flatten_dict(myvars)
+            topath = wfem.path.replace('/','.')
+            for key,value in flattened_output_variables.items():
+                self._output_variables["%s.%s"%(topath,key)] = value
 
+        """ Same loop again this time copying files """
         for myoutput in wfem.outputs:
             if wfem.outputpath == 'unset':
                 # Legacy behaviour in case of wfem missing outputpath

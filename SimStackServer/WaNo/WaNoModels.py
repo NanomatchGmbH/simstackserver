@@ -799,7 +799,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         return listlike, dictlike
 
-    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="", flat_variable_list = None):
+    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="", flat_variable_list = None, input_var_db = None, output_var_db = None):
         if (parent == None):
             parent = self
         #print(type(parent))
@@ -823,7 +823,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list))
+                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db))
             return my_list
         elif dictlike:
             my_dict = {}
@@ -837,13 +837,20 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath="%s" %(key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list)
+                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db)
             return my_dict
         else:
             # We should avoid merging and splitting. It's useless, we only need splitpath anyways
             splitpath = path.split(".")
             #path is complete here, return path
             rendered_parent =  parent.render(rendered_wano,splitpath, submitdir=submitdir)
+            if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
+                varname = rendered_parent[2:-1]
+                if varname.startswith("input:"):
+                    rendered_parent = input_var_db[varname[6:]]
+                if varname.startswith("output:"):
+                    rendered_parent = output_var_db[varname[7:]]
+
             if flat_variable_list is not None:
                 rendered_parent_jsdl = rendered_parent
                 if parent.get_type_str() == "File":
