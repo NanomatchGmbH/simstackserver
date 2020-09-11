@@ -34,7 +34,23 @@ class AbstractWanoModel:
         self._visibility_var_path = None
         self._isvisible = True
         self._vc = None
+
+        self._do_import = False
+        self._import_from = ""
+
         super(AbstractWanoModel, self).__init__()
+
+    def set_import(self, import_from):
+        if import_from is not None:
+            self._do_import = True
+            self._import_from = import_from
+        else:
+            self._do_import = False
+            self._import_from = ""
+
+    @property
+    def do_import(self):
+        return self._do_import
 
     @property
     def name(self):
@@ -66,6 +82,10 @@ class AbstractWanoModel:
             self._visibility_condition = xml.attrib["visibility_condition"]
             self._visibility_var_path  = xml.attrib["visibility_var_path"]
 
+        if "import_from" in xml.attrib:
+            self._do_import = True
+            self._import_from = xml.attrib["import_from"]
+
     def set_parent(self, parent):
         self._parent = parent
         self._parent_set = True
@@ -77,7 +97,6 @@ class AbstractWanoModel:
 
     def set_root(self, root):
         self._root = root
-
 
     def visible(self):
         return self._isvisible
@@ -154,6 +173,8 @@ class AbstractWanoModel:
     # (For example: the rendered wano only contains the logical filename and not local PC filename
     # By default however get_rendered_wano_data == get_data
     def get_rendered_wano_data(self):
+        if self._do_import:
+            return "${%s}"%self._import_from
         return self.get_data()
 
     def set_view(self, view):
@@ -181,7 +202,18 @@ class AbstractWanoModel:
 
     @abc.abstractmethod
     def update_xml(self):
-        pass
+
+        if not hasattr(self,"xml"):
+            return
+
+        if self.xml is None:
+            return
+
+        if self._do_import:
+            self.xml.attrib["import_from"] = self._import_from
+        else:
+            if "import_from" in self.xml:
+                del self.xml["import_from"]
 
     def decommission(self):
         if self._view != None:

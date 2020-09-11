@@ -1096,6 +1096,7 @@ class WaNoItemFloatModel(AbstractWanoModel):
         return "Float"
 
     def update_xml(self):
+        super().update_xml()
         if self.xml is not None:
             self.xml.text = str(self.myfloat)
 
