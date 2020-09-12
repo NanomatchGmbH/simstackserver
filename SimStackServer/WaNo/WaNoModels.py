@@ -4,6 +4,7 @@
 #from pyura.pyura.helpers import trace_to_logger
 from os.path import join
 
+from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
 
 import collections
@@ -24,6 +25,8 @@ import ast
 from jinja2 import Template
 
 from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel
+from TreeWalker.flatten_dict import flatten_dict
+
 
 def mkdir_p(path):
     import errno
@@ -588,6 +591,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._unregister_list = []
         self._register_list = []
         self._wano_dir_root = kwargs["wano_dir_root"]
+        self._my_export_paths = []
 
         if "model_only" in kwargs and kwargs["model_only"] is True:
             pass
@@ -622,9 +626,23 @@ class WaNoModelRoot(WaNoModelDictLike):
     def parse_from_xml(self, xml):
         self.full_xml = xml
         subxml = self.full_xml.find("WaNoRoot")
-
+        export_dictionaries = {}
         for child in self.full_xml.findall("./WaNoOutputFiles/WaNoOutputFile"):
             self.output_files.append(child.text)
+            if child.text == "output_config.ini":
+                absfile = join(self._wano_dir_root, "output_config.ini")
+                if os.path.isfile(absfile):
+                    export_dictionaries["ini"] = absfile
+
+            elif child.text == "output_dict.yml":
+                absfile = join(self._wano_dir_root, "output_dict.yml")
+                if os.path.isfile(absfile):
+                    export_dictionaries["dict"] = absfile
+
+        if len(export_dictionaries) > 0:
+            rr = ReportRenderer(export_dictionaries)
+            my_exports = rr.consolidate_export_dictionaries()
+            self._my_export_paths = [*flatten_dict(my_exports).keys()]
 
         for child in self.full_xml.findall("./WaNoInputFiles/WaNoInputFile"):
             self.input_files.append((child.attrib["logical_filename"],child.text))
@@ -1040,7 +1058,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                   subdict_visitor_function=None,
                   data_visitor_function=None)
 
-        return pc.paths
+        return pc.paths + self._my_export_paths
 
     def get_paths_and_data_dict(self):
         outdict = {}
