@@ -866,10 +866,10 @@ class WaNoModelRoot(WaNoModelDictLike):
             rendered_parent =  parent.render(rendered_wano,splitpath, submitdir=submitdir)
             if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
                 varname = rendered_parent[2:-1]
-                if varname.startswith("input:"):
-                    rendered_parent = input_var_db[varname[6:]]
-                if varname.startswith("output:"):
-                    rendered_parent = output_var_db[varname[7:]]
+                if varname in input_var_db:
+                    rendered_parent = input_var_db[varname]
+                if varname in output_var_db:
+                    rendered_parent = output_var_db[varname]
 
             if flat_variable_list is not None:
                 rendered_parent_jsdl = rendered_parent
