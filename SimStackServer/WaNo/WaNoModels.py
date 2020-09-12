@@ -864,12 +864,13 @@ class WaNoModelRoot(WaNoModelDictLike):
             splitpath = path.split(".")
             #path is complete here, return path
             rendered_parent =  parent.render(rendered_wano,splitpath, submitdir=submitdir)
-            if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
-                varname = rendered_parent[2:-1]
-                if varname in input_var_db:
-                    rendered_parent = input_var_db[varname]
-                if varname in output_var_db:
-                    rendered_parent = output_var_db[varname]
+            if isinstance(rendered_parent,str):
+                if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
+                    varname = rendered_parent[2:-1]
+                    if varname in input_var_db:
+                        rendered_parent = input_var_db[varname]
+                    if varname in output_var_db:
+                        rendered_parent = output_var_db[varname]
 
             if flat_variable_list is not None:
                 rendered_parent_jsdl = rendered_parent
