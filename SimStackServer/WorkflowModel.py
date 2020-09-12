@@ -307,6 +307,7 @@ class WorkflowElementList(object):
             if isinstance(my_str,str):
                 for key,item in vardict.items():
                     self._storage[myid] = my_str.replace(key,item)
+                    self._logger.info("Replacing %s with %s and %s, Outcome was: %s"%(my_str, key, item, self._storage[myid]))
             else:
                 if not _is_basetype(my_str):
                     my_str.fill_in_variables(vardict)
@@ -548,6 +549,8 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def fill_in_variables(self, vardict):
         self._field_values["inputs"].fill_in_variables(vardict)
         self._field_values["outputs"].fill_in_variables(vardict)
+        for key, item in vardict.items():
+            self._field_values["outputpath"] = self._field_values["outputpath"].replace(key,item)
         self._runtime_variables.update(vardict)
 
     def get_runtime_variables(self):
@@ -1061,6 +1064,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 allfiles += glob(myfile)
             else:
                 allfiles += [myfile]
+            self._logger.info("Iterating over %s when looking for %s."% (", ".join([str(e) for e in allfiles]), myfile  ))
         base_store_len = len(base_storage)
         # We want to resolve this iterator relative to base_storage:
         allfiles = [myfile[base_store_len:] for myfile in allfiles]
@@ -1070,10 +1074,11 @@ class ForEachGraph(XMLYMLInstantiationBase):
         new_connections = []
         new_activity_elementlists = []
         new_graphs = []
-        for myfile in resolved_files:
+        for iterator_value, myfile in enumerate(resolved_files):
             mygraph = copy.deepcopy(self.subgraph)
             replacedict = {
-                "${%s_VALUE}"%self.iterator_name :myfile
+                "${%s_VALUE}"%self.iterator_name :myfile,
+                "${%s}"%self.iterator_name : str(iterator_value)
             }
             mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
