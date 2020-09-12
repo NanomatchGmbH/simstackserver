@@ -528,7 +528,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
         ("resources", Resources, None, "Computational resources", "m"),
-
         ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
         ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
         ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m")
@@ -540,6 +539,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._name = "WorkflowExecModule"
         self._nmdir = self._init_nanomatch_directory()
         self._logger = logging.getLogger(self.uid)
+        self._runtime_variables = {}
 
     @classmethod
     def fields(cls):
@@ -548,6 +548,10 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def fill_in_variables(self, vardict):
         self._field_values["inputs"].fill_in_variables(vardict)
         self._field_values["outputs"].fill_in_variables(vardict)
+        self._runtime_variables.update(vardict)
+
+    def get_runtime_variables(self):
+        return self._runtime_variables
 
     def rename(self, renamedict):
         myuid = self.uid
@@ -1397,7 +1401,11 @@ class Workflow(WorkflowBase):
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
-        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None, input_var_db = self._input_variables, output_var_db = self._output_variables)
+        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
+                                                    input_var_db = self._input_variables,
+                                                    output_var_db = self._output_variables,
+                                                    runtime_variables = wfem.get_runtime_variables()
+                                                    )
         input_vars = wmr.get_paths_and_data_dict()
         topath = wfem.path.replace('/','.')
         rendered_exec_command = wmr.render_exec_command(rendered_wano)

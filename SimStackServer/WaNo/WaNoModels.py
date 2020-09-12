@@ -819,7 +819,11 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         return listlike, dictlike
 
-    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="", flat_variable_list = None, input_var_db = None, output_var_db = None):
+    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="",
+                                flat_variable_list = None,
+                                input_var_db = None,
+                                output_var_db = None,
+                                runtime_variables = None):
         if (parent == None):
             parent = self
         #print(type(parent))
@@ -867,6 +871,10 @@ class WaNoModelRoot(WaNoModelDictLike):
             if isinstance(rendered_parent,str) and input_var_db is not None and output_var_db is not None:
                 if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
                     varname = rendered_parent[2:-1]
+                    if runtime_variables is not None:
+                        for runtime_varname, runtime_varvalue in runtime_variables.items():
+                            varname.replace("${%s}"%runtime_varname,runtime_varvalue)
+
                     if varname in input_var_db:
                         rendered_parent = input_var_db[varname]
                     if varname in output_var_db:
