@@ -1094,7 +1094,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
             mygraph = copy.deepcopy(self.subgraph)
             replacedict = {
                 "${%s_VALUE}"%self.iterator_name :myfile,
-                "${%s}"%self.iterator_name : str(iterator_value)
+                "${%s}"%self.iterator_name : str(iterator_value),
+                "%s_VALUE"%self.iterator_name :myfile,
+                "%s"%self.iterator_name : str(iterator_value)
             }
             mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
