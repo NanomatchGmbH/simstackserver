@@ -1022,6 +1022,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
     _fields = [
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
         ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
+        ("iterator_variables", StringList, [], "Variables, which have to be iterated over", "m"),
         ("iterator_name", str, "", "Name of my iterator", "a"),
         #("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
         ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
@@ -1043,6 +1044,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def iterator_files(self) -> StringList:
         return self._field_values["iterator_files"]
 
+    @property
+    def iterator_variables(self) -> StringList:
+        return self._field_values["iterator_variables"]
+
     def fill_in_variables(self, vardict):
         self._field_values["subgraph"].fill_in_variables(vardict)
 
@@ -1051,10 +1056,16 @@ class ForEachGraph(XMLYMLInstantiationBase):
         return self._field_values["subgraph_final_ids"]
 
     def resolve_connect(self, base_storage):
-        allfiles = self._resolve_iterator(base_storage)
-        return self._multiply_connect_subgraph(allfiles)
+        allvars = []
+        if len(self.iterator_files) != 0:
+            allvars = self._resolve_file_iterator(base_storage)
+        elif len(self.iterator_variables) != 0:
+            allvars = self._resolve_variable_iterator()
+        if len(allvars) == 0:
+            self._logger.warning("Empty variable iterator. Skipping ForEach.")
+        return self._multiply_connect_subgraph(allvars)
 
-    def _resolve_iterator(self, base_storage):
+    def _resolve_file_iterator(self, base_storage):
         relfiles = self.iterator_files
         allfiles = []
         for myfile_rel in relfiles:
@@ -1069,6 +1080,11 @@ class ForEachGraph(XMLYMLInstantiationBase):
         # We want to resolve this iterator relative to base_storage:
         allfiles = [myfile[base_store_len:] for myfile in allfiles]
         return allfiles
+
+    def _resolve_variable_iterator(self):
+        relvars = self.iterator_variables
+        # This function will do a list of all matched variables
+        return relvars
 
     def _multiply_connect_subgraph(self, resolved_files):
         new_connections = []
