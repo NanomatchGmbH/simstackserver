@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 #from pyura.pyura.helpers import trace_to_logger
+import logging
 from os.path import join
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
@@ -585,6 +586,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def __init__(self, *args, **kwargs):
         super(WaNoModelRoot, self).__init__(*args, **kwargs)
+        self._logger = logging.getLogger("WaNoModelRoot")
         self._datachanged_callbacks = {}
         self._outputfile_callbacks = []
         self._notifying = False
@@ -847,7 +849,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db))
+                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db, runtime_variables = runtime_variables))
             return my_list
         elif dictlike:
             my_dict = {}
@@ -861,7 +863,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath="%s" %(key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db)
+                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db, runtime_variables = runtime_variables)
             return my_dict
         else:
             # We should avoid merging and splitting. It's useless, we only need splitpath anyways
@@ -871,9 +873,11 @@ class WaNoModelRoot(WaNoModelDictLike):
             if isinstance(rendered_parent,str) and input_var_db is not None and output_var_db is not None:
                 if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
                     varname = rendered_parent[2:-1]
+
                     if runtime_variables is not None:
                         for runtime_varname, runtime_varvalue in runtime_variables.items():
-                            varname.replace("${%s}"%runtime_varname,runtime_varvalue)
+                            varname = varname.replace("${%s}"%runtime_varname,runtime_varvalue)
+                            rendered_parent = varname
 
                     if varname in input_var_db:
                         rendered_parent = input_var_db[varname]
