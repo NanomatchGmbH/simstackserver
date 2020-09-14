@@ -1,6 +1,7 @@
 import abc
 import copy
 import datetime
+import re
 import time
 import logging
 import os
@@ -1055,12 +1056,12 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def subgraph_final_ids(self) -> StringList:
         return self._field_values["subgraph_final_ids"]
 
-    def resolve_connect(self, base_storage):
+    def resolve_connect(self, base_storage, input_variables, output_variables):
         allvars = []
         if len(self.iterator_files) != 0:
             allvars = self._resolve_file_iterator(base_storage)
         elif len(self.iterator_variables) != 0:
-            allvars = self._resolve_variable_iterator()
+            allvars = self._resolve_variable_iterator(input_variables, output_variables)
         if len(allvars) == 0:
             self._logger.warning("Empty variable iterator. Skipping ForEach.")
         return self._multiply_connect_subgraph(allvars)
@@ -1081,10 +1082,27 @@ class ForEachGraph(XMLYMLInstantiationBase):
         allfiles = [myfile[base_store_len:] for myfile in allfiles]
         return allfiles
 
-    def _resolve_variable_iterator(self):
+    def _resolve_variable_iterator(self, input_variables, output_variables):
         relvars = self.iterator_variables
+
+        assert len(relvars) == 1
+        myvar = relvars[0]
+        asteriskvar = myvar.replace("*","[^.]+")
+        asteriskvar = "^%s$"%asteriskvar
+        myregex = re.compile(asteriskvar)
+        outvars = []
+        for var in input_variables.keys():
+            result = myregex.match(var)
+            if result is not None:
+                outvars.append(var)
+
+        for var in output_variables.keys():
+            result = myregex.match(var)
+            if result is not None:
+                outvars.append(var)
+
         # This function will do a list of all matched variables
-        return relvars
+        return outvars
 
     def _multiply_connect_subgraph(self, resolved_files):
         new_connections = []
@@ -1360,7 +1378,9 @@ class Workflow(WorkflowBase):
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph):
                 print("Reached ForEachGraph")
-                new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage)
+                new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
+                                                                                                 input_variables = self._input_variables,
+                                                                                                 output_variables = self._output_variables)
                 for ng in new_graphs:
                     self.graph.merge_other_graph(ng)
                 for new_elementlist in new_activity_elementlists:
