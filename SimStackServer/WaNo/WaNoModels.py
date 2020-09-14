@@ -1164,6 +1164,7 @@ class WaNoItemIntModel(AbstractWanoModel):
         return "Int"
 
     def update_xml(self):
+        super().update_xml()
         if self.xml is not None:
             self.xml.text = str(self.myint)
 
@@ -1373,6 +1374,7 @@ class WaNoItemStringModel(AbstractWanoModel):
         return "String"
 
     def update_xml(self):
+        super().update_xml()
         self.xml.text = self.mystring
 
     def __repr__(self):
