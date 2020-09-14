@@ -1406,7 +1406,7 @@ class Workflow(WorkflowBase):
                 #          We set the ForEachElement starter id as finished immediately so that the new jobs will be run.
         current_time = time.time()
         #if current_time - self._last_dump_time > 2:
-        if True:
+        if False:
             self._last_dump_time = time.time()
             outfile1 = join(self.storage, "input_variables.yml")
             with open(outfile1,'w') as outfile:
@@ -1461,11 +1461,12 @@ class Workflow(WorkflowBase):
             yaml.safe_dump(rendered_wano, outfile)
 
         # Debug dump
-        with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
-            yaml.safe_dump(self._input_variables,outfile)
+        if False:
+            with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
+                yaml.safe_dump(self._input_variables,outfile)
 
-        with open(join(jobdirectory, "outputvardb.yml"), 'wt') as outfile:
-            yaml.safe_dump(self._output_variables,outfile)
+            with open(join(jobdirectory, "outputvardb.yml"), 'wt') as outfile:
+                yaml.safe_dump(self._output_variables,outfile)
 
         """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
