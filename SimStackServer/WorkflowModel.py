@@ -1,6 +1,8 @@
 import abc
 import copy
 import datetime
+import re
+import time
 import logging
 import os
 import shutil
@@ -17,14 +19,17 @@ from pathlib import Path
 
 from os import path
 
+import yaml
 from lxml import etree
 
 import numpy as np
 import networkx as nx
 
 from SimStackServer.MessageTypes import JobStatus
+from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
 from external.clusterjob.clusterjob import FAILED
+from TreeWalker.flatten_dict import flatten_dict
 
 
 class ParserError(Exception):
@@ -78,6 +83,7 @@ class XMLYMLInstantiationBase(object):
         self._field_attribute_or_member = {}
         self._field_names = set()
         self._setup_empty_field_values()
+        self._last_dump_time = time.time()
 
         for key,value in kwargs.items():
             if self.contains(key):
@@ -231,6 +237,12 @@ class XMLYMLInstantiationBase(object):
             infile.write(etree.tostring(me,encoding="utf8",pretty_print=True).decode()+"\n")
 
 
+
+# Tomorrow: Modify this factory to play nice with TreeWalker
+#   Override isdict and islist for ForEachGraph
+#   Suddenly everything has a URI
+#
+
 def workflow_element_factory(name):
     """
     Placeholder function to generate WorkflowElements based on their name. Currently only returns the class of WorkflowElement
@@ -296,6 +308,7 @@ class WorkflowElementList(object):
             if isinstance(my_str,str):
                 for key,item in vardict.items():
                     self._storage[myid] = my_str.replace(key,item)
+                    self._logger.info("Replacing %s with %s and %s, Outcome was: %s"%(my_str, key, item, self._storage[myid]))
             else:
                 if not _is_basetype(my_str):
                     my_str.fill_in_variables(vardict)
@@ -510,11 +523,13 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
         ("given_name", str, "WFEM", "Name of this WorkflowExecModule.", "a"),
+        ("path", str, "unset", "Path to this WFEM in the workflow.", "a"),
+        ("wano_xml", str, "unset", "Name of the WaNo XML.", "a"),
+        ("outputpath", str, "unset", "Path to the output directory of this wfem in the workflow.", "a"),
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
         ("resources", Resources, None, "Computational resources", "m"),
-
         ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
         ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
         ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m")
@@ -526,6 +541,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._name = "WorkflowExecModule"
         self._nmdir = self._init_nanomatch_directory()
         self._logger = logging.getLogger(self.uid)
+        self._runtime_variables = {}
 
     @classmethod
     def fields(cls):
@@ -534,6 +550,12 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def fill_in_variables(self, vardict):
         self._field_values["inputs"].fill_in_variables(vardict)
         self._field_values["outputs"].fill_in_variables(vardict)
+        for key, item in vardict.items():
+            self._field_values["outputpath"] = self._field_values["outputpath"].replace(key,item)
+        self._runtime_variables.update(vardict)
+
+    def get_runtime_variables(self):
+        return self._runtime_variables
 
     def rename(self, renamedict):
         myuid = self.uid
@@ -619,14 +641,6 @@ export NANOMATCH=%s
     cd $CLUSTERJOB_WORKDIR
     %s
 """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
-            #In case somebody uploaded report_template.html, we render it:
-            report_template = join(self.runtime_directory,"report_template.body")
-            if os.path.isfile(report_template):
-                self._logger.debug("Looking for %s" % report_template)
-                import SimStackServer.Reporting as Reporting
-                reporting_path = os.path.dirname(os.path.realpath(Reporting.__file__))
-                toexec += "%s %s\n"%(sys.executable, join(reporting_path,"ReportRenderer.py"))
-
             try:
                 jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
                                                  time = self.resources.walltime, nodes = self.resources.nodes,
@@ -705,6 +719,27 @@ export NANOMATCH=%s
     def set_queueing_system(self, queueing_system):
         self._field_values["queueing_system"] = queueing_system
 
+    def set_path(self, path):
+        self._field_values["path"] = path
+
+    @property
+    def path(self):
+        return self._field_values["path"]
+
+    @property
+    def wano_xml(self):
+        return self._field_values["wano_xml"]
+
+    def set_wano_xml(self, wano_xml):
+        self._field_values["wano_xml"] = wano_xml
+
+    def set_outputpath(self, outputpath):
+        self._field_values["outputpath"] = outputpath
+
+    @property
+    def outputpath(self):
+        return self._field_values["outputpath"]
+
     @property
     def queueing_system(self):
         return self._field_values["queueing_system"]
@@ -724,6 +759,27 @@ export NANOMATCH=%s
             if status in ["completed","cancelled","done","notfound","crashed","failed"]:
                 return True
             return False
+
+    def get_output_variables(self, render_report = False):
+        # In case somebody uploaded report_template.html, we render it:
+        report_renderer = None
+        if render_report:
+            report_template = join(self.runtime_directory, "report_template.body")
+            try:
+                self._logger.debug("Rendering output: %s" % report_template)
+                report_renderer = ReportRenderer.render_everything(self.runtime_directory, render_report)
+            except Exception as e:
+                self._logger.exception("Exception during report rendering.")
+
+            pass
+        if report_renderer is None:
+            #This is the case in which rendering did not work or was not requested:
+            try:
+                report_renderer = ReportRenderer.render_everything(self.runtime_directory, False)
+            except Exception as e:
+                self._logger.exception("Could not create report_renderer for variable instruction. Something went very wrong.")
+                raise WorkflowAbort("Could not create report_renderer for variable instruction. Something went very wrong.")
+        return report_renderer.consolidate_export_dictionaries()
 
     @property
     def uid(self):
@@ -761,6 +817,9 @@ export NANOMATCH=%s
     @property
     def exec_command(self):
         return self._field_values["exec_command"]
+
+    def set_exec_command(self, exec_command):
+        self._field_values["exec_command"] = exec_command
 
     @property
     def jobid(self):
@@ -959,10 +1018,12 @@ class SubGraph(XMLYMLInstantiationBase):
                 self._logger.warning("Element %s does not have explicit rename function yet. Please add even if empty."%type(element))
         return rename_dict
 
+
 class ForEachGraph(XMLYMLInstantiationBase):
     _fields = [
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
         ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
+        ("iterator_variables", StringList, [], "Variables, which have to be iterated over", "m"),
         ("iterator_name", str, "", "Name of my iterator", "a"),
         #("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
         ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
@@ -984,6 +1045,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def iterator_files(self) -> StringList:
         return self._field_values["iterator_files"]
 
+    @property
+    def iterator_variables(self) -> StringList:
+        return self._field_values["iterator_variables"]
+
     def fill_in_variables(self, vardict):
         self._field_values["subgraph"].fill_in_variables(vardict)
 
@@ -991,11 +1056,17 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def subgraph_final_ids(self) -> StringList:
         return self._field_values["subgraph_final_ids"]
 
-    def resolve_connect(self, base_storage):
-        allfiles = self._resolve_iterator(base_storage)
-        return self._multiply_connect_subgraph(allfiles)
+    def resolve_connect(self, base_storage, input_variables, output_variables):
+        allvars = []
+        if len(self.iterator_files) != 0:
+            allvars = self._resolve_file_iterator(base_storage)
+        elif len(self.iterator_variables) != 0:
+            allvars = self._resolve_variable_iterator(input_variables, output_variables)
+        if len(allvars) == 0:
+            self._logger.warning("Empty variable iterator. Skipping ForEach.")
+        return self._multiply_connect_subgraph(allvars)
 
-    def _resolve_iterator(self, base_storage):
+    def _resolve_file_iterator(self, base_storage):
         relfiles = self.iterator_files
         allfiles = []
         for myfile_rel in relfiles:
@@ -1005,19 +1076,45 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 allfiles += glob(myfile)
             else:
                 allfiles += [myfile]
+            self._logger.info("Iterating over %s when looking for %s."% (", ".join([str(e) for e in allfiles]), myfile  ))
         base_store_len = len(base_storage)
         # We want to resolve this iterator relative to base_storage:
         allfiles = [myfile[base_store_len:] for myfile in allfiles]
         return allfiles
 
+    def _resolve_variable_iterator(self, input_variables, output_variables):
+        relvars = self.iterator_variables
+
+        assert len(relvars) == 1
+        myvar = relvars[0]
+        asteriskvar = myvar.replace("*","[^.]+")
+        asteriskvar = "^%s$"%asteriskvar
+        myregex = re.compile(asteriskvar)
+        outvars = []
+        for var in input_variables.keys():
+            result = myregex.match(var)
+            if result is not None:
+                outvars.append(var)
+
+        for var in output_variables.keys():
+            result = myregex.match(var)
+            if result is not None:
+                outvars.append(var)
+
+        # This function will do a list of all matched variables
+        return outvars
+
     def _multiply_connect_subgraph(self, resolved_files):
         new_connections = []
         new_activity_elementlists = []
         new_graphs = []
-        for myfile in resolved_files:
+        for iterator_value, myfile in enumerate(resolved_files):
             mygraph = copy.deepcopy(self.subgraph)
             replacedict = {
-                "${%s_VALUE}"%self.iterator_name :myfile
+                "${%s_VALUE}"%self.iterator_name :myfile,
+                "${%s}"%self.iterator_name : str(iterator_value),
+                "%s_VALUE"%self.iterator_name :myfile,
+                "%s"%self.iterator_name : str(iterator_value)
             }
             mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
@@ -1192,6 +1289,8 @@ class Workflow(WorkflowBase):
         super().__init__(*args, **kwargs)
         self._name = "Workflow"
         self._logger = logging.getLogger("Workflow")
+        self._input_variables = {}
+        self._output_variables = {}
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -1232,13 +1331,13 @@ class Workflow(WorkflowBase):
                 running_job.cancel()
             """
             return True
-
+ 
         for running_job in running_jobs:
             running = self.elements.get_element_by_uid(running_job)
             running : WorkflowExecModule
             if running.completed_or_aborted():
                 try:
-                    self._postjob_care(running)
+                    wfvars = self._postjob_care(running)
                     self.graph.finish(running_job)
                 except WorkflowAbort as e:
                     self.graph.fail(running_job)
@@ -1279,7 +1378,9 @@ class Workflow(WorkflowBase):
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph):
                 print("Reached ForEachGraph")
-                new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage)
+                new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
+                                                                                                 input_variables = self._input_variables,
+                                                                                                 output_variables = self._output_variables)
                 for ng in new_graphs:
                     self.graph.merge_other_graph(ng)
                 for new_elementlist in new_activity_elementlists:
@@ -1303,6 +1404,16 @@ class Workflow(WorkflowBase):
                 #          We need to attach this graph to the WFPass uid. It has to be different from the starter id
                 #    Stage :
                 #          We set the ForEachElement starter id as finished immediately so that the new jobs will be run.
+        current_time = time.time()
+        #if current_time - self._last_dump_time > 2:
+        if True:
+            self._last_dump_time = time.time()
+            outfile1 = join(self.storage, "input_variables.yml")
+            with open(outfile1,'w') as outfile:
+                yaml.safe_dump(self._input_variables)
+            outfile2 = join(self.storage, "output_variables.yml")
+            with open(outfile2,'w') as outfile:
+                yaml.safe_dump(self._output_variables)
         if self.graph.is_workflow_finished():
             self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." %self.name)
@@ -1310,18 +1421,8 @@ class Workflow(WorkflowBase):
         return False
 
     def _prepare_job(self, wfem : WorkflowExecModule):
-        """ Sanity check to check if all files are there """
-        for myinput in wfem.inputs:
-            #tofile = myinput[0]
-            source = myinput[1]
-            absfile = self.storage + '/' + source
-
-            if not path.isfile(absfile):
-                self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
-                return False
 
         jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
-
         counter = 0
         while path.isdir(jobdirectory):
             jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem) + "%d"%counter
@@ -1331,6 +1432,53 @@ class Workflow(WorkflowBase):
         mkdir_p(jobdirectory)
 
 
+        wfxml = join(self.storage, "workflow_data",wfem.path,"inputs",wfem.wano_xml)
+        from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
+        with open(wfxml, 'rt') as infile:
+            xml = etree.parse(infile)
+        wano_dir_root = os.path.dirname(wfem.path)
+        from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
+        wmr.parse_from_xml(xml)
+        wmr = wano_without_view_constructor_helper(wmr)
+        rendered_wano = wmr.wano_walker()
+        # We do two render passes, in case the rendering reset some values:
+        fvl = []
+        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
+                                                    input_var_db = self._input_variables,
+                                                    output_var_db = self._output_variables,
+                                                    runtime_variables = wfem.get_runtime_variables()
+                                                    )
+        input_vars = wmr.get_paths_and_data_dict()
+        topath = wfem.path.replace('/','.')
+        rendered_exec_command = wmr.render_exec_command(rendered_wano)
+        wfem.set_exec_command(rendered_exec_command)
+        self._logger.info("Preparing job with exec command: %s"%wfem.exec_command)
+        for key,value in input_vars.items():
+            self._input_variables["%s.%s"%(topath,key)] = value
+
+        with open(join(jobdirectory, "rendered_wano.yml"), 'wt') as outfile:
+            yaml.safe_dump(rendered_wano, outfile)
+
+        # Debug dump
+        with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
+            yaml.safe_dump(self._input_variables,outfile)
+
+        with open(join(jobdirectory, "outputvardb.yml"), 'wt') as outfile:
+            yaml.safe_dump(self._output_variables,outfile)
+
+        """ Sanity check to check if all files are there """
+        for myinput in wfem.inputs:
+            tofile = myinput[0]
+            source = myinput[1]
+            absfile = self.storage + '/' + source
+
+            if not path.isfile(absfile):
+                self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
+                return False
+
+
+
         """ Same loop again this time copying files """
         for myinput in wfem.inputs:
             tofile = jobdirectory + '/' + myinput[0]
@@ -1338,7 +1486,7 @@ class Workflow(WorkflowBase):
             absfile = self.storage + '/' + source
 
             if not path.isfile(absfile):
-                self._logger.error("Could not find file %s on disk. Canceling workflow."%source)
+                self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                 return False
             shutil.copyfile(absfile, tofile)
 
@@ -1363,15 +1511,25 @@ class Workflow(WorkflowBase):
                     raise WorkflowAbort(mystdout)
             else:
                 if not path.isfile(absfile):
-                    mystdout = "Could not find outputfile %s on disk. Canceling workflow." % output
+                    mystdout = "Could not find outputfile %s on disk (requested at %s). Canceling workflow." % (output,absfile)
                     self._logger.error(mystdout)
                     raise WorkflowAbort(mystdout)
 
+        myvars = wfem.get_output_variables()
+        if isinstance(myvars, dict):
+            flattened_output_variables = flatten_dict(myvars)
+            topath = wfem.path.replace('/','.')
+            for key,value in flattened_output_variables.items():
+                self._output_variables["%s.%s"%(topath,key)] = value
 
         """ Same loop again this time copying files """
-
         for myoutput in wfem.outputs:
-            tofile = self.storage + '/' + myoutput[1]
+            if wfem.outputpath == 'unset':
+                # Legacy behaviour in case of wfem missing outputpath
+                tofile = self.storage + '/' + myoutput[1]
+            else:
+                tofile = join(self.storage, "workflow_data", wfem.outputpath,"outputs", myoutput[1])
+
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
@@ -1394,7 +1552,7 @@ class Workflow(WorkflowBase):
                     tofile = join(tofiledir,basename)
                 shutil.copyfile(tocopy, tofile)
 
-        return True
+        return myvars
 
     def get_running_finished_job_list_formatted(self):
         files = []
@@ -1408,6 +1566,7 @@ class Workflow(WorkflowBase):
                 if not isinstance(jobobj, WorkflowExecModule):
                     continue
                 jobobj : WorkflowExecModule
+                self._logger.debug("Looking for commonpath between %s and %s"%(jobobj.runtime_directory,self.storage))
                 commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
                 jobdir = jobobj.runtime_directory[len(commonpath):]
                 if jobdir.startswith('/'):

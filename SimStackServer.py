@@ -30,6 +30,14 @@ if __name__ == '__main__':
     if not dir_path in sys.path:
         sys.path.append(dir_path)
 
+    dir_path = join(base_path,"external","treewalker")
+    if not dir_path in sys.path:
+        sys.path.append(dir_path)
+
+    dir_path = join(base_path,"external","boolexp")
+    if not dir_path in sys.path:
+        sys.path.append(dir_path)
+
 from SimStackServer.SimStackServer import SimStackServer, AlreadyRunningException
 from SimStackServer.Config import Config
 import daemon

@@ -28,6 +28,13 @@ class TestWorkflowModel(unittest.TestCase):
     def test_write_to_permanent(self):
         pass
 
+    def sample_resource_model(self):
+        example_resource_xml_fn = join(self._input_dir,"resources.xml")
+        myxml = file_to_xml(example_resource_xml_fn)
+        resources = Resources()
+        resources.from_xml(myxml)
+        return resources
+
     def testResourceModel(self):
         """
         This is the test xml:
@@ -121,6 +128,10 @@ class TestWorkflowModel(unittest.TestCase):
         a.from_xml(myxml)
         a.jobloop()
 
+    def test_build_wf(self):
+        WorkflowExecModule(
+
+        )
 
     def test_time_from_seconds_to_clusterjob_timestring(self):
         mytime = 5*86400 + 3*3600 + 12*60 + 14
