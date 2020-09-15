@@ -3,6 +3,7 @@
 from collections import OrderedDict
 
 from jinja2 import Template
+import logging
 
 from boolexp import Expression
 import abc
@@ -22,6 +23,7 @@ class OrderedDictIterHelper(OrderedDict):
 class AbstractWanoModel:
     def __init__(self, *args, **kwargs):
 
+        self._logger = logging.getLogger("AbstractWaNoModel")
         self._parent_set = False
         self._path = ""
 
@@ -111,7 +113,8 @@ class AbstractWanoModel:
 
         value = self._root.get_value(self._visibility_var_path).get_data()
         truefalse = Expression(self._visibility_condition%value).evaluate()
-        self._view.set_visible(truefalse)
+        if self._view is not None:
+            self._view.set_visible(truefalse)
         self._isvisible = truefalse
 
     def get_name(self):

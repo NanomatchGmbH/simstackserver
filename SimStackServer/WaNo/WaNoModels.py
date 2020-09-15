@@ -1281,7 +1281,7 @@ class WaNoItemFileModel(AbstractWanoModel):
                 return rendered_logical_name.encode("utf-8")
         #Upload and copy
         #print(submitdir)
-        if self.is_local_file:
+        if submitdir is not None and self.is_local_file:
             destdir = os.path.join(submitdir,"inputs")
             mkdir_p(destdir)
             destfile = os.path.join(destdir, rendered_logical_name)

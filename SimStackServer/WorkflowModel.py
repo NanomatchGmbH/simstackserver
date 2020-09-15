@@ -1441,6 +1441,8 @@ class Workflow(WorkflowBase):
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
         wmr.parse_from_xml(xml)
         wmr = wano_without_view_constructor_helper(wmr)
+        wmr.datachanged_force()
+        wmr.datachanged_force()
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
