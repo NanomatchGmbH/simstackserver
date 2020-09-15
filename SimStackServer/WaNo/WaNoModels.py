@@ -962,7 +962,12 @@ class WaNoModelRoot(WaNoModelDictLike):
 
                     runtime_stagein_files.append([var[0], log_path_on_cluster])
                 else:
-                    runtime_stagein_files.append([var[0], "${STORAGE}/workflow_data/%s/inputs/%s"% (stageout_basedir, var[1])])
+                    if var[1].startswith("/"):
+                        #In this case this will be a local import.
+                        runtime_stagein_files.append(
+                            [var[0], "${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, var[0])])
+                    else:
+                        runtime_stagein_files.append([var[0], "${STORAGE}/workflow_data/%s/inputs/%s"% (stageout_basedir, var[1])])
                     print(runtime_stagein_files,var)
             else:
                 #These should be NON posix arguments in the end
