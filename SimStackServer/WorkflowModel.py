@@ -1491,7 +1491,22 @@ class Workflow(WorkflowBase):
             if not path.isfile(absfile):
                 self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                 return False
-            shutil.copyfile(absfile, tofile)
+
+
+            try:
+                with open(absfile, 'r') as infile:
+                    absfile_content = infile.read()
+                rendered_content = Template(absfile_content).render(wano = rendered_wano,
+                                                 input_variables = self._input_variables,
+                                                 output_variables = self._output_variables
+                )
+
+                with open(tofile, 'w') as outfile:
+                    outfile.write(rendered_content)
+            except:
+                self._logger.warning("Unable to render input file %s. Copying instead."%absfile)
+                shutil.copyfile(absfile, tofile)
+
 
         wfem.set_runtime_directory(jobdirectory)
         return True
