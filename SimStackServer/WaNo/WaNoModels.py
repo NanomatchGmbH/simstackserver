@@ -6,6 +6,7 @@ import logging
 from os.path import join
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
+from SimStackServer.Util.XMLUtils import is_regular_element
 from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
 
 import collections
@@ -49,6 +50,8 @@ class WaNoModelDictLike(AbstractWanoModel):
     def parse_from_xml(self, xml):
         self.xml = xml
         for child in self.xml:
+            if not is_regular_element(child):
+                continue
             name = child.attrib['name']
             ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(child.tag)
             ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(child.tag)
@@ -107,6 +110,8 @@ class WaNoChoiceModel(AbstractWanoModel):
     def parse_from_xml(self, xml):
         self.xml = xml
         for child in self.xml.iter("Entry"):
+            if not is_regular_element(child):
+                continue
             myid = int(child.attrib["id"])
             self.choices.append(child.text)
             assert(len(self.choices) == myid + 1)
@@ -129,6 +134,8 @@ class WaNoChoiceModel(AbstractWanoModel):
 
     def update_xml(self):
         for child in self.xml.iter("Entry"):
+            if not is_regular_element(child):
+                continue
             myid = int(child.attrib["id"])
             if "chosen" in child.attrib:
                 del child.attrib["chosen"]
@@ -302,6 +309,8 @@ class WaNoModelListLike(AbstractWanoModel):
         else:
             self.style = ""
         for current_id, child in enumerate(self.xml):
+            if not is_regular_element(child):
+                continue
             ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(child.tag)
             ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(child.tag)
             model = ModelClass()
@@ -382,6 +391,8 @@ class WaNoSwitchModel(WaNoModelListLike):
         super().parse_from_xml(xml)
         self.xml = xml
         for child in self.xml:
+            if not is_regular_element(child):
+                continue
             switch_name = child.attrib["switch_name"]
             name = child.attrib["name"]
             self._names_list.append(name)
@@ -467,6 +478,8 @@ class MultipleOfModel(AbstractWanoModel):
     def parse_from_xml(self, xml):
         self.xml = xml
         for child in self.xml:
+            if not is_regular_element(child):
+                continue
             if self.first_xml_child is None:
                 self.first_xml_child = child
             wano_temp_dict = self.parse_one_child(child)
@@ -542,6 +555,8 @@ class MultipleOfModel(AbstractWanoModel):
                 wano.decommission()
             self.list_of_dicts.pop()
             for child in reversed(self.xml):
+                if not is_regular_element(child):
+                    continue
                 self.xml.remove(child)
                 break
 
@@ -1100,6 +1115,8 @@ class WaNoVectorModel(AbstractWanoModel):
         super(WaNoVectorModel, self).__init__(*args, **kwargs)
         self.myvalues = float(kwargs['xml'].text)
         for child in self.xml:
+            if not is_regular_element(child):
+                continue
             my_id = int(child.attrib["id"])
             value = float(child.text)
             while (len(self.myvalues) <= my_id):
