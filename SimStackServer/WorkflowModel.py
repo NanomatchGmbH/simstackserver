@@ -30,6 +30,7 @@ from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
 from external.clusterjob.clusterjob import FAILED
 from TreeWalker.flatten_dict import flatten_dict
+from jinja2 import Template
 
 
 class ParserError(Exception):
@@ -1503,8 +1504,8 @@ class Workflow(WorkflowBase):
 
                 with open(tofile, 'w') as outfile:
                     outfile.write(rendered_content)
-            except:
-                self._logger.warning("Unable to render input file %s. Copying instead."%absfile)
+            except Exception as e:
+                self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
                 shutil.copyfile(absfile, tofile)
 
 
