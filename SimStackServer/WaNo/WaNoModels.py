@@ -29,6 +29,8 @@ from jinja2 import Template
 from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel
 from TreeWalker.flatten_dict import flatten_dict
 
+class WaNoParseError(Exception):
+    pass
 
 def mkdir_p(path):
     import errno
@@ -669,6 +671,9 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.metas = xmltodict.parse(etree.tostring(el))
 
         self.exec_command = self.full_xml.find("WaNoExecCommand").text
+        for child in self.full_xml.find("WaNoExecCommand"):
+            raise WaNoParseError("Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse.")
+        print("My Exec Command is: %s"%self.exec_command)
 
         super().parse_from_xml(xml=subxml)
 
