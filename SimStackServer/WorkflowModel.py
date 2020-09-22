@@ -834,6 +834,7 @@ class DirectedGraph(object):
     def __init__(self, *args, **kwargs):
         self._graph = nx.DiGraph()
         self._default_node_attributes = { "status" : "waiting" }
+        self._logger = logging.getLogger("WFGraph")
 
         #I only collect chose to check
         all_node_ids = set()
@@ -959,14 +960,26 @@ class DirectedGraph(object):
                 nodes[a]["status"] = "success"
             if nodes[a]["status"] == "unstarted":
                 candidate = True
-                for pred in self._graph.predecessors(a):
+                self._logger.debug("%s was unstarted. Testing ready"%a)
+                predecessors = self._graph.predecessors(a)
+                foundpred = False
+                for pred in predecessors:
+                    foundpred = True
+                    self._logger.debug("pred %s status: %s"%(pred,nodes[pred]["status"]))
                     if nodes[pred]["status"] != "success":
                         candidate = False
                         break
                     #print("%d was preceeded by %d"%(a,pred))
+                if foundpred is False:
+                    self._logger.debug("No predecessor found for %s. Skipping"%a)
+                    continue
+
                 if candidate:
+                    self._logger.debug("%s setting to ready"%a)
                     nodes[a]["status"] = "ready"
 
+        for node in self._graph:
+            self._logger.debug("Outnode %s was ready." %node)
         outnodes = [ node for node in self._graph if self._graph.nodes[node]["status"] == "ready"]
         return outnodes
 
@@ -1476,10 +1489,16 @@ class Workflow(WorkflowBase):
             tofile = myinput[0]
             source = myinput[1]
             absfile = self.storage + '/' + source
+            allfiles = []
+            if "*" in absfile:
+                allfiles = glob(absfile)
+            else:
+                allfiles = [absfile]
 
-            if not path.isfile(absfile):
-                self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
-                return False
+            for myfile in allfiles:
+                if not path.isfile(myfile):
+                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
+                    return False
 
 
 
@@ -1489,24 +1508,35 @@ class Workflow(WorkflowBase):
             source = myinput[1]
             absfile = self.storage + '/' + source
 
-            if not path.isfile(absfile):
-                self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
-                return False
+            allfiles = []
+            already_copied = []
+            globmode = False # In this case we need to rewrite something
+            if "*" in absfile:
+                allfiles = glob(absfile)
+            else:
+                allfiles = [absfile]
+            if len(allfiles) > 1:
+                globmode = True
 
-
-            try:
-                with open(absfile, 'r') as infile:
-                    absfile_content = infile.read()
-                rendered_content = Template(absfile_content).render(wano = rendered_wano,
-                                                 input_variables = self._input_variables,
-                                                 output_variables = self._output_variables
-                )
-
-                with open(tofile, 'w') as outfile:
-                    outfile.write(rendered_content)
-            except Exception as e:
-                self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
-                shutil.copyfile(absfile, tofile)
+            for absfilenum, absfile in enumerate(allfiles):
+                if not path.isfile(absfile):
+                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
+                    return False
+                try:
+                    with open(absfile, 'r') as infile:
+                        absfile_content = infile.read()
+                    rendered_content = Template(absfile_content).render(wano = rendered_wano,
+                                                     input_variables = self._input_variables,
+                                                     output_variables = self._output_variables
+                    )
+                    actual_tofile = tofile
+                    if globmode:
+                        actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
+                    with open(actual_tofile, 'w') as outfile:
+                        outfile.write(rendered_content)
+                except Exception as e:
+                    self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
+                    shutil.copyfile(absfile, tofile)
 
 
         wfem.set_runtime_directory(jobdirectory)
@@ -1586,6 +1616,8 @@ class Workflow(WorkflowBase):
                     continue
                 jobobj : WorkflowExecModule
                 self._logger.debug("Looking for commonpath between %s and %s"%(jobobj.runtime_directory,self.storage))
+                if jobobj.runtime_directory == "unstarted":
+                    continue
                 commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
                 jobdir = jobobj.runtime_directory[len(commonpath):]
                 if jobdir.startswith('/'):
