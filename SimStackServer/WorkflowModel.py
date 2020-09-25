@@ -656,6 +656,15 @@ export NANOMATCH=%s
                 if not do_internal:
                     asyncresult = jobscript.submit()
                     if asyncresult.status == FAILED:
+                        queue_to_qsub = {
+                            "lsf": "bsub",
+                            "slurm": "sbatch",
+                            "pbs": "qsub"
+                        }
+                        myexe = queue_to_qsub[queueing_system]
+                        exists = shutil.which(myexe)
+                        if exists == None:
+                            raise JobSubmitException("Did not find submission utility %s in path." %myexe)
                         raise JobSubmitException("Job failed immediately after submission.")
                     #self._async_result_workaround = asyncresult
                     self.set_jobid(asyncresult.job_id)
