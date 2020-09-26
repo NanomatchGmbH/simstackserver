@@ -1,4 +1,5 @@
 import logging
+import os
 import stat
 import time
 
@@ -21,7 +22,7 @@ class SSHExpectedDirectoryError(Exception):
     pass
 
 class ClusterManager(object):
-    def __init__(self, url, port, calculation_basepath, user, sshprivatekey, queueing_system, default_queue):
+    def __init__(self, url, port, calculation_basepath, user, sshprivatekey, extra_config, queueing_system, default_queue):
         """
 
         :param default_queue:
@@ -36,6 +37,7 @@ class ClusterManager(object):
         self._url = url
         self._port = int(port)
         self._calculation_basepath = calculation_basepath
+        self._extra_config = extra_config
         self._user = user
         self._sshprivatekeyfilename = sshprivatekey
         self._default_queue = default_queue
@@ -257,7 +259,42 @@ class ClusterManager(object):
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
         """
-        stdin, stdout, stderr = self._ssh_client.exec_command("bash -c \"source /etc/profile; %s\""%command)
+
+        if not self._extra_config.startswith("None"):
+            extra_conf_mode = True
+            exists = self.exists(self._extra_config)
+            if not exists:
+                raise ConnectionError("The extra_config file %s was not found on the server, please make sure it exists."%self._extra_config)
+        else:
+            extra_conf_mode = False
+
+        queue_to_submission_com = {
+            "slurm": "sbatch",
+            "pbs": "qsub",
+            "lsf": "bsub"
+        }
+        if self._queueing_system != "Internal":
+            mycom = queue_to_submission_com[self._queueing_system]
+            if extra_conf_mode:
+                com = '"source %s; which %s"'%(self._extra_config, mycom)
+            else:
+                com = '"which %s"'%mycom
+            stdin, stdout, stderr = self._ssh_client.exec_command("bash -c %s" % com)
+            stdout_line = None
+            for line in stdout:
+                stdout_line = line[:-1]
+                break
+            if stdout_line is None or not os.path.basename(stdout_line) == mycom:
+                raise ConnectionError("Could not find batch system execution command %s in path. "
+                                      "Please try changing the extra_command setting in the settings"
+                                      " to include the setup file to the queueing system."%mycom)
+
+        if extra_conf_mode:
+            command = '"source %s; %s"' % (self._extra_config, command)
+        else:
+            command = '"%s"' % command
+
+        stdin, stdout, stderr = self._ssh_client.exec_command("bash -c %s"%command)
         stderrmessage = None
         password = None
         port = None
@@ -272,7 +309,7 @@ class ClusterManager(object):
             if zmq_version_string != zmq.zmq_version():
                 errstring = "ZMQ version mismatch: Client: %s != Server: %s"%(zmq.zmq_version(), zmq_version_string)
                 print(errstring)
-                raise ConnectionError(errstring)
+                #raise ConnectionError(errstring)
 
             break
         stderrmessage = " - ".join(stderr)
@@ -321,7 +358,6 @@ class ClusterManager(object):
         except Exception as e:
             print(e)
             pass
-
 
     def _recv_ack_message(self):
         messagetype, message = self._recv_message()
@@ -477,7 +513,7 @@ class ClusterManager(object):
         if basepath_override is None:
             basepath_override = self._calculation_basepath
 
-        if self._calculation_basepath is not "":
+        if not self._calculation_basepath == "":
             if directory.startswith("/"):
                 directory = directory[1:]
 
