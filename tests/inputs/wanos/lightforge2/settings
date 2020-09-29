@@ -1,0 +1,90 @@
+device_layout: {{wano["TABS"]["general"]["device_layout"]}}
+connect_electrodes: {{wano["TABS"]["general"]["connect_electrodes"]}}
+particles:
+    holes: {{wano["TABS"]["general"]["particle_types"]["holes"]}}
+    electrons: {{wano["TABS"]["general"]["particle_types"]["electrons"]}}
+    excitons: {{wano["TABS"]["general"]["particle_types"]["excitons"]}}
+pbc: [{{wano["TABS"]["general"]["PBC"]["x"]}},{{wano["TABS"]["general"]["PBC"]["y"]}},{{wano["TABS"]["general"]["PBC"]["z"]}}]
+set_pbc: automatic
+
+rates: {{wano["TABS"]["physics"]["rates"]}}
+coulomb_correction: {{wano["TABS"]["physics"]["coulomb_correction"]}}
+coulomb_correction_mode: {{wano["TABS"]["physics"]["coulomb_correction_mode"]}}
+coulomb_binding_energy: {{wano["TABS"]["physics"]["coulomb_binding_energy"]}}
+coulomb_binding_shift: {{wano["TABS"]["physics"]["coulomb_binding_shift"]}}
+ct_rate_memory_multiplier: {{wano["TABS"]["physics"]["ct_rate_memory_multiplier"]}}
+epsilon_material: {{wano["TABS"]["physics"]["epsilon_material"]}}
+distance_epsilon: {{wano["TABS"]["physics"]["distance_epsilon"]}}
+screening_length: {{wano["TABS"]["physics"]["screening_length"]}} 
+doping: {{wano["TABS"]["physics"]["doping"]}}
+doping_regeneration_steps: {{wano["TABS"]["physics"]["doping_regeneration_steps"]}}
+electrode_stack_distance: {{wano["TABS"]["physics"]["electrode_stack_distance"]}}
+superexchange: {{wano["TABS"]["physics"]["superexchange"]}}
+recursive_neighbours: 18
+expansion_scheme: {{wano["TABS"]["device"]["morphology expansion scheme"]}}
+scaling: [None]
+excitonics: {{wano["TABS"]["materials"]["excitonics"]}}
+morphology_width: {{wano["TABS"]["device"]["morphology width [nm]"]}}
+
+{%if  wano["TABS"]["IO"]["use QP output"] == True  %}QP_output_files: {{wano["TABS"]["IO"]["QP output file"]}} {%  endif  %}
+
+materials: {{wano["TABS"]["materials"]["materials"]}}
+
+exciton_presets: {{wano["TABS"]["materials"]["exciton_presets"]}}
+
+layers: {{wano["TABS"]["device"]["layers"]}}
+
+electrodes: {{wano["TABS"]["device"]["electrodes"]}}
+
+neighbours: {{wano["TABS"]["topology"]["max neighbours"]}}
+transfer_integral_source: {{wano["TABS"]["topology"]["transfer_integral_source"]}}
+std_scale: {{wano["TABS"]["physics"]["electrode_J_scale"]}}
+
+pair_input: {{wano["TABS"]["topology"]["pair parameters"]}}
+
+transfer_integral_file: {{wano["TABS"]["topology"]["transfer_integral_file"]}}
+
+experiments: 
+- simulations: {{wano["TABS"]["operation"]["simulations"]}}
+  measurement: {{wano["TABS"]["operation"]["measurement"]}}
+  Temperature: {{wano["TABS"]["operation"]["temperature [K]"]}}
+  field_strength: {{wano["TABS"]["operation"]["field_strength [V/nm]"]}}
+  field_direction: {{wano["TABS"]["operation"]["field direction"]}}
+  initial_holes: {{wano["TABS"]["operation"]["initial holes"]}}
+  initial_electrons: {{wano["TABS"]["operation"]["initial electrons"]}}
+
+iv_fluctuation: {{wano["TABS"]["operation"]["computational"]["IV fluctuation"]}}
+max_iterations: {{wano["TABS"]["operation"]["computational"]["max_iterations"]}}
+max_time: {{wano["TABS"]["operation"]["computational"]["max_time"]}}
+continue_run: {{wano["TABS"]["operation"]["restart"]}}
+
+new_wano: True
+reset_random_numbers: 800000
+coulomb_mesh: {%if  wano["TABS"]["general"]["connect_electrodes"] == True  %}True {% else %}False{%  endif  %}
+image_charges: {%if  wano["TABS"]["general"]["connect_electrodes"] == True  %}1 {% else %}0{%  endif  %}
+
+ti_damping: {{wano["TABS"]["operation"]["activate bond damping"]}}
+noise_damping: {{wano["TABS"]["operation"]["activate bond damping"]}}
+max_bond_noise: {{wano["TABS"]["operation"]["bond damping"]["max bond noise"]}}
+max_damp_factor: {{wano["TABS"]["operation"]["bond damping"]["max damp factor"]}}
+damping_activation_threshold: {{wano["TABS"]["operation"]["bond damping"]["activation threshold"]}}
+friction: {{wano["TABS"]["operation"]["bond damping"]["healing"]}}
+jump_tacker_update_iter: {{wano["TABS"]["operation"]["bond damping"]["bond update iter"]}}
+n_injection_layer: {{wano["TABS"]["physics"]["n_injection_layer"]}}
+
+tta_rate: {{wano["TABS"]["physics"]["tta_rate"]}}
+td_scaling: {{wano["TABS"]["physics"]["td_scaling"]}}
+irradiance: {{wano["TABS"]["operation"]["irradiance [W/m2]"]}}
+light_on_time: {{wano["TABS"]["operation"]["light_on_time [s]"]}}
+light_off_time: {{wano["TABS"]["operation"]["light_off_time [s]"]}}
+track_exciton_lifecycle: {{wano["TABS"]["analysis"]["exciton_lifecycle"]}}
+autorun_start: {{wano["TABS"]["analysis"]["autorun_start"]}}
+coulomb_autorun_iter: {{wano["TABS"]["analysis"]["coulomb_autorun_iter"]}}
+dos: {{wano["TABS"]["analysis"]["DOS"]}}
+analyse_doping:
+  analyse_ion_dop: {{wano["TABS"]["analysis"]["analyse_ion_dop"]}}
+current_analysis: {{wano["TABS"]["analysis"]["current_analysis"]}}
+ML_energy_environment: {{wano["TABS"]["physics"]["ML_energy_environment"]}}
+ti_prune: {{wano["TABS"]["topology"]["prune transfer integrals"]}}
+ti_prune_cutoff: {{wano["TABS"]["topology"]["transfer integral cutoff"]}}
+rate_scaling: {{wano["TABS"]["physics"]["rate_scaling"]}}

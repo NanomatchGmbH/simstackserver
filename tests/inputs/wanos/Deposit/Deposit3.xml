@@ -1,0 +1,54 @@
+<WaNoTemplate>
+ <WaNoRoot name="Deposit3">
+ <WaNoTabs name="TABS">
+ <WaNoGroup name="Simulation Parameters">
+  <WaNoDictBox name="Simulation Box">
+    <WaNoFloat name="Lx">40.0</WaNoFloat>
+    <WaNoFloat name="Ly">40.0</WaNoFloat>
+    <WaNoFloat name="Lz">40.0</WaNoFloat>
+    <WaNoDictBox name="PBC">
+       <WaNoBool name="enabled">False</WaNoBool>
+       <WaNoFloat name="Cutoff">20.0</WaNoFloat>
+    </WaNoDictBox>
+  </WaNoDictBox>
+  <WaNoDictBox name="Simulation Parameters">
+    <WaNoInt name="Number of Molecules">10</WaNoInt>
+    <WaNoFloat name="Initial Temperature [K]">4000.0</WaNoFloat>
+    <WaNoFloat name="Final Temperature [K]">330.0</WaNoFloat>
+    <WaNoFloat name="SA Acc Temp">5.0</WaNoFloat>
+    <WaNoInt name="Number of Steps">30000</WaNoInt>
+    <WaNoInt name="Number of SA cycles">10</WaNoInt>
+    <WaNoBool name="Dihedral Moves">False</WaNoBool>
+    <WaNoInt name="Postrelaxation Steps">0</WaNoInt>
+  </WaNoDictBox>
+  </WaNoGroup>
+ <WaNoGroup name="Molecules">
+  <WaNoBool name="Restart from existing morphology">False</WaNoBool>
+  <WaNoFile logical_filename="restartfile.zip" 
+            visibility_condition="%s == True" visibility_var_path="TABS.Molecules.Restart from existing morphology" 
+            name="Restartfile">restartfile.zip</WaNoFile>
+  <WaNoMultipleOf name="Molecules">
+    <Element id="0">
+       <WaNoFile logical_filename="molecule_{{ path[3] }}.pdb" name="Molecule">Choose Molecule</WaNoFile>
+       <WaNoFile logical_filename="molecule_{{ path[3] }}.spf" name="Forcefield">Choose Forcefield</WaNoFile>
+       <WaNoFloat name="Mixing Ratio">1.0</WaNoFloat>
+    </Element>
+  </WaNoMultipleOf>
+ </WaNoGroup>
+  <WaNoGroup name="Postprocessing">
+  <WaNoBool name="Extend morphology (x,y)">True</WaNoBool>
+  <WaNoFloat visibility_condition="%s == True" visibility_var_path="TABS.Postprocessing.Extend morphology (x,y)" name="Cut first layer by (A)">7.0</WaNoFloat>
+ </WaNoGroup>
+ </WaNoTabs>
+ </WaNoRoot>
+ <WaNoExecCommand>bash ./deposit_init.sh</WaNoExecCommand>
+ <WaNoInputFiles>
+   <WaNoInputFile logical_filename="deposit_init.sh">deposit_init.sh</WaNoInputFile>
+ </WaNoInputFiles>
+ <WaNoOutputFiles>
+    <WaNoOutputFile>structure.cml</WaNoOutputFile>
+    <WaNoOutputFile>structurePBC.cml</WaNoOutputFile>
+    <WaNoOutputFile>merged.spf</WaNoOutputFile>
+    <WaNoOutputFile>restartfile.zip</WaNoOutputFile>
+ </WaNoOutputFiles>
+</WaNoTemplate>
