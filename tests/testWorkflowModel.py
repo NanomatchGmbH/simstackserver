@@ -83,7 +83,7 @@ class TestWorkflowModel(unittest.TestCase):
 
 
     def testDigraphTravseral(self):
-        ooommmm = DirectedGraph([(3,[4444,983]),(983,12)])
+        ooommmm = DirectedGraph([("0",3),(3,[4444,983]),(983,12)])
         ooommmm.traverse()
         outnodes = ooommmm.get_next_ready()
         print(outnodes)
