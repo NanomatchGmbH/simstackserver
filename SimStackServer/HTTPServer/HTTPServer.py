@@ -42,6 +42,7 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             '.ini': 'text/plain',
             '.stderr': 'text/plain',
             '.stdout': 'text/plain',
+            '.sh': 'text/plain',
             '.yml': 'text/plain',
             '.json': 'text/plain',
             '.dat': 'text/plain',
