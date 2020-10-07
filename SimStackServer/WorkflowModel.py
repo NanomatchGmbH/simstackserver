@@ -615,12 +615,14 @@ export NANOMATCH=%s
 
     def run_jobfile(self, queueing_system):
         temphandler = StringLoggingHandler()
-        self._logger.addHandler(temphandler)
+        temphandler.setLevel(logging.DEBUG)
         if queueing_system == "Internal":
             queueing_system = "slurm"
             do_internal = True
         else:
             do_internal = False
+        rootlogger = logging.getLogger('')
+        rootlogger.addHandler(temphandler)
         try:
             import clusterjob
             #Sanity checks
@@ -687,11 +689,14 @@ export NANOMATCH=%s
                 self._logger.error("Exception: %s. Writing traceback to: %s"%(e, server_submit_stderr))
                 with open(server_submit_stderr,'wt') as outfile:
                     traceback.print_exc(file=outfile)
+                    outfile.write("\n\n")
+                    outfile.write("During this exception, the following events were logged:\n")
                     outfile.write(temphandler.getvalue())
+                    outfile.write("End of Log\n")
                 raise e from e
         finally:
             # We remove the handler
-            self._logger.removeHandler(temphandler)
+            rootlogger.removeHandler(temphandler)
 
 
     def abort_job(self):
