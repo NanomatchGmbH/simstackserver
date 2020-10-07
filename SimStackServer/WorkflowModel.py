@@ -615,6 +615,7 @@ export NANOMATCH=%s
 
     def run_jobfile(self, queueing_system):
         temphandler = StringLoggingHandler()
+        temphandler.setLevel(logging.DEBUG)
         self._logger.addHandler(temphandler)
         if queueing_system == "Internal":
             queueing_system = "slurm"
@@ -687,7 +688,9 @@ export NANOMATCH=%s
                 self._logger.error("Exception: %s. Writing traceback to: %s"%(e, server_submit_stderr))
                 with open(server_submit_stderr,'wt') as outfile:
                     traceback.print_exc(file=outfile)
+                    outfile.write("During this exception, the following events were logged:")
                     outfile.write(temphandler.getvalue())
+                    outfile.write("End of Log")
                 raise e from e
         finally:
             # We remove the handler
