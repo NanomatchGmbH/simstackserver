@@ -2,8 +2,18 @@
 
 """
 import os
+from os import path
+
+
+from aiida import orm
+from wano_calcjob.calculations import WaNoCalcJob
+
 from . import TEST_DIR
 
+def depxml():
+    deposit_dir = "%s/inputs/wanos/Deposit" % path.dirname(path.realpath(__file__))
+    depxml = path.join(deposit_dir, "Deposit3.xml")
+    return depxml
 
 def test_process(wano_code):
     """Test running a calculation
@@ -32,6 +42,9 @@ def test_process(wano_code):
                 'max_wallclock_seconds': 30
             },
         },
+        'harbl' : { "my": { "garbl": {"mod" :{ "prop" :{ "humbo" : orm.Float(5.0)}} }}}
+        #'harbl.my.garbl.0.prop.humbo'
+        #'humbo': orm.Float(5.0)
     }
 
     result = run(CalculationFactory('wano'), **inputs)
@@ -39,3 +52,8 @@ def test_process(wano_code):
 
     assert 'content1' in computed_diff
     assert 'content2' in computed_diff
+
+def test_wano_namespace_conversion():
+    wmr = WaNoCalcJob._parse_wano_xml(depxml())
+    namespaces = WaNoCalcJob._wano_to_namespaces_and_vars(wmr)
+    print(namespaces)

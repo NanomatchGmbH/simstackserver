@@ -26,8 +26,10 @@ import ast
 
 from jinja2 import Template
 
-from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel
+from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type
 from TreeWalker.flatten_dict import flatten_dict
+from TreeWalker.tree_list_to_dict import tree_list_to_dict
+
 
 class WaNoParseError(Exception):
     pass
@@ -732,7 +734,9 @@ class WaNoModelRoot(WaNoModelDictLike):
     def register_outputfile_callback(self,function):
         self._outputfile_callbacks.append(function)
 
-    def get_output_files(self):
+    def get_output_files(self, only_static = False):
+        if only_static:
+            return self.output_files
         output_files = self.output_files + [ a[0] for a in self.export_model.get_contents() ]
         for callback in self._outputfile_callbacks:
             output_files += callback()
@@ -1084,7 +1088,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             current = current[item]
         return current
 
-    def get_all_variable_paths(self):
+    def get_all_variable_paths(self, export = True):
         outdict = {}
         self.model_to_dict(outdict)
         tw = TreeWalker(outdict)
@@ -1096,20 +1100,41 @@ class WaNoModelRoot(WaNoModelDictLike):
                   subdict_visitor_function=None,
                   data_visitor_function=None)
 
-        return pc.paths + self._my_export_paths
+        if export:
+            return pc.paths + self._my_export_paths
+        else:
+            return pc.paths
 
-    def get_paths_and_data_dict(self):
+    def _get_paths_and_something_helper(self, subdict_visitor, deref_functor_path_collector):
         outdict = {}
         self.model_to_dict(outdict)
         tw = TreeWalker(outdict)
-        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel,
+        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_visitor,
                              data_visitor_function=None)
         tw = TreeWalker(skipdict)
         pc = PathCollector()
         tw.walker(capture=False, path_visitor_function=None,
-                  subdict_visitor_function=None,
-                  data_visitor_function=pc.assemble_paths_and_values)
+                  subdict_visitor_function=subdict_visitor,
+                  data_visitor_function=deref_functor_path_collector(pc)
+        )
+        return pc.path_to_value
 
+    def get_paths_and_data_dict(self):
+        return self._get_paths_and_something_helper(subdict_skiplevel, lambda x : x.assemble_paths_and_values)
+
+    def get_paths_and_type_dict_aiida(self):
+        outdict = {}
+        self.model_to_dict(outdict)
+        outdict = tree_list_to_dict(outdict)
+        tw = TreeWalker(outdict)
+        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel_to_type,
+                             data_visitor_function=None)
+        tw = TreeWalker(skipdict)
+        pc = PathCollector()
+        tw.walker(capture=False, path_visitor_function=None,
+                  subdict_visitor_function=subdict_skiplevel_to_type,
+                  data_visitor_function= pc.assemble_paths_and_values
+                  )
         return pc.path_to_value
 
     def get_dir_root(self):

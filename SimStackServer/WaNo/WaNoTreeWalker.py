@@ -28,6 +28,13 @@ class PathCollector:
         mypath = ".".join([str(p) for p in abspath])
         self._path_to_value[mypath] = data
 
+    def assemble_paths_and_type(self, data, call_info):
+        tw_paths = call_info["treewalker_paths"]
+        abspath = tw_paths.abspath
+        if abspath is None:
+            return
+        mypath = ".".join([str(p) for p in abspath])
+        self._path_to_value[mypath] = data
 
 
 class WaNoTreeWalker(TreeWalker):
@@ -218,6 +225,35 @@ def subdict_skiplevel(subdict,
         newsubdict = subdict["TABS"]
     except (TypeError, KeyError) as e:
         pass
+
+    if newsubdict is not None:
+        pvf = call_info["path_visitor_function"]
+        svf = call_info["subdict_visitor_function"]
+        dvf = call_info["data_visitor_function"]
+        tw = TreeWalker(newsubdict)
+        return tw.walker(capture = True, path_visitor_function=pvf,
+                  subdict_visitor_function=svf,
+                  data_visitor_function=dvf
+        )
+    return None
+
+def subdict_skiplevel_to_type(subdict,
+                      call_info):
+    newsubdict = None
+    try:
+        newsubdict = subdict["content"]
+    except (TypeError,KeyError) as e:
+        pass
+    try:
+        newsubdict = subdict["TABS"]
+    except (TypeError, KeyError) as e:
+        pass
+
+    if "Type" in subdict:
+        mytype = subdict["Type"]
+        basetypes = ["Int", "Boolean", "Float", "String", "File"]
+        if mytype in basetypes:
+            newsubdict = subdict["Type"]
 
     if newsubdict is not None:
         pvf = call_info["path_visitor_function"]

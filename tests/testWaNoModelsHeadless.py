@@ -82,6 +82,7 @@ class TestWaNoModels(unittest.TestCase):
                   subdict_visitor_function=None,
                   data_visitor_function=None)
         wanopaths = wmr.get_all_variable_paths()
+        wanotypes = wmr.get_paths_and_type_dict_aiida()
         self.assertListEqual(pc.paths, wanopaths)
         print("here")
 
