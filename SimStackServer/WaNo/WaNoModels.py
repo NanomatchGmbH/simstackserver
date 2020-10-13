@@ -463,11 +463,10 @@ class WaNoSwitchModel(WaNoModelListLike):
     def _evaluate_switch_condition(self,changed_path):
         if changed_path != self._switch_path and not changed_path == "force":
             return
-        print("Evaluating mypath %s for changed_path %s"%(self._switch_path, changed_path))
+        #print("Evaluating mypath %s for changed_path %s"%(self._switch_path, changed_path))
         visible_thing_string = self._root.get_value(self._switch_path).get_data()
         try:
             visible_thing = self._switch_name_list.index(visible_thing_string)
-            print(visible_thing)
             self._visible_thing = visible_thing
             self._name = self._names_list[self._visible_thing]
             self._view.init_from_model()
@@ -744,7 +743,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             return
         if self._notifying:
             return
-        print("Checking changed path %s"%path)
+        #print("Checking changed path %s"%path)
         if "unset" in path:
             print("Found unset in path %s"%path)
         self._notifying = True
