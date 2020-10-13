@@ -32,7 +32,7 @@ def wano_without_view_constructor_helper(wmr, start_path = None):
 
     return wmr
 
-def wano_constructor_helper(wmr, start_path = None):
+def wano_constructor_helper(wmr, start_path = None, parent_view = None):
     from Qt import QtWidgets
 
     if start_path is None:
@@ -67,7 +67,10 @@ def wano_constructor_helper(wmr, start_path = None):
 
     # Stage 3 (or Stage 0): Initialize the rootview parent
     rootview = vc.get_views_by_path()[()]
-    anonymous_parent = QtWidgets.QWidget()
+    if parent_view is None:
+        anonymous_parent = QtWidgets.QWidget()
+    else:
+        anonymous_parent = parent_view
     rootview.set_parent(anonymous_parent)
 
     # Stage 4: Put actual data into the views from the ones deep in the hierarchy to the shallow ones
@@ -78,8 +81,9 @@ def wano_constructor_helper(wmr, start_path = None):
     rootview.init_from_model()
 
     # Stage 5: Update the layout
-    anonymous_parent.update()
+    #anonymous_parent.update()
     return wmr,rootview
+
 
 def wano_constructor(wanofile):
     # Timo: Begin path, Begin parse, etc. in the function above. Then call the function above
