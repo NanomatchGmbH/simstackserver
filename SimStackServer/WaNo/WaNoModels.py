@@ -102,6 +102,11 @@ class WaNoModelDictLike(AbstractWanoModel):
         for wano in self.wano_dict.values():
             wano.update_xml()
 
+    def decommission(self):
+        for wano in self.wano_dict.values():
+            wano.decommission()
+        super().decommission()
+
 class WaNoChoiceModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoChoiceModel,self).__init__(*args,**kwargs)
@@ -110,6 +115,7 @@ class WaNoChoiceModel(AbstractWanoModel):
 
 
     def parse_from_xml(self, xml):
+        super().parse_from_xml(xml)
         self.xml = xml
         for child in self.xml.iter("Entry"):
             if not is_regular_element(child):
@@ -154,9 +160,11 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         self.chosen = -1
         self._connected = True
         self._updating = False
+        self._registered = False
         self._registered_paths = []
 
     def parse_from_xml(self, xml):
+        super().parse_from_xml(xml)
         self.xml = xml
         self._collection_path = self.xml.attrib["collection_path"]
         self._subpath = self.xml.attrib["subpath"]
@@ -168,7 +176,9 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def set_root(self, root):
         super().set_root(root)
         self._connected = True
-        root.register_callback(self._collection_path, self._update_choices)
+        if not self._registered:
+            root.register_callback(self._collection_path, self._update_choices)
+            self._registered = True
 
     def _update_choices(self, changed_path):
         if not self._connected:
@@ -186,10 +196,14 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
             register_paths.append(query_string)
             self.choices.append(self._root.get_value(query_string).get_data())
 
+        delete_later = []
         for path in self._registered_paths:
             if path not in register_paths:
                 self._root.unregister_callback(path, self._update_choices)
-                self._registered_paths.remove(path)
+                delete_later.append(path)
+        for path in delete_later:
+            self._registered_paths.remove(path)
+
         for path in register_paths:
             if path in self._registered_paths:
                 continue
@@ -222,13 +236,16 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def update_xml(self):
         self.xml.attrib["chosen"] = str(self.chosen)
 
-    def disconnectSignals(self):
-        if self.visibility_condition != None:
-            self._root.dataChanged.disconnect(self.evaluate_visibility_condition)
-            self.visibility_condition = None
+    def decommission(self):
+        if self._registered:
+            self.get_root().unregister_callback(self._collection_path, self._update_choices)
+            self._registered = False
+        for path in self._registered_paths:
+            self._root.unregister_callback(path, self._update_choices)
+        self._registered_paths.clear()
 
-        self._root.dataChanged.disconnect(self._update_choices)
-        self._connected = False
+        super().decommission()
+
 
 
 class WaNoMatrixModel(AbstractWanoModel):
@@ -319,9 +336,6 @@ class WaNoModelListLike(AbstractWanoModel):
             model.set_view_class(ViewClass)
             model.parse_from_xml(child)
             start_path = [*self.path.split(".")] + [str(current_id)]
-            #if build_view:
-            #    model.set_root(self.get_root())
-            #    WaNo.WaNoFactory.wano_constructor_helper(model, start_path=start_path)
             self.wano_list.append(model)
 
     @property
@@ -347,6 +361,11 @@ class WaNoModelListLike(AbstractWanoModel):
     def update_xml(self):
         for wano in self.wano_list:
             wano.update_xml()
+
+    def decommission(self):
+        for wano in self.wano_list:
+            wano.decommission()
+        super().decommission()
 
     def disconnectSignals(self):
         super(WaNoModelListLike,self).disconnectSignals()
@@ -387,6 +406,7 @@ class WaNoSwitchModel(WaNoModelListLike):
         self._names_list = []
         self._switch_path = None
         self._visible_thing = -1
+        self._registered = False
         #self._name = "unset"
 
     def parse_from_xml(self, xml):
@@ -423,6 +443,12 @@ class WaNoSwitchModel(WaNoModelListLike):
     def __reversed__(self):
         return self.wano_list.__reversed__()
 
+    def get_selected_id(self):
+        if self._visible_thing >= 0:
+            return self._visible_thing
+        else:
+            return 0
+
     def get_selected_view(self):
         #return self.wano_dict[self._visible_thing].view
         if self._visible_thing >= 0:
@@ -433,18 +459,21 @@ class WaNoSwitchModel(WaNoModelListLike):
     def _evaluate_switch_condition(self,changed_path):
         if changed_path != self._switch_path and not changed_path == "force":
             return
+        print("Evaluating mypath %s for changed_path %s"%(self._switch_path, changed_path))
         visible_thing_string = self._root.get_value(self._switch_path).get_data()
         try:
             visible_thing = self._switch_name_list.index(visible_thing_string)
+            print(visible_thing)
             self._visible_thing = visible_thing
             self._name = self._names_list[self._visible_thing]
             self._view.init_from_model()
-        except ValueError as e:
+        except (IndexError, KeyError) as e:
+            print("This will throw!",e)
             pass
 
     def get_type_str(self):
         if self._visible_thing >= 0:
-            print(self._visible_thing, self.wano_list, self._name, self.path)
+            #print(self._visible_thing, self.wano_list, self._name, self.path)
             return self.wano_list[self._visible_thing].get_type_str()
         return "unset"
 
@@ -456,7 +485,15 @@ class WaNoSwitchModel(WaNoModelListLike):
     def set_path(self, path):
         super().set_path(path)
         self._switch_path = Template(self._switch_path).render(path = self._path.split("."))
-        self._root.register_callback(self._switch_path, self._evaluate_switch_condition)
+        if not self._registered:
+            self._root.register_callback(self._switch_path, self._evaluate_switch_condition)
+            self._registered = True
+
+    def get_parent(self):
+        return self._parent
+
+    def set_parent(self, parent):
+        super().set_parent(parent)
 
     def set_root(self, root):
         super().set_root(root)
@@ -465,9 +502,12 @@ class WaNoSwitchModel(WaNoModelListLike):
         self._switch_path  = xml.attrib["switch_path"]
 
     def decommission(self):
-        self.disconnectSignals()
+        self._root.unregister_callback(self._switch_path, self._evaluate_switch_condition)
+        self._registered = False
         for wano in self.wano_list:
             wano.decommission()
+        super().decommission()
+
 
 class MultipleOfModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -490,6 +530,12 @@ class MultipleOfModel(AbstractWanoModel):
 
     def numitems_per_add(self):
         return len(self.first_xml_child)
+
+    def set_parent(self, parent):
+        super().set_parent(parent)
+        for wano_dict in self.list_of_dicts:
+            for wano in wano_dict.values():
+                wano.set_parent(self)
 
     @property
     def listlike(self):
@@ -517,11 +563,15 @@ class MultipleOfModel(AbstractWanoModel):
             start_path = [*self.path.split(".")] + [str(current_id),model.name ]
 
             model.set_name(name)
+            rootview = None
             if build_view:
                 self.get_root()
                 model.set_root(self.get_root())
 
-                SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(model, start_path = start_path)
+                model, rootview = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(model, start_path = start_path, parent_view = self.view)
+                rootview.set_parent(self.view)
+
+            model.set_parent(self)
             wano_temp_dict[name] = model
         return wano_temp_dict
 
@@ -552,7 +602,7 @@ class MultipleOfModel(AbstractWanoModel):
 
     def delete_item(self):
         if len(self.list_of_dicts) > 1:
-            #before = self._root.blockSignals(True)
+            before = self._root.block_signals(True)
             for wano in self.list_of_dicts[-1].values():
                 wano.decommission()
             self.list_of_dicts.pop()
@@ -562,22 +612,24 @@ class MultipleOfModel(AbstractWanoModel):
                 self.xml.remove(child)
                 break
 
-            #self._root.blockSignals(before)
+            self._root.block_signals(before)
             self._root.datachanged_force()
 
             return True
         return False
 
     def add_item(self):
-        #before = self._root.blockSignals(True)
+        before = self._root.block_signals(True)
         my_xml = copy.copy(self.first_xml_child)
         my_xml.attrib["id"] = str(len(self.list_of_dicts))
         self.xml.append(my_xml)
         model_dict = self.parse_one_child(my_xml, build_view=True)
         self.list_of_dicts.append(model_dict)
-        #self._root.blockSignals(before)
+        self._root.block_signals(before)
         self.get_root().datachanged_force()
-        #self._root.datachanged_force()
+        if self.view is not None:
+            self.view.init_from_model()
+
 
 
     def update_xml(self):
@@ -611,6 +663,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._register_list = []
         self._wano_dir_root = kwargs["wano_dir_root"]
         self._my_export_paths = []
+        self._block_signals = False
 
         if "model_only" in kwargs and kwargs["model_only"] is True:
             pass
@@ -641,6 +694,11 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.output_files = []
 
         self.metas = OrderedDictIterHelper()
+
+    def block_signals(self,true_or_false):
+        before = self._block_signals
+        self._block_signals = true_or_false
+        return before
 
     def parse_from_xml(self, xml):
         self.full_xml = xml
@@ -673,13 +731,18 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.exec_command = self.full_xml.find("WaNoExecCommand").text
         for child in self.full_xml.find("WaNoExecCommand"):
             raise WaNoParseError("Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse.")
-        print("My Exec Command is: %s"%self.exec_command)
+        #print("My Exec Command is: %s"%self.exec_command)
 
         super().parse_from_xml(xml=subxml)
 
     def notify_datachanged(self, path):
+        if self._block_signals:
+            return
         if self._notifying:
             return
+        print("Checking changed path %s"%path)
+        if "unset" in path:
+            print("Found unset in path %s"%path)
         self._notifying = True
         if path == "force":
             for callbacks in self._datachanged_callbacks.values():
@@ -700,7 +763,6 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.register_callback(key,func)
 
     def register_callback(self, path, callback_function):
-        print(path, "callback function", callback_function)
         if self._notifying:
             self._register_list.append((path, callback_function))
         else:
@@ -712,6 +774,7 @@ class WaNoModelRoot(WaNoModelDictLike):
     def unregister_callback(self, path, callback_function):
         assert path in self._datachanged_callbacks, "When unregistering a function, it has to exist in datachanged_callbacks."
         assert callback_function in self._datachanged_callbacks[path], "Function not found in callbacks. Has to exist."
+        #print("Removing %s for %s"%(path, callback_function))
         if self._notifying:
             self._unregister_list.append((path, callback_function))
         else:
@@ -988,7 +1051,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                             [var[0], "${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, var[0])])
                     else:
                         runtime_stagein_files.append([var[0], "${STORAGE}/workflow_data/%s/inputs/%s"% (stageout_basedir, var[1])])
-                    print(runtime_stagein_files,var)
+                    #print(runtime_stagein_files,var)
             else:
                 #These should be NON posix arguments in the end
                 varname.replace(".","_")
