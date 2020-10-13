@@ -4,6 +4,7 @@ Calculations provided by wano_calcjob.
 Register calculations via the "aiida.calculations" entry point in setup.json.
 """
 import os
+from os.path import join
 
 from aiida.common import datastructures
 from aiida.engine import CalcJob
@@ -12,6 +13,7 @@ from aiida import orm
 from aiida.parsers import Parser
 from aiida.plugins import DataFactory
 from lxml import etree
+from jinja2 import Template
 
 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 
@@ -24,6 +26,11 @@ class WaNoCalcJob(CalcJob):
 
     Simple AiiDA plugin wrapper for 'diffing' two files.
     """
+    _cached_input_namespaces = None
+    _cached_output_namespaces = None
+    _cached_inputs = None
+    _cached_outputs = None
+    _cached_output_files = None
     typemap = {
         "Float": orm.Float,
         "Boolean": orm.Bool,
@@ -31,56 +38,90 @@ class WaNoCalcJob(CalcJob):
         "Int": orm.Int,
         "File": orm.SinglefileData
     }
+    _myxml = "/home/strunk/nanomatch/git/SimStackServer/SimStackServer/wano_calcjob/tests/inputs/wanos/Deposit/Deposit3.xml"
 
     @classmethod
     def define(cls, spec):
         """Define inputs and outputs of the calculation."""
         # yapf: disable
         super(WaNoCalcJob, cls).define(spec)
-        myxml = "/home/strunk/nanomatch/git/SimStackServer/SimStackServer/wano_calcjob/tests/inputs/wanos/Deposit/Deposit3.xml"
+        myxml = cls._myxml
         cls._build_spec_from_wano(wfxml=myxml, spec=spec)
 
         # set default values for AiiDA options
         spec.inputs['metadata']['options']['resources'].default = {
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 1,
-                }
+        }
         spec.inputs['metadata']['options']['parser_name'].default = 'wano'
-
-        # new ports
-        spec.input('metadata.options.output_filename', valid_type=str, default='patch.diff')
-
-        spec.input('parameters', valid_type=WaNoParameters, help='Command line parameters for diff')
-        #spec.input('abc.robot.yyy.ge',valid_type=orm.Float, default='mine')
-        #spec.input('humbo',valid_type=orm.Float)
-        spec.input_namespace('harbl.my.garbl.mod.prop')
-        spec.input('harbl.my.garbl.mod.prop.humbo', valid_type=orm.Float)
-
-
-        spec.input('file1', valid_type=SinglefileData, help='First file to be compared.')
-        spec.input('file2', valid_type=SinglefileData, help='Second file to be compared.')
-        spec.output('wano', valid_type=SinglefileData, help='diff between file1 and file2.')
-
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES', message='Calculation did not produce all expected output files.')
+        spec.exit_code(0, 'EXIT_NORMAL', message='Normal exit condition.')
+
+
+
 
     @classmethod
     def _build_spec_from_wano(cls, wfxml, spec):
         wmr = cls._parse_wano_xml(wfxml)
-        namespaces, vars = cls._wano_to_namespaces_and_vars(wmr)
-        for namespace in namespaces:
+        input_namespaces = cls.input_namespaces()
+        input_vars = cls.input_vars()
+        for namespace in input_namespaces:
             spec.input_namespace(namespace, dynamic=True)
-        for path, vartype in vars.items():
+        for path, vartype in input_vars.items():
             spec.input(path, valid_type=cls.typemap[vartype], required = False)
 
         wmr:WaNoModelRoot
-        outputfiles = wmr.get_output_files(only_static=True)
-        spec.output_namespace("files")
-        for myfile in outputfiles:
-            spec.output("files.%s"%myfile, valid_type=SinglefileData)
+        output_files = cls.output_files()
+        output_namespaces = cls.output_namespaces()
+
+        for ons in output_namespaces:
+            spec.output_namespace(ons)
+
+        for myfile in output_files:
+            spec.output(myfile, valid_type=SinglefileData)
 
         exec_command = wmr.exec_command
         spec.input('metadata.options.exec_command', valid_type = str, default = exec_command)
 
+    @classmethod
+    def _set_caches(cls):
+        wmr = cls._parse_wano_xml(cls._myxml)
+        namespaces, vars, output_namespaces, outputs, outputfiles = cls._wano_to_namespaces_and_vars(wmr)
+        cls._cached_input_namespaces = namespaces
+        cls._cached_inputs = vars
+        cls._cached_outputs = outputs
+        cls._cached_output_namespaces = output_namespaces
+        cls._cached_output_files = outputfiles
+
+    @classmethod
+    def input_namespaces(cls):
+        if cls._cached_input_namespaces is None:
+            cls._set_caches()
+        return cls._cached_input_namespaces
+
+    @classmethod
+    def input_vars(cls):
+        if cls._cached_inputs is None:
+            cls._set_caches()
+        return cls._cached_inputs
+
+    @classmethod
+    def output_namespaces(cls):
+        if cls._cached_output_namespaces is None:
+            cls._set_caches()
+        return cls._cached_output_namespaces
+
+    @classmethod
+    def output_vars(cls):
+        if cls._cached_outputs is None:
+            cls._set_caches()
+        return cls._cached_outputs
+
+    @classmethod
+    def output_files(cls):
+        if cls._cached_output_files is None:
+            cls._set_caches()
+        return cls._cached_output_files
 
     @classmethod
     def _parse_wano_xml(cls, wfxml):
@@ -95,7 +136,6 @@ class WaNoCalcJob(CalcJob):
         wmr.datachanged_force()
         wmr.datachanged_force()
         return wmr
-        # Now we have the wano, what now?
 
     @classmethod
     def _clean_path(cls, path):
@@ -110,7 +150,6 @@ class WaNoCalcJob(CalcJob):
 
     @classmethod
     def _wano_to_namespaces_and_vars(cls, wmr):
-        #mypaths = wmr.get_all_variable_paths(export = False)
         mypaths = wmr.get_paths_and_type_dict_aiida()
         namespaces = set()
         for path in mypaths:
@@ -122,11 +161,17 @@ class WaNoCalcJob(CalcJob):
         outpaths = {}
         for path in mypaths:
             outpaths[cls._clean_path(path)] = mypaths[path]
-        return namespaces, outpaths
 
-    # Plan: Make a type TreeWalker in WaNomodels
-    # InputPathLists will be called: WListEx1 WListEx2 WListEx3
-    # They should be expanded in the WaNo
+        output_namespaces = ["files"]
+        outputfiles = wmr.get_output_files(only_static=True)
+        outputs_in_namespace = []
+        outputs = []
+        for myfile in outputfiles:
+            outputs_in_namespace.append("files.%s"%myfile)
+
+        # We return input_namepsaces, input_paths, output_namespaces, output_paths (without files), outputfiles
+        return namespaces, outpaths, output_namespaces, outputs, outputfiles
+
     # Take care of the exec command somehow, output 5
     def prepare_for_submission(self, folder):
         """
@@ -136,17 +181,43 @@ class WaNoCalcJob(CalcJob):
             the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
+
+        # we need to render everything here, i.e.
+        # When initializing, we will have a rendered XML file from SimStackServer
+        # It will know the filenames of the files - we need logical filename still to know where to put it
+        # ExecCommand will be rendered by SSS and given
+        # Who renders the input files?
+        #
         codeinfo = datastructures.CodeInfo()
-        codeinfo.cmdline_params = self.inputs.parameters.cmdline_params(
-            file1_name=self.inputs.file1.filename,
-            file2_name=self.inputs.file2.filename)
         codeinfo.code_uuid = self.inputs.code.uuid
-        codeinfo.stdout_name = self.metadata.options.output_filename
+        codeinfo.stdout_name = self.options.output_filename
+        codeinfo.cmdline_params = ['-in', self.options.input_filename]
+
+        calcinfo = datastructures.CalcInfo()
+        calcinfo.codes_info = [codeinfo]
+        calcinfo.local_copy_list = []
+        calcinfo.remote_copy_list = []
+        calcinfo.retrieve_list = []
+
+        # codeinfo wird mit verdi code an lokale exe gekoppelt
+
+        codeinfo = datastructures.CodeInfo()
+        collected_variables = self.inputs.as_dict()
+        exec_command = self.inputs.metadata.options.exec_command
+        codeinfo.cmdline_params = " ".split(exec_command)[1:]
+        Template(exec_command).render(collected_variables)
+
+        codeinfo.code_uuid = self.inputs.code.uuid
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
+
+
+        # Write WaNo Files into folder and render them there,
+        # Add them to local copy list
         # Prepare a `CalcInfo` to be returned to the engine
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
+
         calcinfo.local_copy_list = [
             (self.inputs.file1.uuid, self.inputs.file1.filename, self.inputs.file1.filename),
             (self.inputs.file2.uuid, self.inputs.file2.filename, self.inputs.file2.filename),
@@ -158,21 +229,49 @@ class WaNoCalcJob(CalcJob):
 from aiida.common.exceptions import NotExistent
 
 class WaNoCalcJobParser(Parser):
+    _calcJobClass = WaNoCalcJob
+    def __init__(self, node):
+        """
+        Initialize Parser instance
+        Checks that the ProcessNode being passed was produced by a WaNoCalcJobParser.
+        :param node: ProcessNode of calculation
+        :param type node: :class:`aiida.orm.ProcessNode`
+        """
+        from aiida.common import exceptions
+        super(WaNoCalcJobParser, self).__init__(node)
+        if not issubclass(node.process_class, WaNoCalcJobParser):
+            raise exceptions.ParsingError("Can only parse WaNoCalcJobParser")
+
+
     def parse(self, **kwargs):
         try:
             retrieved_folder = self.retrieved
         except NotExistent as _:
             return self.exit(self.exit_codes.ERROR_MISSING_OUTPUT_FILES)
 
-        filename_stdout = self.node.get_attribute('output_filename')
+        #self.out('output_parameters', orm.Dict(dict=parsed_data))
+        output_dict_file = join(retrieved_folder, "output_dict.yml")
+        output_config_file = join(retrieved_folder, "output_config.ini")
+        # Linearize those here, i.e. use ReportRenderer to parse them, then export using out
 
-        try:
-            tensor_file = self.retrieved.get_object_content(filename_tensor)
-        except (IOError, OSError):
-            tensor_file = None
+        for myfile in self.node.output_files():
+            with self.retrieved.open(myfile) as opened_file:
+                output_node = SinglefileData(file=opened_file)
+                self.out(myfile, output_node)
+        return self.exit_codes.EXIT_NORMAL
+        """
+            def out_many(self, out_dict):
+        Attach outputs to multiple output ports.
 
-        self.out('output_parameters', orm.Dict(dict=parsed_data))
+        Keys of the dictionary will be used as output port names, values as outputs.
 
-        for filename in sorted(self.retrieved.list_object_names(dynmat_folder), key=natural_sort):
+        :param out_dict: output dictionary
+        :type out_dict: dict
 
-            #filename_stdout = self.node.get_option('output_filename')  # or get_attribute(), but this is clearer
+        for key, value in out_dict.items():
+            self.out(key, value)
+        """
+
+        #for filename in sorted(self.retrieved.list_object_names(dynmat_folder), key=natural_sort):
+        #    pass
+        #filename_stdout = self.node.get_option('output_filename')  # or get_attribute(), but this is clearer
