@@ -453,13 +453,6 @@ class WaNoSwitchModel(WaNoModelListLike):
         else:
             return 0
 
-    def get_selected_view(self):
-        #return self.wano_dict[self._visible_thing].view
-        if self._visible_thing >= 0:
-            return self.wano_list[self._visible_thing].view
-        else:
-            return None
-
     def _evaluate_switch_condition(self,changed_path):
         if changed_path != self._switch_path and not changed_path == "force":
             return
@@ -469,7 +462,8 @@ class WaNoSwitchModel(WaNoModelListLike):
             visible_thing = self._switch_name_list.index(visible_thing_string)
             self._visible_thing = visible_thing
             self._name = self._names_list[self._visible_thing]
-            self._view.init_from_model()
+            if self._view is not None:
+                self._view.init_from_model()
         except (IndexError, KeyError) as e:
             print("This will throw!",e)
             pass
@@ -832,6 +826,9 @@ class WaNoModelRoot(WaNoModelDictLike):
         if (parent == None):
             parent = self
 
+        if isinstance(parent, WaNoSwitchModel):
+            parent = parent[parent.get_selected_id()]
+
         listlike, dictlike = self._listlike_dictlike(parent)
         if listlike:
             my_list = []
@@ -862,6 +859,9 @@ class WaNoModelRoot(WaNoModelDictLike):
     def wano_walker(self, parent = None, path = ""):
         if (parent == None):
             parent = self
+
+        if isinstance(parent, WaNoSwitchModel):
+            parent = parent[parent.get_selected_id()]
         #print(type(parent))
         listlike, dictlike = self._listlike_dictlike(parent)
         if listlike:
@@ -914,6 +914,9 @@ class WaNoModelRoot(WaNoModelDictLike):
                                 runtime_variables = None):
         if (parent == None):
             parent = self
+
+        if isinstance(parent, WaNoSwitchModel):
+            parent = parent[parent.get_selected_id()]
         #print(type(parent))
         """
         import traceback
