@@ -128,7 +128,11 @@ class WaNoChoiceModel(AbstractWanoModel):
         return "String"
 
     def get_data(self):
-        return self.choices[self.chosen]
+        try:
+            return self.choices[self.chosen]
+        except IndexError as e:
+            print("Invalid choice in %s. Returning choice 0"%self.name)
+            return self.choices[0]
 
     def set_chosen(self,choice):
         self.chosen = int(choice)
@@ -1178,7 +1182,7 @@ class WaNoItemIntModel(AbstractWanoModel):
         super().parse_from_xml(xml)
 
     def get_data(self):
-        return self.myint
+        return int(self.myint)
 
     def set_data(self, data):
         self.myint = int(data)
