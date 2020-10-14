@@ -114,7 +114,7 @@ class ReportRenderer():
 
             report = a.render(html_parts_dict)
 
-            with open("report.html",'wt') as outfile:
+            with open(join(basepath,"report.html"),'wt') as outfile:
                 outfile.write(report)
         return a
 
