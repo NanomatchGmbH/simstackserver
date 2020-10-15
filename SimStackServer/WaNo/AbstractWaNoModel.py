@@ -110,8 +110,11 @@ class AbstractWanoModel:
         if changed_path != self._visibility_var_path:
             if changed_path != "force":
                 return
-
-        value = self._root.get_value(self._visibility_var_path).get_data()
+        try:
+            value = self._root.get_value(self._visibility_var_path).get_data()
+        except (IndexError, KeyError) as e:
+            print("Could not resolve %s. Ignoring callback."%self._visibility_var_path)
+            return
         truefalse = Expression(self._visibility_condition%value).evaluate()
         if self._view is not None:
             self._view.set_visible(truefalse)
@@ -224,8 +227,10 @@ class AbstractWanoModel:
 
         if self._root is not None:
             if self._visibility_condition is not None:
-                #print("unregistering")
-                self._root.unregister_callback(self._visibility_var_path, self.evaluate_visibility_condition)
+                try:
+                    self._root.unregister_callback(self._visibility_var_path, self.evaluate_visibility_condition)
+                except AssertionError as e:
+                    print("Path for callback function was not registered. Path was: %s"%self._visibility_var_path)
 
     def construct_children(self):
         pass

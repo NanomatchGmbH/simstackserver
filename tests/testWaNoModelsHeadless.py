@@ -50,6 +50,9 @@ class TestWaNoModels(unittest.TestCase):
         self.lf_dir = "%s/inputs/wanos/lightforge2" % path.dirname(path.realpath(__file__))
         self.lfxml = path.join(self.lf_dir, "lightforge2.xml")
 
+        self.qp_dir = "%s/inputs/wanos/QuantumPatch3" % path.dirname(path.realpath(__file__))
+        self.qpxml = path.join(self.qp_dir, "QuantumPatch3.xml")
+
     def tearDown(self) -> None:
         pass
 
@@ -57,6 +60,22 @@ class TestWaNoModels(unittest.TestCase):
         myfloatmodel = WaNoItemFloatModel(bypass_init = True)
         outdict = {}
         myfloatmodel.model_to_dict(outdict)
+
+    def test_rendered_wano(self):
+        wmr = self._construct_wano_nogui(self.qpxml)
+        wmr: WaNoModelRoot
+        wmr.datachanged_force()
+        wmr.datachanged_force()
+        rendered_wano = wmr.wano_walker()
+        # We do two render passes, in case the rendering reset some values:
+        fvl = []
+        rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
+                    input_var_db = None,
+                    output_var_db = None,
+                    runtime_variables = None
+        )
+        print(rendered_wano)
+
 
     def _construct_wano_nogui(self,wanofile):
         with open(wanofile, 'rt') as infile:
@@ -84,7 +103,8 @@ class TestWaNoModels(unittest.TestCase):
         wanopaths = wmr.get_all_variable_paths()
         wanotypes = wmr.get_paths_and_type_dict_aiida()
         self.assertListEqual(pc.paths, wanopaths)
-        print("here")
+        return wmr
+
 
     def test_dep_nogui(self):
         self._construct_wano_nogui(self.depxml)
