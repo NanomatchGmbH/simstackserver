@@ -1578,7 +1578,7 @@ class Workflow(WorkflowBase):
                     self._logger.error(mystdout)
                     raise WorkflowAbort(mystdout)
 
-        myvars = wfem.get_output_variables()
+        myvars = wfem.get_output_variables(render_report = True)
         if isinstance(myvars, dict):
             flattened_output_variables = flatten_dict(myvars)
             topath = wfem.path.replace('/','.')
