@@ -371,10 +371,10 @@ class WaNoModelListLike(AbstractWanoModel):
             wano.decommission()
         super().decommission()
 
-    def disconnectSignals(self):
-        super(WaNoModelListLike,self).disconnectSignals()
-        for wano in self.wano_list:
-            wano.disconnectSignals()
+    #def disconnectSignals(self):
+    #    super(WaNoModelListLike,self).disconnectSignals()
+    #    for wano in self.wano_list:
+    #        wano.disconnectSignals()
 
 class WaNoNoneModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -634,6 +634,13 @@ class MultipleOfModel(AbstractWanoModel):
             for wano in wano_dict.values():
                 wano.update_xml()
 
+    def decommission(self):
+        for wano_dict in self.list_of_dicts:
+            for wano in wano_dict.values():
+                wano.decommission()
+
+        super().decommission()
+
 
 # This is the parent class and grandfather. Children have to be unique, no lists here
 class WaNoModelRoot(WaNoModelDictLike):
@@ -732,11 +739,24 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         super().parse_from_xml(xml=subxml)
 
+    def _tidy_lists(self):
+        while len(self._unregister_list) > 0:
+            key,func = self._unregister_list.pop()
+            self.unregister_callback(key,func)
+
+        while len(self._register_list) > 0:
+            key,func = self._register_list.pop()
+            self.register_callback(key,func)
+
+
     def notify_datachanged(self, path):
         if self._block_signals:
             return
         if self._notifying:
             return
+
+        self._tidy_lists()
+
         #print("Checking changed path %s"%path)
         if "unset" in path:
             print("Found unset in path %s"%path)
@@ -751,22 +771,19 @@ class WaNoModelRoot(WaNoModelDictLike):
                 callback(path)
         self._notifying = False
 
-        while len(self._unregister_list) > 0:
-            key,func = self._unregister_list.pop()
-            self.unregister_callback(key,func)
-
-        while len(self._register_list) > 0:
-            key,func = self._register_list.pop()
-            self.register_callback(key,func)
+        self._tidy_lists()
 
     def register_callback(self, path, callback_function):
         if self._notifying:
-            self._register_list.append((path, callback_function))
+            toregister = (path, callback_function)
+            if not toregister in self._register_list:
+                self._register_list.append(toregister)
         else:
             if path not in self._datachanged_callbacks:
                 self._datachanged_callbacks[path] = []
 
-            self._datachanged_callbacks[path].append(callback_function)
+            if callback_function not in self._datachanged_callbacks[path]:
+                self._datachanged_callbacks[path].append(callback_function)
 
     def unregister_callback(self, path, callback_function):
         assert path in self._datachanged_callbacks, "When unregistering a function, it has to exist in datachanged_callbacks."
