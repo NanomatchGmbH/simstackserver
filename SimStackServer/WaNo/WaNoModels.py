@@ -26,7 +26,8 @@ import ast
 
 from jinja2 import Template
 
-from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type
+from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type, \
+    subdict_skiplevel_to_aiida_type
 from TreeWalker.flatten_dict import flatten_dict
 from TreeWalker.tree_list_to_dict import tree_list_to_dict
 
@@ -897,6 +898,8 @@ class WaNoModelRoot(WaNoModelDictLike):
             return parent.get_rendered_wano_data()
 
     def _listlike_dictlike(self,myobject):
+        listlike = False
+        dictlike = False
         if isinstance(myobject,collections.OrderedDict) or isinstance(myobject,dict):
             listlike = False
             dictlike = True
@@ -1205,6 +1208,33 @@ class WaNoModelRoot(WaNoModelDictLike):
                   data_visitor_function= pc.assemble_paths_and_values
                   )
         return pc.path_to_value
+
+    def get_valuedict_with_aiida_types(self):
+        outdict = {}
+        self.model_to_dict(outdict)
+        outdict = tree_list_to_dict(outdict)
+        tw = TreeWalker(outdict)
+        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel_to_aiida_type,
+                             data_visitor_function=None)
+        return skipdict
+
+    """
+    def get_paths_and_type_dict_aiida(self):
+        outdict = {}
+        self.model_to_dict(outdict)
+        outdict = tree_list_to_dict(outdict)
+        tw = TreeWalker(outdict)
+        skipdict = tw.walker(capture=True, path_visitor_function=None,
+                             subdict_visitor_function=subdict_skiplevel_to_type,
+                             data_visitor_function=None)
+        tw = TreeWalker(skipdict)
+        pc = PathCollector()
+        tw.walker(capture=False, path_visitor_function=None,
+                  subdict_visitor_function=subdict_skiplevel_to_type,
+                  data_visitor_function=pc.assemble_paths_and_values
+                  )
+        return pc.path_to_value
+        """
 
     def get_dir_root(self):
         return self._wano_dir_root

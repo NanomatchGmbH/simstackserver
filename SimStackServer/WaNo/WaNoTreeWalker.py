@@ -1,5 +1,10 @@
 from TreeWalker.TreeWalker import TreeWalker
 
+def attribute_dict_to_normal_dict(attribute_dict):
+    pass
+
+
+
 class PathCollector:
     def __init__(self):
         self._paths = []
@@ -254,6 +259,43 @@ def subdict_skiplevel_to_type(subdict,
         basetypes = ["Int", "Boolean", "Float", "String", "File"]
         if mytype in basetypes:
             newsubdict = subdict["Type"]
+
+    if newsubdict is not None:
+        pvf = call_info["path_visitor_function"]
+        svf = call_info["subdict_visitor_function"]
+        dvf = call_info["data_visitor_function"]
+        tw = TreeWalker(newsubdict)
+        return tw.walker(capture = True, path_visitor_function=pvf,
+                  subdict_visitor_function=svf,
+                  data_visitor_function=dvf
+        )
+    return None
+
+def subdict_skiplevel_to_aiida_type(subdict,
+                      call_info):
+    newsubdict = None
+    try:
+        newsubdict = subdict["content"]
+    except (TypeError,KeyError) as e:
+        pass
+    try:
+        newsubdict = subdict["TABS"]
+    except (TypeError, KeyError) as e:
+        pass
+
+
+    if "Type" in subdict:
+        mytype = subdict["Type"]
+        from aiida import orm
+        basetypes = {
+            "Float": orm.Float,
+            "Boolean": orm.Bool,
+            "String": orm.Str,
+            "Int": orm.Int,
+            "File": orm.SinglefileData
+        }
+        if mytype in basetypes:
+            newsubdict = basetypes[subdict["Type"]](subdict["content"])
 
     if newsubdict is not None:
         pvf = call_info["path_visitor_function"]

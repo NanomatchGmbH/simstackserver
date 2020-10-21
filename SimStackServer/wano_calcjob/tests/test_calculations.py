@@ -3,17 +3,58 @@
 """
 import os
 from os import path
-
+from os.path import join
 
 from aiida import orm
-from wano_calcjob.calculations import WaNoCalcJob
+from lxml import etree
+from wano_calcjob.calculations import WaNoCalcJob, clean_dict_for_aiida
 
+from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
 from . import TEST_DIR
 
-def depxml():
+def depdir():
     deposit_dir = "%s/inputs/wanos/Deposit" % path.dirname(path.realpath(__file__))
-    depxml = path.join(deposit_dir, "Deposit3.xml")
+    return deposit_dir
+
+def dep_inputs():
+    deposit_file_dir = "%s/input_files/" % path.dirname(path.realpath(__file__))
+    moleculepdb = join(deposit_file_dir, "molecule_0.pdb")
+    moleculespf = join(deposit_file_dir, "molecule_0.spf")
+    return moleculepdb, moleculespf
+
+
+def depxml():
+    depxml = path.join(depdir(), "Deposit3.xml")
     return depxml
+
+
+from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+
+def get_parsed_dep_xml():
+    wmr = WaNoModelRoot(wano_dir_root=depdir(), model_only=True)
+    with open(depxml(), 'rt') as infile:
+        xml = etree.parse(infile)
+    wmr.parse_from_xml(xml)
+    wmr = wano_without_view_constructor_helper(wmr)
+    mol, spf  = dep_inputs()
+    wmr["TABS"]["Molecules"]["Molecules"][0]["Molecule"].set_data(mol)
+    wmr["TABS"]["Molecules"]["Molecules"][0]["Forcefield"].set_data(spf)
+    wmr.datachanged_force()
+    wmr.datachanged_force()
+    # I don't think we need these two walks here. They are here, because legacy applications required them
+    rendered_wano = wmr.wano_walker()
+    wmr.wano_walker_render_pass(rendered_wano, submitdir=None, flat_variable_list=None,
+                                                input_var_db=None,
+                                                output_var_db=None,
+                                                runtime_variables=None
+    )
+    rendered_wano = wmr.get_valuedict_with_aiida_types()
+    return rendered_wano
+
+def test_clean_aiida_dict():
+    rendered_wano = get_parsed_dep_xml()
+    outdict = clean_dict_for_aiida(rendered_wano)
+    print(outdict)
 
 def test_process(wano_code):
     """Test running a calculation
@@ -21,37 +62,29 @@ def test_process(wano_code):
     from aiida.plugins import DataFactory, CalculationFactory
     from aiida.engine import run
 
-    # Prepare input parameters
-    DiffParameters = DataFactory('wano')
-    parameters = DiffParameters({'ignore-case': True})
-
-    from aiida.orm import SinglefileData
-    file1 = SinglefileData(
-        file=os.path.join(TEST_DIR, "input_files", 'file1.txt'))
-    file2 = SinglefileData(
-        file=os.path.join(TEST_DIR, "input_files", 'file2.txt'))
+    rendered_wano = get_parsed_dep_xml()
+    outdict = clean_dict_for_aiida(rendered_wano)
+    print(wano_code)
 
     # set up calculation
     inputs = {
         'code': wano_code,
-        'parameters': parameters,
-        'file1': file1,
-        'file2': file2,
         'metadata': {
             'options': {
                 'max_wallclock_seconds': 30
             },
-        },
-        'harbl' : { "my": { "garbl": {"mod" :{ "prop" :{ "humbo" : orm.Float(5.0)}} }}}
-        #'harbl.my.garbl.0.prop.humbo'
-        #'humbo': orm.Float(5.0)
+        }
     }
+    inputs.update(outdict)
 
     result = run(CalculationFactory('wano'), **inputs)
-    computed_diff = result['wano'].get_content()
+    print(result)
 
-    assert 'content1' in computed_diff
-    assert 'content2' in computed_diff
+    #computed_diff = result['wano'].get_content()
+
+    #assert 'content1' in computed_diff
+
+    #assert 'content2' in computed_diff
 
 def test_wano_namespace_conversion():
     wmr = WaNoCalcJob._parse_wano_xml(depxml())

@@ -15,16 +15,30 @@ from aiida.plugins import DataFactory
 from lxml import etree
 from jinja2 import Template
 
+from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+from TreeWalker.TreeWalker import TreeWalker
 
 WaNoParameters = DataFactory('wano')
 
+def rewrite_path(inpath):
+    outpath = [ WaNoCalcJob.clean_path(mypath) for mypath in inpath]
+    return outpath
+
+def clean_dict_for_aiida(input_dictionary):
+    tw = TreeWalker(input_dictionary)
+    visitor_functions = {
+        "path_visitor_function":None,
+        "path_rewrite_function":WaNoCalcJob.clean_path,
+        "subdict_visitor_function": None,
+        "data_visitor_function": None
+    }
+    output_dictionary = tw.walker_from_dict(visitor_functions, capture=True)
+    return output_dictionary
 
 class WaNoCalcJob(CalcJob):
     """
-    AiiDA calculation plugin wrapping the diff executable.
-
-    Simple AiiDA plugin wrapper for 'diffing' two files.
+    WaNo CalcJob Wrapper plugin.
     """
     _cached_input_namespaces = None
     _cached_output_namespaces = None
@@ -138,7 +152,9 @@ class WaNoCalcJob(CalcJob):
         return wmr
 
     @classmethod
-    def _clean_path(cls, path):
+    def clean_path(cls, path):
+        if isinstance(path, int):
+            return "L_ELE_%d"%path
         return path.replace(" ","_")\
             .replace("[","_")\
             .replace("]","_")\
@@ -153,14 +169,14 @@ class WaNoCalcJob(CalcJob):
         mypaths = wmr.get_paths_and_type_dict_aiida()
         namespaces = set()
         for path in mypaths:
-            namespace = cls._clean_path(".".join(path.split(".")[:-1]))
+            namespace = cls.clean_path(".".join(path.split(".")[:-1]))
             if namespace == "":
                 continue
             else:
                 namespaces.add(namespace)
         outpaths = {}
         for path in mypaths:
-            outpaths[cls._clean_path(path)] = mypaths[path]
+            outpaths[cls.clean_path(path)] = mypaths[path]
 
         output_namespaces = ["files"]
         outputfiles = wmr.get_output_files(only_static=True)
@@ -190,8 +206,8 @@ class WaNoCalcJob(CalcJob):
         #
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
-        codeinfo.stdout_name = self.options.output_filename
-        codeinfo.cmdline_params = ['-in', self.options.input_filename]
+        #codeinfo.stdout_name = self.options.output_filename
+        #codeinfo.cmdline_params = ['-in', self.options.input_filename]
 
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
@@ -202,7 +218,7 @@ class WaNoCalcJob(CalcJob):
         # codeinfo wird mit verdi code an lokale exe gekoppelt
 
         codeinfo = datastructures.CodeInfo()
-        collected_variables = self.inputs.as_dict()
+        collected_variables = self.inputs
         exec_command = self.inputs.metadata.options.exec_command
         codeinfo.cmdline_params = " ".split(exec_command)[1:]
         Template(exec_command).render(collected_variables)
@@ -218,11 +234,11 @@ class WaNoCalcJob(CalcJob):
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
 
-        calcinfo.local_copy_list = [
-            (self.inputs.file1.uuid, self.inputs.file1.filename, self.inputs.file1.filename),
-            (self.inputs.file2.uuid, self.inputs.file2.filename, self.inputs.file2.filename),
-        ]
-        calcinfo.retrieve_list = [self.metadata.options.output_filename]
+        #calcinfo.local_copy_list = [
+        #    (self.inputs.file1.uuid, self.inputs.file1.filename, self.inputs.file1.filename),
+        #    (self.inputs.file2.uuid, self.inputs.file2.filename, self.inputs.file2.filename),
+        #]
+        #calcinfo.retrieve_list = [self.metadata.options.output_filename]
 
         return calcinfo
 
@@ -249,9 +265,9 @@ class WaNoCalcJobParser(Parser):
         except NotExistent as _:
             return self.exit(self.exit_codes.ERROR_MISSING_OUTPUT_FILES)
 
-        #self.out('output_parameters', orm.Dict(dict=parsed_data))
-        output_dict_file = join(retrieved_folder, "output_dict.yml")
-        output_config_file = join(retrieved_folder, "output_config.ini")
+        vardict = ReportRenderer.render_everything(retrieved_folder)
+
+
         # Linearize those here, i.e. use ReportRenderer to parse them, then export using out
 
         for myfile in self.node.output_files():
