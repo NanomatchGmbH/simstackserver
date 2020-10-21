@@ -1,0 +1,122 @@
+residues:
+  LI0:
+    atoms:
+      C: {charge: 0.3761, deposit_evaluate: 0, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C1: {charge: -0.1996, deposit_evaluate: 0, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C2: {charge: -0.2573, deposit_evaluate: 0, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C3: {charge: -0.3329, deposit_evaluate: 0, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C4: {charge: -0.0446, deposit_evaluate: 0, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C5: {charge: -0.0759, deposit_evaluate: 0, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      H: {charge: 0.3941, deposit_evaluate: 0, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H1: {charge: 0.1595, deposit_evaluate: 0, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H2: {charge: 0.1405, deposit_evaluate: 0, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H3: {charge: 0.115, deposit_evaluate: 0, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H4: {charge: 0.1167, deposit_evaluate: 0, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H5: {charge: 0.1257, deposit_evaluate: 0, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      O: {charge: -0.5173, deposit_evaluate: 0, epsilon: 0.20076481835564053, flex_atom_grid_type: 3,
+        mol2_atom_type: O.3, sigma: 2.8499999999999996}
+    bonds:
+    - [H, O, '1']
+    - [O, C, '1']
+    - [C, C3, ar]
+    - [C, C2, ar]
+    - [C1, C4, ar]
+    - [C1, C5, ar]
+    - [C1, H5, '1']
+    - [C2, C5, ar]
+    - [C2, H1, '1']
+    - [C3, C4, ar]
+    - [C3, H2, '1']
+    - [C4, H3, '1']
+    - [C5, H4, '1']
+    dihedrals:
+      C2.C.O.H:
+        spline: [-3.141592653589793, 3.141592653589793, 0.15707963267948966, -5.336446999995343,
+          -5.2067339999906865, -4.837553999995343, -4.268789999988359, -3.5402610000069847,
+          -2.721761, -1.8730939999941794, -1.0741270000058207, -0.4147600000023283,
+          0.05505699999883584, 0.275358, 0.24616700000116415, -0.03250799999767168,
+          -0.5006739999988359, -1.0983940000046566, -1.7658179999883585, -2.4431839999813736,
+          -3.0508339999965077, -3.529066000006985, -3.848026999984866, -3.957694,
+          -3.848027999984866, -3.529069000006985, -3.0508329999965076, -2.4431849999813737,
+          -1.7658159999883585, -1.0983970000046566, -0.5006719999988358, -0.032505999997671675,
+          0.24616700000116415, 0.275359, 0.05505699999883584, -0.4147610000023283,
+          -1.0741260000058208, -1.8730969999941793, -2.721762, -3.540263000006985,
+          -4.268789999988359, -4.837554999995343, -5.206732999990686, -5.336446999995343]
+    moves:
+      dihedral:
+      - - [C2, C, O, H]
+        - single
+  LI1:
+    atoms:
+      C: {charge: 0.3761, deposit_evaluate: 1, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C1: {charge: -0.1996, deposit_evaluate: 1, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C2: {charge: -0.2573, deposit_evaluate: 1, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C3: {charge: -0.3329, deposit_evaluate: 1, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C4: {charge: -0.0446, deposit_evaluate: 1, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      C5: {charge: -0.0759, deposit_evaluate: 1, epsilon: 0.1505736137667304, flex_atom_grid_type: 1,
+        mol2_atom_type: C.ar, sigma: 3.5599999999999996}
+      H: {charge: 0.3941, deposit_evaluate: 1, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H1: {charge: 0.1595, deposit_evaluate: 1, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H2: {charge: 0.1405, deposit_evaluate: 1, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H3: {charge: 0.115, deposit_evaluate: 1, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H4: {charge: 0.1167, deposit_evaluate: 1, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      H5: {charge: 0.1257, deposit_evaluate: 1, epsilon: 0.019120458891013385, flex_atom_grid_type: 2,
+        mol2_atom_type: H, sigma: 1.7799999999999998}
+      O: {charge: -0.5173, deposit_evaluate: 1, epsilon: 0.20076481835564053, flex_atom_grid_type: 3,
+        mol2_atom_type: O.3, sigma: 2.8499999999999996}
+    bonds:
+    - [H, O, '1']
+    - [O, C, '1']
+    - [C, C3, ar]
+    - [C, C2, ar]
+    - [C1, C4, ar]
+    - [C1, C5, ar]
+    - [C1, H5, '1']
+    - [C2, C5, ar]
+    - [C2, H1, '1']
+    - [C3, C4, ar]
+    - [C3, H2, '1']
+    - [C4, H3, '1']
+    - [C5, H4, '1']
+    dihedrals:
+      C2.C.O.H:
+        spline: [-3.141592653589793, 3.141592653589793, 0.15707963267948966, -5.336446999995343,
+          -5.2067339999906865, -4.837553999995343, -4.268789999988359, -3.5402610000069847,
+          -2.721761, -1.8730939999941794, -1.0741270000058207, -0.4147600000023283,
+          0.05505699999883584, 0.275358, 0.24616700000116415, -0.03250799999767168,
+          -0.5006739999988359, -1.0983940000046566, -1.7658179999883585, -2.4431839999813736,
+          -3.0508339999965077, -3.529066000006985, -3.848026999984866, -3.957694,
+          -3.848027999984866, -3.529069000006985, -3.0508329999965076, -2.4431849999813737,
+          -1.7658159999883585, -1.0983970000046566, -0.5006719999988358, -0.032505999997671675,
+          0.24616700000116415, 0.275359, 0.05505699999883584, -0.4147610000023283,
+          -1.0741260000058208, -1.8730969999941793, -2.721762, -3.540263000006985,
+          -4.268789999988359, -4.837554999995343, -5.206732999990686, -5.336446999995343]
+    moves:
+      dihedral:
+      - - [C2, C, O, H]
+        - single
+structure:
+  bonds: []
+  moves: {}
