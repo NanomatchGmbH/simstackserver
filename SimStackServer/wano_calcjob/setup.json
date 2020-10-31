@@ -4,27 +4,25 @@
     "author_email": "timo.strunk@nanomatch.com",
     "description": "Wrapper to calculate Nanomatch WaNos (Workflow Active Nodes) as a CalcJob",
     "url": "https://github.com/timostrunk/wano_calcjob",
-    "license": "MIT",
+    "license": "proprietary",
     "classifiers": [
         "Programming Language :: Python",
-        "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: MIT License",
+        "Intended Audience :: Science/Industry",
+        "License :: Proprietary",
         "Natural Language :: English",
-        "Framework :: AiiDA"
+        "Framework :: AiiDA :: SimStack"
     ],
     "version": "0.1.0a0",
     "entry_points": {
         "aiida.data": [
-            "wano = wano_calcjob.data:DiffParameters"
         ],
         "aiida.calculations": [
-            "wano = wano_calcjob.calculations:DiffCalculation"
+            "wano = wano_calcjob.calculations:DepositCalcJob"
         ],
         "aiida.parsers": [
-            "wano = wano_calcjob.parsers:DiffParser"
+            "wano = wano_calcjob.calculations.DepositParser"
         ],
         "aiida.cmdline.data": [
-            "wano = wano_calcjob.cli:data_cli"
         ]
     },
     "include_package_data": true,

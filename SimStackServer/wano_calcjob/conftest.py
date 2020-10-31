@@ -21,5 +21,19 @@ def wano_code(aiida_local_code_factory):
     # 4.)
 
 
-    wano_code = aiida_local_code_factory(executable='diff', entry_point='wano')
+    wano_code = aiida_local_code_factory(executable='wano-deptest-exec', entry_point='wano')
     return wano_code
+
+@pytest.fixture(scope='session')
+def generate_parser():
+    """Fixture to load a parser class for testing parsers."""
+
+    def _generate_parser(entry_point_name):
+        """Fixture to load a parser class for testing parsers.
+        :param entry_point_name: entry point name of the parser class
+        :return: the `Parser` sub class
+        """
+        from aiida.plugins import ParserFactory
+        return ParserFactory(entry_point_name)
+
+    return _generate_parser

@@ -6,8 +6,10 @@ from os import path
 from os.path import join
 
 from aiida import orm
+from aiida.engine import run_get_node
+from aiida.plugins import ParserFactory
 from lxml import etree
-from wano_calcjob.calculations import WaNoCalcJob, clean_dict_for_aiida
+from wano_calcjob.calculations import WaNoCalcJob, clean_dict_for_aiida, WaNoCalcJobParser
 
 from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
 from . import TEST_DIR
@@ -26,7 +28,6 @@ def dep_inputs():
 def depxml():
     depxml = path.join(depdir(), "Deposit3.xml")
     return depxml
-
 
 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 
@@ -56,7 +57,7 @@ def test_clean_aiida_dict():
     outdict = clean_dict_for_aiida(rendered_wano)
     print(outdict)
 
-def test_process(wano_code):
+def test_process(wano_code, generate_parser):
     """Test running a calculation
     note this does not test that the expected outputs are created of output parsing"""
     from aiida.plugins import DataFactory, CalculationFactory
@@ -77,8 +78,10 @@ def test_process(wano_code):
     }
     inputs.update(outdict)
 
-    result = run(CalculationFactory('wano'), **inputs)
-    print(result)
+    result = run_get_node(CalculationFactory('wano'), **inputs)
+    myparser = WaNoCalcJobParser(result.node)
+    myparser.parse_from_node(result.node)
+    print("here")
 
     #computed_diff = result['wano'].get_content()
 

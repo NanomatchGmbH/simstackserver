@@ -36,6 +36,9 @@ def clean_dict_for_aiida(input_dictionary):
     output_dictionary = tw.walker_from_dict(visitor_functions, capture=True)
     return output_dictionary
 
+class DepositCalcJob(WaNoCalcJob):
+    _myxml = "/home/strunk/nanomatch/git/SimStackServer/SimStackServer/wano_calcjob/tests/inputs/wanos/Deposit/Deposit3.xml"
+
 class WaNoCalcJob(CalcJob):
     """
     WaNo CalcJob Wrapper plugin.
@@ -52,7 +55,11 @@ class WaNoCalcJob(CalcJob):
         "Int": orm.Int,
         "File": orm.SinglefileData
     }
-    _myxml = "/home/strunk/nanomatch/git/SimStackServer/SimStackServer/wano_calcjob/tests/inputs/wanos/Deposit/Deposit3.xml"
+    _myxml = None
+
+    @classmethod
+    def wano_repo_path(cls):
+        
 
     @classmethod
     def define(cls, spec):
@@ -197,7 +204,6 @@ class WaNoCalcJob(CalcJob):
             the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
-
         # we need to render everything here, i.e.
         # When initializing, we will have a rendered XML file from SimStackServer
         # It will know the filenames of the files - we need logical filename still to know where to put it
@@ -213,7 +219,11 @@ class WaNoCalcJob(CalcJob):
         calcinfo.codes_info = [codeinfo]
         calcinfo.local_copy_list = []
         calcinfo.remote_copy_list = []
-        calcinfo.retrieve_list = []
+        retrieve_list = []
+        for outputfile in self.output_files():
+            retrieve_list.append(outputfile)
+        calcinfo.retrieve_temporary_list = retrieve_list
+        print(retrieve_list)
 
         # codeinfo wird mit verdi code an lokale exe gekoppelt
 
@@ -231,6 +241,7 @@ class WaNoCalcJob(CalcJob):
         # Write WaNo Files into folder and render them there,
         # Add them to local copy list
         # Prepare a `CalcInfo` to be returned to the engine
+
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
 
@@ -240,6 +251,7 @@ class WaNoCalcJob(CalcJob):
         #]
         #calcinfo.retrieve_list = [self.metadata.options.output_filename]
 
+        #print("STarting with calcinfo", calcinfo.retrieve_list)
         return calcinfo
 
 from aiida.common.exceptions import NotExistent
@@ -255,8 +267,8 @@ class WaNoCalcJobParser(Parser):
         """
         from aiida.common import exceptions
         super(WaNoCalcJobParser, self).__init__(node)
-        if not issubclass(node.process_class, WaNoCalcJobParser):
-            raise exceptions.ParsingError("Can only parse WaNoCalcJobParser")
+        #if not issubclass(node.process_class, WaNoCalcJobParser):
+        #    raise exceptions.ParsingError("Can only parse WaNoCalcJobParser")
 
 
     def parse(self, **kwargs):
@@ -265,12 +277,19 @@ class WaNoCalcJobParser(Parser):
         except NotExistent as _:
             return self.exit(self.exit_codes.ERROR_MISSING_OUTPUT_FILES)
 
-        vardict = ReportRenderer.render_everything(retrieved_folder)
+        print("Printing folder contents")
+        for file in retrieved_folder.list_object_names():
+            print(file)
+        print("End of print")
+        #print(join(retrieved_folder, "output_dict.yml"))
+        #print(join(retrieved_folder, "output_config.ini"))
+        #vardict = ReportRenderer.render_everything(retrieved_folder)
 
 
         # Linearize those here, i.e. use ReportRenderer to parse them, then export using out
 
-        for myfile in self.node.output_files():
+        for myfile in WaNoCalcJob.output_files():
+            print("Opening", myfile)
             with self.retrieved.open(myfile) as opened_file:
                 output_node = SinglefileData(file=opened_file)
                 self.out(myfile, output_node)

@@ -13,3 +13,6 @@
 [submodule "external/treewalker"]
 	path = external/treewalker
 	url = ssh://git@gitlab.nanobuild.de:2222/nanomatch/treewalker.git
+[submodule "SimStackServer/wano_calcjob/wano_repo"]
+	path = SimStackServer/wano_calcjob/wano_repo
+	url = ssh://git@gitlab.nanobuild.de:2222/nanomatch/wanos.git

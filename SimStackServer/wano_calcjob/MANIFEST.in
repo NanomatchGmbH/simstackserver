@@ -1,2 +1,3 @@
 include setup.json
 include LICENSE
+include wano_calcjob/wanos/Deposit3/Deposit3.xml
