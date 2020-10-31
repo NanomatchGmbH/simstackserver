@@ -9,7 +9,9 @@ from aiida import orm
 from aiida.engine import run_get_node
 from aiida.plugins import ParserFactory
 from lxml import etree
-from wano_calcjob.calculations import WaNoCalcJob, clean_dict_for_aiida, WaNoCalcJobParser
+from wano_calcjob.calculations import clean_dict_for_aiida
+from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob
+from wano_calcjob.parsers import WaNoCalcJobParser
 
 from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
 from . import TEST_DIR
