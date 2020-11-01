@@ -17,10 +17,10 @@
         "aiida.data": [
         ],
         "aiida.calculations": [
-            "wano = wano_calcjob.calculations:DepositCalcJob"
+            "Deposit3 = wano_calcjob.calculations:DepositCalcJob"
         ],
         "aiida.parsers": [
-            "wano = wano_calcjob.calculations.DepositParser"
+            "Deposit3 = wano_calcjob.calculations:DepositParser"
         ],
         "aiida.cmdline.data": [
         ]

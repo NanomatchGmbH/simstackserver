@@ -9,9 +9,9 @@ from aiida import orm
 from aiida.engine import run_get_node
 from aiida.plugins import ParserFactory
 from lxml import etree
-from wano_calcjob.calculations import clean_dict_for_aiida
-from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob
-from wano_calcjob.parsers import WaNoCalcJobParser
+from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob, clean_dict_for_aiida
+from wano_calcjob.calculations import DepositCalcJob, DepositParser
+from wano_calcjob.WaNoCalcJobParserBase import WaNoCalcJobParser
 
 from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
 from . import TEST_DIR
@@ -80,8 +80,8 @@ def test_process(wano_code, generate_parser):
     }
     inputs.update(outdict)
 
-    result = run_get_node(CalculationFactory('wano'), **inputs)
-    myparser = WaNoCalcJobParser(result.node)
+    result = run_get_node(CalculationFactory('Deposit3'), **inputs)
+    myparser = DepositParser(result.node)
     myparser.parse_from_node(result.node)
     print("here")
 

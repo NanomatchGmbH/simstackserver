@@ -8,6 +8,7 @@ from jinja2 import Template
 from lxml import etree
 
 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+from TreeWalker.TreeWalker import TreeWalker
 
 
 class WaNoCalcJob(CalcJob):
@@ -27,10 +28,18 @@ class WaNoCalcJob(CalcJob):
         "File": orm.SinglefileData
     }
     _myxml = None
+    _wano_path = None
 
     @classmethod
     def wano_repo_path(cls):
-
+        if cls._wano_path is None:
+            myfile = __file__
+            mydir = os.path.dirname(os.path.abspath(os.path.realpath(myfile)))
+            wanodir = os.path.join(mydir,"wanos")
+            cls._wano_path = wanodir
+            return wanodir
+        else:
+            return cls._wano_path
 
     @classmethod
     def define(cls, spec):
@@ -45,7 +54,7 @@ class WaNoCalcJob(CalcJob):
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 1,
         }
-        spec.inputs['metadata']['options']['parser_name'].default = 'wano'
+        spec.inputs['metadata']['options']['parser_name'].default = 'Deposit3'
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES', message='Calculation did not produce all expected output files.')
         spec.exit_code(0, 'EXIT_NORMAL', message='Normal exit condition.')
 
@@ -70,10 +79,14 @@ class WaNoCalcJob(CalcJob):
             spec.output_namespace(ons)
 
         for myfile in output_files:
-            spec.output(myfile, valid_type=SinglefileData)
+            spec.output(cls.clean_path(cls.dot_to_none(myfile)), valid_type=SinglefileData)
 
         exec_command = wmr.exec_command
         spec.input('metadata.options.exec_command', valid_type = str, default = exec_command)
+
+    @classmethod
+    def dot_to_none(cls, inputpath):
+        return inputpath.replace(".","")
 
     @classmethod
     def _set_caches(cls):
@@ -193,7 +206,7 @@ class WaNoCalcJob(CalcJob):
         retrieve_list = []
         for outputfile in self.output_files():
             retrieve_list.append(outputfile)
-        calcinfo.retrieve_temporary_list = retrieve_list
+        calcinfo.retrieve_list = retrieve_list
         print(retrieve_list)
 
         # codeinfo wird mit verdi code an lokale exe gekoppelt
@@ -212,10 +225,6 @@ class WaNoCalcJob(CalcJob):
         # Write WaNo Files into folder and render them there,
         # Add them to local copy list
         # Prepare a `CalcInfo` to be returned to the engine
-
-        calcinfo = datastructures.CalcInfo()
-        calcinfo.codes_info = [codeinfo]
-
         #calcinfo.local_copy_list = [
         #    (self.inputs.file1.uuid, self.inputs.file1.filename, self.inputs.file1.filename),
         #    (self.inputs.file2.uuid, self.inputs.file2.filename, self.inputs.file2.filename),
@@ -224,3 +233,20 @@ class WaNoCalcJob(CalcJob):
 
         #print("STarting with calcinfo", calcinfo.retrieve_list)
         return calcinfo
+
+
+def rewrite_path(inpath):
+    outpath = [WaNoCalcJob.clean_path(mypath) for mypath in inpath]
+    return outpath
+
+
+def clean_dict_for_aiida(input_dictionary):
+    tw = TreeWalker(input_dictionary)
+    visitor_functions = {
+        "path_visitor_function":None,
+        "path_rewrite_function": WaNoCalcJob.clean_path,
+        "subdict_visitor_function": None,
+        "data_visitor_function": None
+    }
+    output_dictionary = tw.walker_from_dict(visitor_functions, capture=True)
+    return output_dictionary
