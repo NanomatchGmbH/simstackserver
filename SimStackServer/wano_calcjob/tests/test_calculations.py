@@ -83,7 +83,11 @@ def test_process(wano_code, generate_parser):
     result = run_get_node(CalculationFactory('Deposit3'), **inputs)
     myparser = DepositParser(result.node)
     myparser.parse_from_node(result.node)
-    print("here")
+    #print("here")
+
+    # Do: Submit Deposit
+    # Write: Small python library to query status
+    #
 
     #computed_diff = result['wano'].get_content()
 
