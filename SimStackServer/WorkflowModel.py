@@ -543,6 +543,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._nmdir = self._init_nanomatch_directory()
         self._logger = logging.getLogger(self.uid)
         self._runtime_variables = {}
+        self._aiida_valuedict = None
 
     @classmethod
     def fields(cls):
@@ -616,11 +617,14 @@ export NANOMATCH=%s
     def run_jobfile(self, queueing_system):
         temphandler = StringLoggingHandler()
         temphandler.setLevel(logging.DEBUG)
+        do_internal = False
+        do_aiida = False
         if queueing_system == "Internal":
             queueing_system = "slurm"
             do_internal = True
-        else:
-            do_internal = False
+        elif queueing_system == "AiiDA":
+            do_aiida = True
+
         rootlogger = logging.getLogger('')
         rootlogger.addHandler(temphandler)
         try:
@@ -670,6 +674,22 @@ export NANOMATCH=%s
                         raise JobSubmitException("Job failed immediately after submission.")
                     #self._async_result_workaround = asyncresult
                     self.set_jobid(asyncresult.job_id)
+                elif do_aiida:
+                    from aiida.orm import load_code
+                    from aiida.plugins import CalculationFactory
+                    wano_code = load_code(label="Deposit3")
+                    inputs =  {
+                        'code': wano_code,
+                        'metadata': {
+                            'options': {
+                                'num_machines': self.resources.nodes
+                            }
+                        }
+                    }
+                    inputs.update(self._aiida_valuedict)
+                    output = submit(CalculationFactory('Deposit3'), **inputs)
+                    jobid = output.uuid
+                    self.set_jobid(jobid)
                 else:
                     from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
                     batchsys, _ = InternalBatchSystem.get_instance()
@@ -700,7 +720,11 @@ export NANOMATCH=%s
 
 
     def abort_job(self):
-        if self.queueing_system != "Internal":
+        if self.queueing_system == "AiiDA":
+            from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
+            myjob = AiiDAJob(self.jobid)
+            myjob.kill()
+        elif self.queueing_system != "Internal":
             asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
             try:
                 asyncresult.status
@@ -767,6 +791,13 @@ export NANOMATCH=%s
             except ValueError as e:
                 # In this case the queueing system did not know about our job anymore. Return True
                 return True # The job will be checked for actual completion anyways
+        elif self.queueing_system == "AiiDA":
+            from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
+            myjob = AiiDAJob(uuid = self.jobid)
+            status = myjob.status()
+            if status in ["completed","cancelled","done","notfound","crashed","failed"]:
+                return True
+            return False
         else:
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
@@ -843,6 +874,14 @@ export NANOMATCH=%s
     @property
     def runtime_directory(self):
         return self._field_values["runtime_directory"]
+
+    def set_aiida_valuedict(self, aiida_valuedict):
+        self._aiida_valuedict = aiida_valuedict
+
+    def get_aiida_valuedict(self, aiida_valuedict):
+        assert self._aiida_valuedict is not None, "AiiDA value dict was not generated before query."
+        return self._aiida_valuedict
+
 
 class DirectedGraph(object):
     def __init__(self, *args, **kwargs):
@@ -1319,6 +1358,7 @@ class Workflow(WorkflowBase):
         self._logger = logging.getLogger("Workflow")
         self._input_variables = {}
         self._output_variables = {}
+        self._prepared_aiida_variables = None
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -1479,6 +1519,8 @@ class Workflow(WorkflowBase):
                                                     output_var_db = self._output_variables,
                                                     runtime_variables = wfem.get_runtime_variables()
                                                     )
+        if self.queueing_system == "AiiDA":
+            wfem.set_aiida_valuedict(wmr.get_valuedict_with_aiida_types())
         input_vars = wmr.get_paths_and_data_dict()
         topath = wfem.path.replace('/','.')
         rendered_exec_command = wmr.render_exec_command(rendered_wano)
@@ -1564,7 +1606,8 @@ class Workflow(WorkflowBase):
             # tofile = myinput[0]
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
-
+            if self.queueing_system == "AiiDA":
+                print("AiiDA stageout here")
             # In case of a glob pattern, we need special care
             if "*" in absfile:
                 allfiles = glob(absfile)
