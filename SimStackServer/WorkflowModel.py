@@ -623,6 +623,7 @@ export NANOMATCH=%s
             queueing_system = "slurm"
             do_internal = True
         elif queueing_system == "AiiDA":
+            queueing_system = "slurm"
             do_aiida = True
 
         rootlogger = logging.getLogger('')
