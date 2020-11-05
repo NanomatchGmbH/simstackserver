@@ -660,7 +660,7 @@ export NANOMATCH=%s
 
                 #with open(self.runtime_directory + "/" + "jobscript.sh", 'wt') as outfile:
                 #    outfile.write(str(jobscript)+ '\n')
-                if not do_internal:
+                if not do_internal and not do_aiida:
                     asyncresult = jobscript.submit()
                     if asyncresult.status == FAILED:
                         queue_to_qsub = {
@@ -678,6 +678,7 @@ export NANOMATCH=%s
                 elif do_aiida:
                     from aiida.orm import load_code
                     from aiida.plugins import CalculationFactory
+                    from aiida.engine import submit
                     wano_code = load_code(label="Deposit3")
                     inputs =  {
                         'code': wano_code,

@@ -34,8 +34,8 @@ class WaNoCalcJob(CalcJob):
     def wano_repo_path(cls):
         if cls._wano_path is None:
             myfile = __file__
-            mydir = os.path.dirname(os.path.abspath(os.path.realpath(myfile)))
-            wanodir = os.path.join(mydir,"wanos")
+            wanodir = os.path.dirname(os.path.abspath(os.path.realpath(myfile)))
+            wanodir = os.path.join(wanodir,"..","wano_repo")
             cls._wano_path = wanodir
             return wanodir
         else:
