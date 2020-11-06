@@ -6,6 +6,8 @@ from os.path import join
 import sys
 
 from aiida.orm import load_code
+from aiida.orm import SinglefileData
+import aiida
 
 from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 
@@ -15,7 +17,7 @@ sys.path.append(ssspath)
 sys.path.append(join(ssspath,"external","treewalker"))
 sys.path.append(join(ssspath,"external","boolexp"))
 
-from aiida.engine import submit
+from aiida.engine import submit, run_get_node
 from lxml import etree
 from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
 
@@ -64,6 +66,7 @@ def test_submit():
     """Test running a calculation
     note this does not test that the expected outputs are created of output parsing"""
     from aiida.plugins import CalculationFactory
+    aiida.load_profile()
 
     rendered_wano = get_parsed_dep_xml()
     outdict = clean_dict_for_aiida(rendered_wano)
@@ -78,13 +81,26 @@ def test_submit():
             },
         }
     }
+    #resources = {
+    #         "num_machines": 1,
+    #         "tot_num_mpiprocs": 1,
+    #         "num_mpiprocs_per_machine": 1,
+    #     }
+    #     "max_wallclock_seconds": 10 * 60 * 60, # 10 hours
+    #     "max_memory_kb": 2000000, # limiting the
+    #     "withmpi": False
+    #}
     inputs.update(outdict)
+    #output = run_get_node(CalculationFactory('Deposit3'), **inputs).node
     output = submit(CalculationFactory('Deposit3'), **inputs)
-    pk = output.pk
-    print("submitted",pk)
+    #pk = output.pk
+    #print("submitted",pk)
     import time
-    time.sleep(30)
-    print(output.is_excepted,output.exception)
+    time.sleep(5)
+    if output.is_excepted:
+        print(output.is_excepted,output.exception)
+    else:
+        print("not excepted")
     print(output.is_failed, output.is_finished_ok)
     print(output.is_terminated, output.is_finished)
     print(output.is_terminated, output.is_finished)
@@ -95,7 +111,20 @@ def test_submit():
     myjon.listdir()
 
     myjon = AiiDAJob(uuid)
+    outputs = myjon.get_outputs()
+    breakpoint()
+
     myjon.listdir()
+    for myoutput in outputs:
+        mynode = outputs[myoutput]
+        if mynode.class_node_type == 'data.singlefile.SinglefileData.':
+            print(mynode)
+            dir(mynode)
+        else:
+            print("not staging",myoutput)
+    assert output.is_finished, "not finished here"
+    outfile = output.outputs["structurecml"]
+    print(outfile.get_content(),"will be saved to", outfile.filename)
     #myjon.delete()
     print("Make this usable from python, not verdi")
 
