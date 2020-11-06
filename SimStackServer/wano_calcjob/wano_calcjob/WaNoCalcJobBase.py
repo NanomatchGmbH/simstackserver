@@ -20,6 +20,7 @@ class WaNoCalcJob(CalcJob):
     _cached_inputs = None
     _cached_outputs = None
     _cached_output_files = None
+    _cached_inputfile_paths = None
     typemap = {
         "Float": orm.Float,
         "Boolean": orm.Bool,
@@ -91,18 +92,25 @@ class WaNoCalcJob(CalcJob):
     @classmethod
     def _set_caches(cls):
         wmr = cls._parse_wano_xml(cls._myxml)
-        namespaces, vars, output_namespaces, outputs, outputfiles = cls._wano_to_namespaces_and_vars(wmr)
+        namespaces, vars, output_namespaces, outputs, outputfiles, inputfile_paths = cls._wano_to_namespaces_and_vars(wmr)
         cls._cached_input_namespaces = namespaces
         cls._cached_inputs = vars
         cls._cached_outputs = outputs
         cls._cached_output_namespaces = output_namespaces
         cls._cached_output_files = outputfiles
+        cls._cached_inputfile_paths = inputfile_paths
 
     @classmethod
     def input_namespaces(cls):
         if cls._cached_input_namespaces is None:
             cls._set_caches()
         return cls._cached_input_namespaces
+
+    @classmethod
+    def inputfile_paths(cls):
+        if cls._cached_inputfile_paths is None:
+            cls._set_caches()
+        return cls._cached_inputfile_paths
 
     @classmethod
     def input_vars(cls):
@@ -159,15 +167,20 @@ class WaNoCalcJob(CalcJob):
     def _wano_to_namespaces_and_vars(cls, wmr):
         mypaths = wmr.get_paths_and_type_dict_aiida()
         namespaces = set()
-        for path in mypaths:
+        inputfile_paths = []
+        for path, mytype in mypaths.items():
             namespace = cls.clean_path(".".join(path.split(".")[:-1]))
             if namespace == "":
                 continue
             else:
                 namespaces.add(namespace)
+            if mytype == SinglfileData:
+                inputfile_paths.append(path)
         outpaths = {}
         for path in mypaths:
             outpaths[cls.clean_path(path)] = mypaths[path]
+        
+        
 
         output_namespaces = ["files"]
         outputfiles = wmr.get_output_files(only_static=True)
@@ -177,7 +190,16 @@ class WaNoCalcJob(CalcJob):
             outputs_in_namespace.append("files.%s"%myfile)
 
         # We return input_namepsaces, input_paths, output_namespaces, output_paths (without files), outputfiles
-        return namespaces, outpaths, output_namespaces, outputs, outputfiles
+        return namespaces, outpaths, output_namespaces, outputs, outputfiles, inputfile_paths
+
+    @classmethod
+    def deref_by_listpath(cls, toderef, listpath):
+        if len(listpath) == 0:
+            return toderef
+        toderef_path = listpath.pop(0)
+        toderef = toderef[toderef_path]
+        return deref_by_listpath(toderef, listpath)
+        
 
     # Take care of the exec command somehow, output 5
     def prepare_for_submission(self, folder):
@@ -206,7 +228,12 @@ class WaNoCalcJob(CalcJob):
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
         calcinfo.local_copy_list = []
-        calcinfo.remote_copy_list = []
+        #calcinfo.remote_copy_list = []
+        for localfile_path in self.inputfile_paths:
+            fileobj = self.deref_by_list_path(self.inputs, localfile_path.split("."))
+            calc_info.local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
+
+
         retrieve_list = []
         for outputfile in self.output_files():
             retrieve_list.append(outputfile)
@@ -215,7 +242,7 @@ class WaNoCalcJob(CalcJob):
         # codeinfo wird mit verdi code an lokale exe gekoppelt
 
         codeinfo = datastructures.CodeInfo()
-        collected_variables = self.inputs
+        #collected_variables = self.inputs
         #exec_command = self.inputs.metadata.options.exec_command
         #Template(exec_command).render(collected_variables)
 
