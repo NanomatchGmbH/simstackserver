@@ -198,6 +198,7 @@ class WaNoCalcJob(CalcJob):
         codeinfo.code_uuid = self.inputs.code.uuid
         #codeinfo.stdout_name = self.options.output_filename
         #codeinfo.cmdline_params = ['-in', self.options.input_filename]
+        codeinfo.cmdline_params = ["exec_command.sh"]
 
         with folder.open("exec_command.sh", 'wt') as outfile:
             outfile.write(self.inputs["metadata"]["options"]["exec_command"] + "\n")
@@ -215,9 +216,8 @@ class WaNoCalcJob(CalcJob):
 
         codeinfo = datastructures.CodeInfo()
         collected_variables = self.inputs
-        exec_command = self.inputs.metadata.options.exec_command
-        codeinfo.cmdline_params = " ".split(exec_command)[1:]
-        Template(exec_command).render(collected_variables)
+        #exec_command = self.inputs.metadata.options.exec_command
+        #Template(exec_command).render(collected_variables)
 
         codeinfo.code_uuid = self.inputs.code.uuid
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
