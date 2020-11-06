@@ -199,6 +199,9 @@ class WaNoCalcJob(CalcJob):
         #codeinfo.stdout_name = self.options.output_filename
         #codeinfo.cmdline_params = ['-in', self.options.input_filename]
 
+        with folder.open("exec_command.sh", 'wt') as outfile:
+            outfile.write(self.inputs["metadata"]["options"]["exec_command"] + "\n")
+
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
         calcinfo.local_copy_list = []
@@ -207,7 +210,6 @@ class WaNoCalcJob(CalcJob):
         for outputfile in self.output_files():
             retrieve_list.append(outputfile)
         calcinfo.retrieve_list = retrieve_list
-        print(retrieve_list)
 
         # codeinfo wird mit verdi code an lokale exe gekoppelt
 
