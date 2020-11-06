@@ -25,10 +25,11 @@ class WaNoCalcJobParser(Parser):
         except NotExistent as _:
             return self.exit(self.exit_codes.ERROR_MISSING_OUTPUT_FILES)
 
-        print("Printing folder contents")
-        for file in retrieved_folder.list_object_names():
-            print(file)
-        print("End of print")
+        #print("Printing folder contents")
+        
+        #for file in retrieved_folder.list_object_names():
+        #    print(file)
+        #print("End of print")
         #print(join(retrieved_folder, "output_dict.yml"))
         #print(join(retrieved_folder, "output_config.ini"))
         #vardict = ReportRenderer.render_everything(retrieved_folder)
@@ -38,8 +39,7 @@ class WaNoCalcJobParser(Parser):
 
         mycls = self._calcJobClass
         for myfile in self._calcJobClass.output_files():
-            print("Opening", myfile)
-            with self.retrieved.open(myfile) as opened_file:
+            with self.retrieved.open(myfile, 'rb') as opened_file:
                 output_node = SinglefileData(file=opened_file)
                 self.out(mycls.clean_path(mycls.dot_to_none(myfile)), output_node)
         return self.exit_codes.EXIT_NORMAL
