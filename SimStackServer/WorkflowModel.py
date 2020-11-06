@@ -679,12 +679,13 @@ export NANOMATCH=%s
                     from aiida.orm import load_code
                     from aiida.plugins import CalculationFactory
                     from aiida.engine import submit
+                    import aiida
+                    aiida.load_profile()
                     wano_code = load_code(label="Deposit3")
                     inputs =  {
                         'code': wano_code,
                         'metadata': {
                             'options': {
-                                'num_machines': self.resources.nodes
                             }
                         }
                     }
@@ -786,7 +787,7 @@ export NANOMATCH=%s
         return self._field_values["queueing_system"]
 
     def completed_or_aborted(self):
-        if self.queueing_system != "Internal":
+        if not self.queueing_system in ["Internal", "AiiDA"] :
             try:
                 asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
                 return asyncresult.status >= 0
@@ -795,7 +796,7 @@ export NANOMATCH=%s
                 return True # The job will be checked for actual completion anyways
         elif self.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
-            myjob = AiiDAJob(uuid = self.jobid)
+            myjob = AiiDAJob(self.jobid)
             status = myjob.status()
             if status in ["completed","cancelled","done","notfound","crashed","failed"]:
                 return True
@@ -1522,7 +1523,10 @@ class Workflow(WorkflowBase):
                                                     runtime_variables = wfem.get_runtime_variables()
                                                     )
         if self.queueing_system == "AiiDA":
-            wfem.set_aiida_valuedict(wmr.get_valuedict_with_aiida_types())
+            from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
+            aiida_rw = wmr.get_valuedict_with_aiida_types()
+            aiida_rw = clean_dict_for_aiida(aiida_rw)
+            wfem.set_aiida_valuedict(aiida_rw)
         input_vars = wmr.get_paths_and_data_dict()
         topath = wfem.path.replace('/','.')
         rendered_exec_command = wmr.render_exec_command(rendered_wano)
@@ -1603,6 +1607,12 @@ class Workflow(WorkflowBase):
     def _postjob_care(self, wfem : WorkflowExecModule):
         jobdirectory = wfem.runtime_directory
 
+        myjobid = wfem.jobid
+        if self.queueing_system == "AiiDA":
+            #For AiiDA, we need to copy the files into the job dir from the database.
+            pass
+
+
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
             # tofile = myinput[0]
@@ -1610,6 +1620,16 @@ class Workflow(WorkflowBase):
             absfile = jobdirectory + '/' + output
             if self.queueing_system == "AiiDA":
                 print("AiiDA stageout here")
+                from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
+                myjob = AiiDAJob(wfem.jobid)
+                outputs = myjob.get_outputs()
+                for myoutput in outputs:
+                    mynode = outputs[myoutput]
+                    if mynode.class_node_type == 'data.singlefile.SinglefileData.':
+                        stagingfilename = mynode.filename
+                        with open(jobdirectory + '/' + stagingfilename, 'wt') as outfile:
+                            outfile.write(mynode.get_content())
+
             # In case of a glob pattern, we need special care
             if "*" in absfile:
                 allfiles = glob(absfile)
