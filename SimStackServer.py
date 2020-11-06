@@ -161,6 +161,11 @@ if __name__ == '__main__':
             logger.debug("Releasing setup PID")
 
             try:
+                import aiida
+                aiida.load_profile()
+            except Exception as e:
+                pass
+            try:
                 if len(sys.argv) >= 2 and not "-D" in sys.argv:
                     wf_filename = sys.argv[1]
                     ss.main_loop(wf_filename)
