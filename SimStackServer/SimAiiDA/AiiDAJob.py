@@ -7,13 +7,13 @@ class AiiDAJob:
     def __init__(self, jobuuid):
         self._my_uuid = jobuuid
         self._mynode = load_node(self._my_uuid)
-        print("Found node", self._mynode)
         if self._mynode.is_excepted:
             print(self._mynode.exception)
 
     def kill(self):
         controller = manager.get_manager().get_process_controller()
-        controller.kill_process(self._mynode.pk)
+        if not self._mynode.is_killed:
+            controller.kill_process(self._mynode.pk)
 
     def status(self):
         if self._mynode.is_finished_ok:
@@ -30,4 +30,6 @@ class AiiDAJob:
 
     def listdir(self):
         wdir = self._mynode.get_remote_workdir()
-        print(wdir)
+
+    def get_outputs(self):
+        return self._mynode.outputs
