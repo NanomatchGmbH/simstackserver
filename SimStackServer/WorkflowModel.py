@@ -691,8 +691,8 @@ export NANOMATCH=%s
                         }
                     }
                     aiida_resource_dict = {
-                        'num_cores_per_machine': self.resources.cpus_per_node,
-                        'num_machines': self.resources.nodes
+                        'num_cores_per_machine': int(self.resources.cpus_per_node),
+                        'num_machines': int(self.resources.nodes)
                     }
                     inputs['metadata']['options']['resources'] = aiida_resource_dict
 
@@ -701,7 +701,7 @@ export NANOMATCH=%s
                         inputs['metadata']['options']['queue_name'] = self.resources.queue
 
                     if self.resources.queue != "default":
-                        inputs['metadata']['options']['max_wallclock_seconds'] = str(self.resources.walltime)
+                        inputs['metadata']['options']['max_wallclock_seconds'] = int(self.resources.walltime)
                     # We also need to set the env variables here
                     # i.e. Nanomatch
                     # UC_PROCESSORS_PER_NODE
@@ -712,8 +712,8 @@ export NANOMATCH=%s
                     envdict["UC_MEMORY_PER_NODE"] = str(self.resources.memory)
                     envdict["NANOMATCH"] = self._nmdir
 
-                    inputs["metadata"]["options"]["exec_command"] = wfem.exec_command
-                    inputs["metadata"]["environment_variables"] = envdict
+                    inputs["metadata"]["options"]["exec_command"] = self.exec_command
+                    inputs["metadata"]["options"]["environment_variables"] = envdict
 
                     inputs.update(self._aiida_valuedict)
                     output = submit(CalculationFactory('Deposit3'), **inputs)
