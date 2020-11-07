@@ -174,14 +174,14 @@ class WaNoCalcJob(CalcJob):
                 continue
             else:
                 namespaces.add(namespace)
-            if mytype == SinglfileData:
+            if mytype == "File":
                 inputfile_paths.append(path)
+            else:
+                print("found type",mytype)
         outpaths = {}
         for path in mypaths:
             outpaths[cls.clean_path(path)] = mypaths[path]
         
-        
-
         output_namespaces = ["files"]
         outputfiles = wmr.get_output_files(only_static=True)
         outputs_in_namespace = []
@@ -198,7 +198,7 @@ class WaNoCalcJob(CalcJob):
             return toderef
         toderef_path = listpath.pop(0)
         toderef = toderef[toderef_path]
-        return deref_by_listpath(toderef, listpath)
+        return cls.deref_by_listpath(toderef, listpath)
         
 
     # Take care of the exec command somehow, output 5
@@ -227,11 +227,14 @@ class WaNoCalcJob(CalcJob):
 
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
-        calcinfo.local_copy_list = []
+        local_copy_list = []
         #calcinfo.remote_copy_list = []
-        for localfile_path in self.inputfile_paths:
-            fileobj = self.deref_by_list_path(self.inputs, localfile_path.split("."))
-            calc_info.local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
+        for localfile_path in self.inputfile_paths():
+            fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
+            local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
+            print("added",local_copy_list[-1])
+        calcinfo.local_copy_list = local_copy_list
+        print(local_copy_list)
 
 
         retrieve_list = []
