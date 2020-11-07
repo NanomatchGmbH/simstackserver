@@ -273,7 +273,7 @@ class ClusterManager(object):
             "pbs": "qsub",
             "lsf": "bsub"
         }
-        if self._queueing_system != "Internal":
+        if not self._queueing_system in ["Internal", "AiiDA"]:
             mycom = queue_to_submission_com[self._queueing_system]
             if extra_conf_mode:
                 com = '"source %s; which %s"'%(self._extra_config, mycom)
