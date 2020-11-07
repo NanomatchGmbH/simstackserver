@@ -1549,10 +1549,9 @@ class Workflow(WorkflowBase):
                                                     runtime_variables = wfem.get_runtime_variables()
                                                     )
         if self.queueing_system == "AiiDA":
-            from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
-            aiida_rw = wmr.get_valuedict_with_aiida_types()
-            aiida_rw = clean_dict_for_aiida(aiida_rw)
-            wfem.set_aiida_valuedict(aiida_rw)
+            do_aiida = True
+        else:
+            do_aiida = False
         input_vars = wmr.get_paths_and_data_dict()
         topath = wfem.path.replace('/','.')
         rendered_exec_command = wmr.render_exec_command(rendered_wano)
@@ -1585,10 +1584,10 @@ class Workflow(WorkflowBase):
 
             for myfile in allfiles:
                 if not path.isfile(myfile):
-                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
+                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source, absfile, tofile))
                     return False
 
-
+        aiida_files = []
 
         """ Same loop again this time copying files """
         for myinput in wfem.inputs:
@@ -1618,14 +1617,29 @@ class Workflow(WorkflowBase):
                                                      output_variables = self._output_variables
                     )
                     actual_tofile = tofile
+                    actual_tofilerel = myinput[0]
                     if globmode:
                         actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
+                        actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                     with open(actual_tofile, 'w') as outfile:
                         outfile.write(rendered_content)
+                    if do_aiida:
+                        from aiida.orm import SinglefileData
+                        aiida_files.append(SinglefileData(actual_tofile_rel, filename=actual_tofile_rel))
                 except Exception as e:
                     self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
                     shutil.copyfile(absfile, tofile)
-
+        if do_aiida:
+            # Here we prep the aiida value dict:
+            from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
+            from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
+            aiida_rw = wmr.get_valuedict_with_aiida_types()
+            aiida_rw["static_local_files"] = {}
+            for myfile in aiida_files:
+                cleaned_filename = WCJ.dot_to_none(myfile.filename)
+                aiida_rw["static_local_files"][cleaned_filename] = myfile
+            aiida_rw = clean_dict_for_aiida(aiida_rw)
+            wfem.set_aiida_valuedict(aiida_rw)
 
         wfem.set_runtime_directory(jobdirectory)
         return True

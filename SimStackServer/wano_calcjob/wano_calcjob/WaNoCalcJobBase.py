@@ -21,6 +21,8 @@ class WaNoCalcJob(CalcJob):
     _cached_outputs = None
     _cached_output_files = None
     _cached_inputfile_paths = None
+    _cached_extra_inputfiles = None
+
     typemap = {
         "Float": orm.Float,
         "Boolean": orm.Bool,
@@ -72,6 +74,11 @@ class WaNoCalcJob(CalcJob):
         for path, vartype in input_vars.items():
             spec.input(path, valid_type=cls.typemap[vartype], required = False)
 
+        spec.input_namespace("static_extra_files", dynamic=True)
+        for path in cls.extra_inputfiles():
+            dotpath = "static_extra_files." + cls.clean_path(cls.dot_to_none(path))
+            spec.input(dotpath, valid_type = orm.SinglefileData, required = True)
+
         wmr:WaNoModelRoot
         output_files = cls.output_files()
         output_namespaces = cls.output_namespaces()
@@ -92,13 +99,14 @@ class WaNoCalcJob(CalcJob):
     @classmethod
     def _set_caches(cls):
         wmr = cls._parse_wano_xml(cls._myxml)
-        namespaces, vars, output_namespaces, outputs, outputfiles, inputfile_paths = cls._wano_to_namespaces_and_vars(wmr)
+        namespaces, vars, output_namespaces, outputs, outputfiles, inputfile_paths, extra_inputfiles = cls._wano_to_namespaces_and_vars(wmr)
         cls._cached_input_namespaces = namespaces
         cls._cached_inputs = vars
         cls._cached_outputs = outputs
         cls._cached_output_namespaces = output_namespaces
         cls._cached_output_files = outputfiles
         cls._cached_inputfile_paths = inputfile_paths
+        cls._cached_extra_inputfiles = extra_inputfiles
 
     @classmethod
     def input_namespaces(cls):
@@ -111,6 +119,12 @@ class WaNoCalcJob(CalcJob):
         if cls._cached_inputfile_paths is None:
             cls._set_caches()
         return cls._cached_inputfile_paths
+
+    @classmethod
+    def extra_inputfiles(cls):
+        if cls._cached_extra_inputfiles is None:
+            cls._set_caches()
+        return cls._cached_extra_inputfiles
 
     @classmethod
     def input_vars(cls):
@@ -176,8 +190,8 @@ class WaNoCalcJob(CalcJob):
                 namespaces.add(namespace)
             if mytype == "File":
                 inputfile_paths.append(path)
-            else:
-                print("found type",mytype)
+            #else:
+            #    print("found type",mytype)
         outpaths = {}
         for path in mypaths:
             outpaths[cls.clean_path(path)] = mypaths[path]
@@ -189,8 +203,9 @@ class WaNoCalcJob(CalcJob):
         for myfile in outputfiles:
             outputs_in_namespace.append("files.%s"%myfile)
 
+        extra_inputfile_paths = wmr.get_extra_inputs_aiida()
         # We return input_namepsaces, input_paths, output_namespaces, output_paths (without files), outputfiles
-        return namespaces, outpaths, output_namespaces, outputs, outputfiles, inputfile_paths
+        return namespaces, outpaths, output_namespaces, outputs, outputfiles, inputfile_paths, extra_inputfile_paths
 
     @classmethod
     def deref_by_listpath(cls, toderef, listpath):
@@ -229,12 +244,16 @@ class WaNoCalcJob(CalcJob):
         calcinfo.codes_info = [codeinfo]
         local_copy_list = []
         #calcinfo.remote_copy_list = []
+        for localfile_path_without in self.extra_inputfiles():
+            localfile_path = "static_extra_files." + self.dot_to_none(localfile_path_without)
+            fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
+            local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
+
         for localfile_path in self.inputfile_paths():
             fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
             local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
-            print("added",local_copy_list[-1])
+
         calcinfo.local_copy_list = local_copy_list
-        print(local_copy_list)
 
 
         retrieve_list = []

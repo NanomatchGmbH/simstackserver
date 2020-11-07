@@ -52,6 +52,11 @@ def get_parsed_dep_xml():
                                                 runtime_variables=None
     )
     rendered_wano = wmr.get_valuedict_with_aiida_types()
+    import aiida
+    aiida.load_profile()
+    rendered_wano["static_extra_files"] = {}
+    for dest, src in wmr.input_files:
+        rendered_wano["static_extra_files"][WaNoCalcJob.dot_to_none(dest)] = orm.SinglefileData(join(depdir(), src), filename=dest)
     return rendered_wano
 
 def test_clean_aiida_dict():
@@ -79,6 +84,7 @@ def test_process(wano_code, generate_parser):
         }
     }
     inputs.update(outdict)
+
 
     result = run_get_node(CalculationFactory('Deposit3'), **inputs)
     myparser = DepositParser(result.node)
