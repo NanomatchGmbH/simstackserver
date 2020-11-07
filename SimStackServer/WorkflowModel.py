@@ -1584,7 +1584,6 @@ class Workflow(WorkflowBase):
 
             for myfile in allfiles:
                 if not path.isfile(myfile):
-                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source, absfile, tofile))
                     return False
 
         aiida_files = []
@@ -1609,6 +1608,11 @@ class Workflow(WorkflowBase):
                 if not path.isfile(absfile):
                     self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                     return False
+                actual_tofile = tofile
+                actual_tofile_rel = myinput[0]
+                if globmode:
+                    actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
+                    actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                 try:
                     with open(absfile, 'r') as infile:
                         absfile_content = infile.read()
@@ -1616,28 +1620,23 @@ class Workflow(WorkflowBase):
                                                      input_variables = self._input_variables,
                                                      output_variables = self._output_variables
                     )
-                    actual_tofile = tofile
-                    actual_tofilerel = myinput[0]
-                    if globmode:
-                        actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
-                        actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                     with open(actual_tofile, 'w') as outfile:
                         outfile.write(rendered_content)
-                    if do_aiida:
-                        from aiida.orm import SinglefileData
-                        aiida_files.append(SinglefileData(actual_tofile_rel, filename=actual_tofile_rel))
                 except Exception as e:
                     self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
                     shutil.copyfile(absfile, tofile)
+                if do_aiida:
+                    from aiida.orm import SinglefileData
+                    aiida_files.append(SinglefileData(actual_tofile, filename=actual_tofile_rel))
         if do_aiida:
             # Here we prep the aiida value dict:
             from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
             aiida_rw = wmr.get_valuedict_with_aiida_types()
-            aiida_rw["static_local_files"] = {}
+            aiida_rw["static_extra_files"] = {}
             for myfile in aiida_files:
                 cleaned_filename = WCJ.dot_to_none(myfile.filename)
-                aiida_rw["static_local_files"][cleaned_filename] = myfile
+                aiida_rw["static_extra_files"][cleaned_filename] = myfile
             aiida_rw = clean_dict_for_aiida(aiida_rw)
             wfem.set_aiida_valuedict(aiida_rw)
 
