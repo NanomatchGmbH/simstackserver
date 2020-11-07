@@ -1666,8 +1666,9 @@ class Workflow(WorkflowBase):
                     mynode = outputs[myoutput]
                     if mynode.class_node_type == 'data.singlefile.SinglefileData.':
                         stagingfilename = mynode.filename
-                        with open(jobdirectory + '/' + stagingfilename, 'wt') as outfile:
-                            outfile.write(mynode.get_content())
+                        with mynode.open(mode="rb") as infile:
+                            with open(jobdirectory + '/' + stagingfilename, 'wb') as outfile:
+                                outfile.write(infile.read())
 
             # In case of a glob pattern, we need special care
             if "*" in absfile:
