@@ -1211,6 +1211,10 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_paths_and_data_dict(self):
         return self._get_paths_and_something_helper(subdict_skiplevel, lambda x : x.assemble_paths_and_values)
 
+    def get_extra_inputs_aiida(self):
+        outfiles = [ ftuple[0] for ftuple in self.input_files ]
+        return outfiles
+
     def get_paths_and_type_dict_aiida(self):
         outdict = {}
         self.model_to_dict(outdict)
