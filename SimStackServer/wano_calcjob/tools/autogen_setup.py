@@ -9,13 +9,15 @@ with open("setup_template.json",'rt') as infile:
 with open("wano_calcjob/calculations.py.template", 'rt') as infile:
     calcpytemplate = infile.read()
 
+calcpy = StringIO()
+calcpy.write(calcpytemplate)
 def get_per_class_template(wanoname, wanodir, wanoxml):
     classtemplate = """class %sCalcJob(WaNoCalcJob):
     _myxml = join(WaNoCalcJob.wano_repo_path(), "%s", "%s.xml")
-
 class %sParser(WaNoCalcJobParser):
-    _calcJobClass = DepositCalcJob
-""" %(wanoname, wanodir, wanoxml, wanoname)
+    _calcJobClass = %sCalcJob
+
+""" %(wanoname, wanodir, wanoxml, wanoname, wanoname)
     return classtemplate
 
 
@@ -53,10 +55,13 @@ for mydir in glob("wano_repo/*"):
             parsername = "%s = wano_calcjob.calculations:%sParser"%(wano_name, wano_name)
             entry_points["aiida.calculations"].append(calcname)
             entry_points["aiida.parsers"].append(parsername)
-            myclass = get_per_class_template(wano_name, mydir[10:], dirname + ".xml")
-            print(myclass)
+            myclass = get_per_class_template(wano_name, mydir[10:], dirname)
+            calcpy.write(myclass)
 my["entry_points"] = entry_points
 with open("setup.json",'wt') as outfile:
     json.dump(my, outfile, indent=4)
 
+calcpy.flush()
+with open("wano_calcjob/calculations.py", "wt") as outfile:
+    outfile.write(calcpy.getvalue())
 
