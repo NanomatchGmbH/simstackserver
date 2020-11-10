@@ -5,12 +5,14 @@ from os.path import join
 from io import StringIO
 with open("setup_template.json",'rt') as infile:
     my = json.load(infile)
+    assert "entry_points" in my
 
 with open("wano_calcjob/calculations.py.template", 'rt') as infile:
     calcpytemplate = infile.read()
 
 calcpy = StringIO()
 calcpy.write(calcpytemplate)
+execsh = open("register_calcjobs.sh", 'wt')
 def get_per_class_template(wanoname, wanodir, wanoxml):
     classtemplate = """class %sCalcJob(WaNoCalcJob):
     _myxml = join(WaNoCalcJob.wano_repo_path(), "%s", "%s.xml")
@@ -20,8 +22,11 @@ class %sParser(WaNoCalcJobParser):
 """ %(wanoname, wanodir, wanoxml, wanoname, wanoname)
     return classtemplate
 
+def get_exec_template(wanoname):
+    mydir = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
+    exec_template = """verdi code setup -Y local -L %s -P %s  --on-computer  -D %s  --remote-abs-path %s --prepend-text "echo \\"Starting %s\\"" --append-text "echo \\"%s finished\\"" """ %(wanoname, wanoname, wanoname, join(mydir, "wano-aiida-exec"), wanoname, wanoname)
+    return exec_template
 
-assert "entry_points" in my
 """
     "entry_points": {
         "aiida.data": [
@@ -57,6 +62,8 @@ for mydir in glob("wano_repo/*"):
             entry_points["aiida.parsers"].append(parsername)
             myclass = get_per_class_template(wano_name, mydir[10:], dirname)
             calcpy.write(myclass)
+            execsh.write(get_exec_template(wano_name) + "\n")
+
 my["entry_points"] = entry_points
 with open("setup.json",'wt') as outfile:
     json.dump(my, outfile, indent=4)
@@ -65,3 +72,4 @@ calcpy.flush()
 with open("wano_calcjob/calculations.py", "wt") as outfile:
     outfile.write(calcpy.getvalue())
 
+execsh.close()
