@@ -295,7 +295,11 @@ def subdict_skiplevel_to_aiida_type(subdict,
             "File": orm.SinglefileData
         }
         if mytype in basetypes:
-            newsubdict = basetypes[subdict["Type"]](subdict["content"])
+            if mytype != "File":
+                newsubdict = basetypes[subdict["Type"]](subdict["content"])
+            else:
+                newsubdict = orm.SinglefileData(subdict["content"], filename = subdict["logical_name"])
+
 
     if newsubdict is not None:
         pvf = call_info["path_visitor_function"]

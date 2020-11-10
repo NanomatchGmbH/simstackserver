@@ -720,7 +720,7 @@ export NANOMATCH=%s
                     inputs["metadata"]["options"]["environment_variables"] = envdict
 
                     inputs.update(self._aiida_valuedict)
-                    output = submit(CalculationFactory('Deposit3'), **inputs)
+                    output = submit(CalculationFactory(wano_name), **inputs)
                     jobid = output.uuid
                     self.set_jobid(jobid)
                 else:
@@ -1639,6 +1639,7 @@ class Workflow(WorkflowBase):
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
             aiida_rw = wmr.get_valuedict_with_aiida_types()
             aiida_rw["static_extra_files"] = {}
+            aiida_files.append(SinglefileData("%s/rendered_wano.yml"%jobdirectory, filename="rendered_wano.yml"))
             for myfile in aiida_files:
                 cleaned_filename = WCJ.dot_to_none(myfile.filename)
                 aiida_rw["static_extra_files"][cleaned_filename] = myfile

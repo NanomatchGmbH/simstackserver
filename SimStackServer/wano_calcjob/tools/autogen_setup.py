@@ -16,10 +16,11 @@ execsh = open("register_calcjobs.sh", 'wt')
 def get_per_class_template(wanoname, wanodir, wanoxml):
     classtemplate = """class %sCalcJob(WaNoCalcJob):
     _myxml = join(WaNoCalcJob.wano_repo_path(), "%s", "%s.xml")
+    _parser_name = "%s"
 class %sParser(WaNoCalcJobParser):
     _calcJobClass = %sCalcJob
 
-""" %(wanoname, wanodir, wanoxml, wanoname, wanoname)
+""" %(wanoname, wanodir, wanoxml, wanoname, wanoname, wanoname)
     return classtemplate
 
 def get_exec_template(wanoname):
