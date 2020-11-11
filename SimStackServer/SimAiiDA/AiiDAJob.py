@@ -23,7 +23,7 @@ class AiiDAJob:
         elif self._mynode.is_sealed:
             return "inprogress"
         else:
-            return "crashed"
+            return "inprogress"
 
     def delete(self):
         delete_nodes([self._mynode.pk], force=True)

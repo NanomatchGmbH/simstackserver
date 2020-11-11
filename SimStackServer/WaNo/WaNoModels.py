@@ -1386,6 +1386,7 @@ class WaNoItemFileModel(AbstractWanoModel):
         self.is_local_file = True
         self.mystring = "FileData"
         self.logical_name = "FileDataLogical"
+        self._cached_logical_name = "unset"
 
 
     def parse_from_xml(self, xml):
@@ -1441,11 +1442,15 @@ class WaNoItemFileModel(AbstractWanoModel):
         if self.view is not None:
             self.view.line_edited()
         rendered_logical_name = Template(self.logical_name,newline_sequence='\n').render(wano=rendered_wano, path=path)
+        outfile = None
         if not self.visible():
             if sys.version_info >= (3, 0):
-                return rendered_logical_name
+                outfile = rendered_logical_name
             else:
-                return rendered_logical_name.encode("utf-8")
+                outfile = rendered_logical_name.encode("utf-8")
+        if outfile is not None:
+            self._cached_logical_name = outfile
+            return outfile
         #Upload and copy
         #print(submitdir)
         if submitdir is not None and self.is_local_file:
@@ -1455,9 +1460,18 @@ class WaNoItemFileModel(AbstractWanoModel):
             #print("Copying",self._root.wano_dir_root,rendered_logical_name,destdir)
             shutil.copy(self.mystring,destfile)
         if sys.version_info >= (3,0):
-            return rendered_logical_name
+            outfile = rendered_logical_name
         else:
-            return rendered_logical_name.encode("utf-8")
+            outfile = rendered_logical_name.encode("utf-8")
+        self._cached_logical_name = outfile
+        return outfile
+
+    def cached_logical_name(self):
+        return self._cached_logical_name
+
+    def model_to_dict(self, outdict):
+        outdict["logical_name"] = self._cached_logical_name
+        super().model_to_dict(outdict)
 
 
 

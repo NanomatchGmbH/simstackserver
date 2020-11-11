@@ -22,6 +22,7 @@ class WaNoCalcJob(CalcJob):
     _cached_output_files = None
     _cached_inputfile_paths = None
     _cached_extra_inputfiles = None
+    _parser_name = None
 
     typemap = {
         "Float": orm.Float,
@@ -57,7 +58,7 @@ class WaNoCalcJob(CalcJob):
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 1,
         }
-        spec.inputs['metadata']['options']['parser_name'].default = 'Deposit3'
+        spec.inputs['metadata']['options']['parser_name'].default = cls._parser_name
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES', message='Calculation did not produce all expected output files.')
         spec.exit_code(0, 'EXIT_NORMAL', message='Normal exit condition.')
 
@@ -78,6 +79,7 @@ class WaNoCalcJob(CalcJob):
         for path in cls.extra_inputfiles():
             dotpath = "static_extra_files." + cls.clean_path(cls.dot_to_none(path))
             spec.input(dotpath, valid_type = orm.SinglefileData, required = True)
+        spec.input("static_extra_files.rendered_wanoyml", valid_type=orm.SinglefileData)
 
         wmr:WaNoModelRoot
         output_files = cls.output_files()
@@ -174,6 +176,8 @@ class WaNoCalcJob(CalcJob):
             .replace("(","_")\
             .replace(")","_")\
             .replace(",","_")\
+            .replace("+","_")\
+            .replace("-","_")\
             .replace("__","_")\
             .strip("_")
 
@@ -212,7 +216,7 @@ class WaNoCalcJob(CalcJob):
         if len(listpath) == 0:
             return toderef
         toderef_path = listpath.pop(0)
-        toderef = toderef[toderef_path]
+        toderef = toderef[cls.clean_path(toderef_path)]
         return cls.deref_by_listpath(toderef, listpath)
         
 
@@ -249,6 +253,7 @@ class WaNoCalcJob(CalcJob):
             fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
             local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
 
+        local_copy_list.append( (self.inputs.static_extra_files.rendered_wanoyml.uuid, "rendered_wano.yml", "rendered_wano.yml") )
         for localfile_path in self.inputfile_paths():
             fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
             local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))

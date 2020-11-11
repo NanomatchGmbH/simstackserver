@@ -544,6 +544,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._logger = logging.getLogger(self.uid)
         self._runtime_variables = {}
         self._aiida_valuedict = None
+        self._xmlbasename = os.path.basename(self.wano_xml)
 
     @classmethod
     def fields(cls):
@@ -684,8 +685,11 @@ export NANOMATCH=%s
                     from aiida.plugins import CalculationFactory
                     from aiida.engine import submit
                     import aiida
+                    valdict = self._aiida_valuedict
+                    wano_name = valdict["wano_name"]
+                    del valdict["wano_name"]
                     aiida.load_profile()
-                    wano_code = load_code(label="Deposit3")
+                    wano_code = load_code(label=wano_name)
                     inputs =  {
                         'code': wano_code,
                         'metadata': {
@@ -720,7 +724,7 @@ export NANOMATCH=%s
                     inputs["metadata"]["options"]["environment_variables"] = envdict
 
                     inputs.update(self._aiida_valuedict)
-                    output = submit(CalculationFactory('Deposit3'), **inputs)
+                    output = submit(CalculationFactory(wano_name), **inputs)
                     jobid = output.uuid
                     self.set_jobid(jobid)
                 else:
@@ -1544,6 +1548,7 @@ class Workflow(WorkflowBase):
         wmr = wano_without_view_constructor_helper(wmr)
         wmr.datachanged_force()
         wmr.datachanged_force()
+        
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
@@ -1588,7 +1593,6 @@ class Workflow(WorkflowBase):
 
             for myfile in allfiles:
                 if not path.isfile(myfile):
-                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source, absfile, tofile))
                     return False
 
         aiida_files = []
@@ -1613,6 +1617,11 @@ class Workflow(WorkflowBase):
                 if not path.isfile(absfile):
                     self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                     return False
+                actual_tofile = tofile
+                actual_tofile_rel = myinput[0]
+                if globmode:
+                    actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
+                    actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                 try:
                     with open(absfile, 'r') as infile:
                         absfile_content = infile.read()
@@ -1620,29 +1629,26 @@ class Workflow(WorkflowBase):
                                                      input_variables = self._input_variables,
                                                      output_variables = self._output_variables
                     )
-                    actual_tofile = tofile
-                    actual_tofilerel = myinput[0]
-                    if globmode:
-                        actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
-                        actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                     with open(actual_tofile, 'w') as outfile:
                         outfile.write(rendered_content)
-                    if do_aiida:
-                        from aiida.orm import SinglefileData
-                        aiida_files.append(SinglefileData(actual_tofile_rel, filename=actual_tofile_rel))
                 except Exception as e:
                     self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
                     shutil.copyfile(absfile, tofile)
+                if do_aiida:
+                    from aiida.orm import SinglefileData
+                    aiida_files.append(SinglefileData(actual_tofile, filename=actual_tofile_rel))
         if do_aiida:
             # Here we prep the aiida value dict:
             from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
             aiida_rw = wmr.get_valuedict_with_aiida_types()
-            aiida_rw["static_local_files"] = {}
+            aiida_rw["static_extra_files"] = {}
+            aiida_files.append(SinglefileData("%s/rendered_wano.yml"%jobdirectory, filename="rendered_wano.yml"))
             for myfile in aiida_files:
                 cleaned_filename = WCJ.dot_to_none(myfile.filename)
-                aiida_rw["static_local_files"][cleaned_filename] = myfile
+                aiida_rw["static_extra_files"][cleaned_filename] = myfile
             aiida_rw = clean_dict_for_aiida(aiida_rw)
+            aiida_rw["wano_name"] = wmr.name
             wfem.set_aiida_valuedict(aiida_rw)
 
         wfem.set_runtime_directory(jobdirectory)
@@ -1652,10 +1658,6 @@ class Workflow(WorkflowBase):
         jobdirectory = wfem.runtime_directory
 
         myjobid = wfem.jobid
-        if self.queueing_system == "AiiDA":
-            #For AiiDA, we need to copy the files into the job dir from the database.
-            pass
-
 
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
@@ -1663,7 +1665,6 @@ class Workflow(WorkflowBase):
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
             if self.queueing_system == "AiiDA":
-                print("AiiDA stageout here")
                 from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
                 myjob = AiiDAJob(wfem.jobid)
                 outputs = myjob.get_outputs()
@@ -1671,8 +1672,9 @@ class Workflow(WorkflowBase):
                     mynode = outputs[myoutput]
                     if mynode.class_node_type == 'data.singlefile.SinglefileData.':
                         stagingfilename = mynode.filename
-                        with open(jobdirectory + '/' + stagingfilename, 'wt') as outfile:
-                            outfile.write(mynode.get_content())
+                        with mynode.open(mode="rb") as infile:
+                            with open(jobdirectory + '/' + stagingfilename, 'wb') as outfile:
+                                outfile.write(infile.read())
 
             # In case of a glob pattern, we need special care
             if "*" in absfile:

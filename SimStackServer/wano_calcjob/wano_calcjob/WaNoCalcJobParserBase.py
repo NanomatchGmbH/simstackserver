@@ -39,9 +39,13 @@ class WaNoCalcJobParser(Parser):
 
         mycls = self._calcJobClass
         for myfile in self._calcJobClass.output_files():
-            with self.retrieved.open(myfile, 'rb') as opened_file:
-                output_node = SinglefileData(file=opened_file)
-                self.out(mycls.clean_path(mycls.dot_to_none(myfile)), output_node)
+            try:
+                with self.retrieved.open(myfile, 'rb') as opened_file:
+                    output_node = SinglefileData(file=opened_file)
+                    self.out(mycls.clean_path(mycls.dot_to_none(myfile)), output_node)
+            except NotExistent as _:
+                print("Could not find file %s"%myfile)
+                return self.exit(self.exit_codes.ERROR_MISSING_OUTPUT_FILES)
         return self.exit_codes.EXIT_NORMAL
         """
             def out_many(self, out_dict):

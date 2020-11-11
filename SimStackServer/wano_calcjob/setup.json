@@ -14,19 +14,49 @@
     ],
     "version": "0.1.0a0",
     "entry_points": {
-        "aiida.data": [
-        ],
+        "aiida.data": [],
         "aiida.calculations": [
-            "Deposit3 = wano_calcjob.calculations:DepositCalcJob"
+            "lightforge2 = wano_calcjob.calculations:lightforge2CalcJob",
+            "IntraOverlap = wano_calcjob.calculations:IntraOverlapCalcJob",
+            "ExcitonPreProcessor = wano_calcjob.calculations:ExcitonPreProcessorCalcJob",
+            "DihedralParametrizer2 = wano_calcjob.calculations:DihedralParametrizer2CalcJob",
+            "StokesShiftAnalysis = wano_calcjob.calculations:StokesShiftAnalysisCalcJob",
+            "Deposit3 = wano_calcjob.calculations:Deposit3CalcJob",
+            "Emission = wano_calcjob.calculations:EmissionCalcJob",
+            "lightforge2_analysis = wano_calcjob.calculations:lightforge2_analysisCalcJob",
+            "Script = wano_calcjob.calculations:ScriptCalcJob",
+            "TCAD = wano_calcjob.calculations:TCADCalcJob",
+            "OrientationAnalysis = wano_calcjob.calculations:OrientationAnalysisCalcJob",
+            "ExtendJs = wano_calcjob.calculations:ExtendJsCalcJob",
+            "QuantumPatch3 = wano_calcjob.calculations:QuantumPatch3CalcJob",
+            "GSPAnalysis = wano_calcjob.calculations:GSPAnalysisCalcJob",
+            "Parametrizer3 = wano_calcjob.calculations:Parametrizer3CalcJob",
+            "VariableExporter = wano_calcjob.calculations:VariableExporterCalcJob"
         ],
         "aiida.parsers": [
-            "Deposit3 = wano_calcjob.calculations:DepositParser"
+            "lightforge2 = wano_calcjob.calculations:lightforge2Parser",
+            "IntraOverlap = wano_calcjob.calculations:IntraOverlapParser",
+            "ExcitonPreProcessor = wano_calcjob.calculations:ExcitonPreProcessorParser",
+            "DihedralParametrizer2 = wano_calcjob.calculations:DihedralParametrizer2Parser",
+            "StokesShiftAnalysis = wano_calcjob.calculations:StokesShiftAnalysisParser",
+            "Deposit3 = wano_calcjob.calculations:Deposit3Parser",
+            "Emission = wano_calcjob.calculations:EmissionParser",
+            "lightforge2_analysis = wano_calcjob.calculations:lightforge2_analysisParser",
+            "Script = wano_calcjob.calculations:ScriptParser",
+            "TCAD = wano_calcjob.calculations:TCADParser",
+            "OrientationAnalysis = wano_calcjob.calculations:OrientationAnalysisParser",
+            "ExtendJs = wano_calcjob.calculations:ExtendJsParser",
+            "QuantumPatch3 = wano_calcjob.calculations:QuantumPatch3Parser",
+            "GSPAnalysis = wano_calcjob.calculations:GSPAnalysisParser",
+            "Parametrizer3 = wano_calcjob.calculations:Parametrizer3Parser",
+            "VariableExporter = wano_calcjob.calculations:VariableExporterParser"
         ],
-        "aiida.cmdline.data": [
-        ]
+        "aiida.cmdline.data": []
     },
     "include_package_data": true,
-    "setup_requires": ["reentry"],
+    "setup_requires": [
+        "reentry"
+    ],
     "reentry_register": true,
     "install_requires": [
         "aiida-core>=1.1.0,<2.0.0",
