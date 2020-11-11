@@ -635,7 +635,11 @@ export NANOMATCH=%s
             queue = self.resources.queue
             kwargs = {}
             kwargs["queue"] = self.resources.queue
-            if queue == "default" and queueing_system in ["pbs","slurm"]:
+            if queue is None or queue == "None" or queue == "":
+                # In case of empty string or unset, we let clusterjob decide
+                del kwargs["queue"]
+            if queue  == "default" and queueing_system in ["pbs","slurm"]:
+                # In case of pbs and slurm we let the queueing system decide:
                 del kwargs["queue"]
 
             mytime = self.resources.walltime
