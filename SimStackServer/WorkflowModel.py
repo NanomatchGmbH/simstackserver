@@ -689,7 +689,7 @@ export NANOMATCH=%s
                     wano_name = valdict["wano_name"]
                     del valdict["wano_name"]
                     aiida.load_profile()
-                    wano_code = load_code(label=wano_name)
+                    wano_code = load_code(label="wano-default-exec")
                     inputs =  {
                         'code': wano_code,
                         'metadata': {
