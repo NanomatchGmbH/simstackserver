@@ -699,7 +699,8 @@ export NANOMATCH=%s
                         }
                     }
                     aiida_resource_dict = {
-                        'num_cores_per_machine': int(self.resources.cpus_per_node),
+                        'num_mpiprocs_per_machine': int(self.resources.cpus_per_node),
+                        'num_cores_per_mpiproc' : 1,
                         'num_machines': int(self.resources.nodes)
                     }
                     inputs['metadata']['options']['resources'] = aiida_resource_dict
