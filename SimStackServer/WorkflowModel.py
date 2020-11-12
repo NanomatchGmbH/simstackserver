@@ -1596,6 +1596,7 @@ class Workflow(WorkflowBase):
                     return False
 
         aiida_files = []
+        aiida_files_by_relpath = {}
 
         """ Same loop again this time copying files """
         for myinput in wfem.inputs:
@@ -1636,12 +1637,14 @@ class Workflow(WorkflowBase):
                     shutil.copyfile(absfile, tofile)
                 if do_aiida:
                     from aiida.orm import SinglefileData
-                    aiida_files.append(SinglefileData(actual_tofile, filename=actual_tofile_rel))
+                    afile = SinglefileData(actual_tofile, filename=actual_tofile_rel)
+                    aiida_files.append(afile)
+                    aiida_files_by_relpath[actual_tofile_rel] = afile
         if do_aiida:
             # Here we prep the aiida value dict:
             from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
-            aiida_rw = wmr.get_valuedict_with_aiida_types()
+            aiida_rw = wmr.get_valuedict_with_aiida_types(aiida_files_by_relpath = aiida_files_by_relpath)
             aiida_rw["static_extra_files"] = {}
             aiida_files.append(SinglefileData("%s/rendered_wano.yml"%jobdirectory, filename="rendered_wano.yml"))
             for myfile in aiida_files:

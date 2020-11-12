@@ -1,3 +1,5 @@
+from os.path import join
+
 from TreeWalker.TreeWalker import TreeWalker
 
 def attribute_dict_to_normal_dict(attribute_dict):
@@ -272,7 +274,7 @@ def subdict_skiplevel_to_type(subdict,
     return None
 
 def subdict_skiplevel_to_aiida_type(subdict,
-                      call_info):
+                      call_info, aiida_files_by_relpath):
     newsubdict = None
     try:
         newsubdict = subdict["content"]
@@ -298,7 +300,9 @@ def subdict_skiplevel_to_aiida_type(subdict,
             if mytype != "File":
                 newsubdict = basetypes[subdict["Type"]](subdict["content"])
             else:
-                newsubdict = orm.SinglefileData(subdict["content"], filename = subdict["logical_name"])
+                relfilename = subdict["logical_name"]
+                myfileobj = aiida_files_by_relpath[relfilename]
+                newsubdict = myfileobj
 
 
     if newsubdict is not None:

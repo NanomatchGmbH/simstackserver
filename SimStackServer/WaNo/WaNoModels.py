@@ -3,6 +3,7 @@
 
 #from pyura.pyura.helpers import trace_to_logger
 import logging
+from functools import partial
 from os.path import join
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
@@ -1230,12 +1231,15 @@ class WaNoModelRoot(WaNoModelDictLike):
                   )
         return pc.path_to_value
 
-    def get_valuedict_with_aiida_types(self):
+    def get_valuedict_with_aiida_types(self, aiida_files_by_relpath = None):
+        if aiida_files_by_relpath is None:
+            aiida_files_by_relpath = {}
         outdict = {}
         self.model_to_dict(outdict)
         outdict = tree_list_to_dict(outdict)
         tw = TreeWalker(outdict)
-        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel_to_aiida_type,
+        svf = partial(subdict_skiplevel_to_aiida_type, aiida_files_by_relpath = aiida_files_by_relpath)
+        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=svf,
                              data_visitor_function=None)
         return skipdict
 
