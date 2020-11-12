@@ -22,11 +22,6 @@ class %sParser(WaNoCalcJobParser):
 """ %(wanoname, wanodir, wanoxml, wanoname, wanoname, wanoname)
     return classtemplate
 
-def get_exec_template(wanoname):
-    mydir = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
-    exec_template = """verdi code setup -Y local -L %s -P %s  --on-computer  -D %s  --remote-abs-path %s --prepend-text "echo \\"Starting %s\\"" --append-text "echo \\"%s finished\\"" """ %(wanoname, "arithmetic.add", wanoname, join(mydir, "wano-aiida-exec"), wanoname, wanoname)
-    return exec_template
-
 """
     "entry_points": {
         "aiida.data": [
@@ -71,5 +66,3 @@ calcpy.flush()
 with open("wano_calcjob/calculations.py", "wt") as outfile:
     outfile.write(calcpy.getvalue())
 
-with open("register_calcjobs.sh", 'wt') as execsh:
-    execsh.write(get_exec_template("wano-default-exec"))
