@@ -6,4 +6,6 @@ then
     kill $PID
 else
     echo "Did not find running SimStackServer process for user $USER"
+    exit 0
 fi 
+sleep 20 && kill -KILL $PID 2> /dev/null &
