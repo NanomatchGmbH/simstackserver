@@ -354,10 +354,9 @@ class ClusterManager(object):
         try:
             self._http_base_address = self.get_http_server_address()
             print("Connected HTTP",self._http_base_address)
-
         except Exception as e:
             print(e)
-            pass
+            raise ConnectionError("Could not connect http tunnel. Error was: %s"%e) from e
 
     def _recv_ack_message(self):
         messagetype, message = self._recv_message()
