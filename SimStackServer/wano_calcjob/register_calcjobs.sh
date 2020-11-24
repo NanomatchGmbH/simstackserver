@@ -1,1 +1,0 @@
-verdi code setup -Y local -L wano-default-exec -P arithmetic.add  --on-computer  -D wano-default-exec  --remote-abs-path /home/strunk/software/nanomatch_v4/nanomatch/V4/SimStackServer/SimStackServer/wano_calcjob/tools/wano-aiida-exec --prepend-text "echo \"Starting wano-default-exec\"" --append-text "echo \"wano-default-exec finished\"" 

@@ -705,8 +705,7 @@ export NANOMATCH=%s
                     }
                     inputs['metadata']['options']['resources'] = aiida_resource_dict
 
-
-                    if self.resources.queue != "default":
+                    if not self.resources.queue in ["default", "None", None]:
                         inputs['metadata']['options']['queue_name'] = self.resources.queue
 
                     if self.resources.queue != "default":
