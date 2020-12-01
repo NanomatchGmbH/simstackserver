@@ -772,6 +772,11 @@ export NANOMATCH=%s
             except FileNotFoundError as e:
                 # In this case the queueing system was most probably wrong.
                 pass
+            except Exception as e:
+                # This is a workaround, because we somehow cannot catch clusterjob exceptions
+                if "StatusParseError" in type(e).__name__:
+                    return True
+                raise
         else:
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
@@ -828,6 +833,12 @@ export NANOMATCH=%s
             except ValueError as e:
                 # In this case the queueing system did not know about our job anymore. Return True
                 return True # The job will be checked for actual completion anyways
+            except Exception as e:
+                # This is a workaround, because we somehow cannot catch clusterjob exceptions
+                if "StatusParseError" in type(e).__name__:
+                    return True
+                raise
+
         elif self.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(self.jobid)
