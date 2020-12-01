@@ -27,6 +27,9 @@ import ast
 
 from jinja2 import Template
 
+class FileNotFoundErrorSimStack(FileNotFoundError):
+    pass
+
 from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type, \
     subdict_skiplevel_to_aiida_type
 from TreeWalker.flatten_dict import flatten_dict
@@ -1047,7 +1050,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
             if not os.path.exists(os.path.join(joined_filename)):
                 print("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
-                raise OSError("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
+                raise FileNotFoundErrorSimStack("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
 
             outfile = os.path.join(basefolder,remote_file)
             dirn=os.path.dirname(outfile)
