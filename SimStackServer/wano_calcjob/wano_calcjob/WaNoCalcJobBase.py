@@ -178,6 +178,8 @@ class WaNoCalcJob(CalcJob):
             .replace(",","_")\
             .replace("+","_")\
             .replace("-","_")\
+            .replace("/","_")\
+            .replace("\\","_")\
             .replace("__","_")\
             .strip("_")
 
