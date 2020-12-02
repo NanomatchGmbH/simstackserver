@@ -1529,6 +1529,7 @@ class WaNoItemScriptFileModel(WaNoItemFileModel):
             destfile = os.path.join(destdir, rendered_logical_name)
             with open(destfile,'wt',newline='\n') as out:
                 out.write(self.get_as_text())
+        self._cached_logical_name = rendered_logical_name
         return rendered_logical_name
 
 
