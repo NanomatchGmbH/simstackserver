@@ -190,12 +190,12 @@ class WaNoCalcJob(CalcJob):
         inputfile_paths = []
         for path, mytype in mypaths.items():
             namespace = cls.clean_path(".".join(path.split(".")[:-1]))
+            if mytype == "File":
+                inputfile_paths.append(path)
             if namespace == "":
                 continue
             else:
                 namespaces.add(namespace)
-            if mytype == "File":
-                inputfile_paths.append(path)
             #else:
             #    print("found type",mytype)
         outpaths = {}
