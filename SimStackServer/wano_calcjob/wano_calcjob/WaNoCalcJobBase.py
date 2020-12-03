@@ -265,7 +265,7 @@ class WaNoCalcJob(CalcJob):
 
         retrieve_list = []
         for outputfile in self.output_files():
-            retrieve_list.append(outputfile)
+            retrieve_list.append(( outputfile, ".", outputfile.count("/")+1 ))
         calcinfo.retrieve_list = retrieve_list
 
         # codeinfo wird mit verdi code an lokale exe gekoppelt
