@@ -1178,7 +1178,8 @@ class IfGraph(XMLYMLInstantiationBase):
                 condition = condition.replace(key, item)
         from ast import literal_eval
         self._logger.info("Condition %s resolved to %s"%(self.condition, condition))
-        outcome = literal_eval(condition)
+        #outcome = literal_eval(condition)
+        outcome = eval(condition)
         if type(outcome) != bool:
             raise WorkflowAbort("Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
         return self._connect_subgraph(outcome)
