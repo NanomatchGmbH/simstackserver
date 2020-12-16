@@ -1169,6 +1169,12 @@ class IfGraph(XMLYMLInstantiationBase):
         condition = self.condition
         for vardict in output_variables, input_variables:
             for key, item in vardict.items():
+                try:
+                    int(item)
+                    float(item)
+                except TypeError as e:
+                    #if its not int or float, we assume it is string
+                    item = '"%s"'%str(item)
                 condition = condition.replace(key, item)
         from ast import literal_eval
         self._logger.info("Condition %s resolved to %s"%(self.condition, condition))
