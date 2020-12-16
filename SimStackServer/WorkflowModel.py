@@ -260,6 +260,8 @@ def workflow_element_factory(name):
         return WFPass
     elif name == "ForEachGraph":
         return ForEachGraph
+    elif name == "IfGraph":
+        return IfGraph
     elif name == "SubGraph":
         return SubGraph
     elif name == "int":
@@ -1134,6 +1136,86 @@ class SubGraph(XMLYMLInstantiationBase):
         return rename_dict
 
 
+class IfGraph(XMLYMLInstantiationBase):
+    _fields = [
+        ("truegraph", SubGraph, None, "Graph to instantiate If in case condition is true", "m"),
+        ("falsegraph", SubGraph, None, "Graph to instantiate If in case condition is false", "m"),
+        ("true_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
+        ("false_final_ids", StringList, [],
+         "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
+        ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
+        ("condition", str, "", "Condition, which evaluates to true or false"),
+        ("uid", str, "", "UID of this Foreach","a")
+    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not "uid" in kwargs:
+            self._field_values["uid"] = str(uuid.uuid4())
+        self._name = "IfGraph"
+        self._logger = logging.getLogger("IfGraph")
+
+     def fill_in_variables(self, vardict):
+        self._field_values["true_final_ids"].fill_in_variables(vardict)
+        self._field_values["false_final_ids"].fill_in_variables(vardict)
+
+    @property
+    def true_final_ids(self) -> StringList:
+        return self._field_values["true_final_ids"]
+
+    @property
+    def false_final_ids(self) -> StringList:
+        return self._field_values["true_final_ids"]
+
+    def resolve_connect(self, base_storage, input_variables, output_variables):
+        return self._connect_subgraph(True)
+
+    def _connect_subgraph(self, condition_is_true_or_false):
+        if condition_is_true_or_false:
+            mygraph = self.truegraph
+            final_ids = self.true_final_ids
+        else:
+            mygraph = self.falsegraph
+            final_ids = self.false_final_ids
+        override = {"temporary_connector": self.uid}
+        rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
+        new_connections = []
+        if not "temporary_connector" in rename_dict:
+            raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s" % (
+                ",".join(rename_dict.keys())))
+        for uid in final_ids:
+            if not uid in rename_dict:
+                raise WorkflowAbort(
+                    "mygraph did not contain final id %s. Renamed keys were: %s" % (uid,",".join(rename_dict.keys())))
+        for uid in final_ids:
+            new_connections.append((rename_dict[uid],self.finish_uid))
+
+        # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
+        # we return all subgraph.elements and all connections and get this communicated into the base graph
+        return new_connections, [mygraph.elements], [mygraph.graph]
+
+    @property
+    def finish_uid(self) -> str:
+        return self._field_values["finish_uid"]
+
+    @property
+    def uid(self):
+        return self._field_values["uid"]
+
+    @property
+    def truegraph(self) -> SubGraph:
+        return self._field_values["truegraph"]
+
+    @property
+    def falsegraph(self) -> SubGraph:
+        return self._field_values["falsegraph"]
+
+    @property
+    def condition(self) -> str:
+        return self._field_values["condition"]
+
+    def fields(cls):
+        return cls._fields
+
 class ForEachGraph(XMLYMLInstantiationBase):
     _fields = [
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
@@ -1492,8 +1574,7 @@ class Workflow(WorkflowBase):
                 # If this is encountered it is just passed on. These can be used as anchors inside the workflow.
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
-            elif isinstance(tostart, ForEachGraph):
-                print("Reached ForEachGraph")
+            elif isinstance(tostart, ForEachGraph) or isinstance(tostart, IfGraph):
                 new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
                                                                                                  input_variables = self._input_variables,
                                                                                                  output_variables = self._output_variables)
