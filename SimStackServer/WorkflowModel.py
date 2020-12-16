@@ -1166,7 +1166,15 @@ class IfGraph(XMLYMLInstantiationBase):
         return self._field_values["true_final_ids"]
 
     def resolve_connect(self, base_storage, input_variables, output_variables):
-        return self._connect_subgraph(True)
+        condition = self.condition
+        for vardict in output_variables, input_variables:
+            for key, item in vardict.items():
+                condition = condition.replace(key, item)
+        from ast import literal_eval
+        outcome = literal_eval(condition)
+        if type(outcome) != bool:
+            raise WorkflowAbort("Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
+        return self._connect_subgraph(outcome)
 
     def _connect_subgraph(self, condition_is_true_or_false):
         if condition_is_true_or_false:
