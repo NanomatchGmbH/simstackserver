@@ -1154,7 +1154,7 @@ class IfGraph(XMLYMLInstantiationBase):
         self._name = "IfGraph"
         self._logger = logging.getLogger("IfGraph")
 
-     def fill_in_variables(self, vardict):
+    def fill_in_variables(self, vardict):
         self._field_values["true_final_ids"].fill_in_variables(vardict)
         self._field_values["false_final_ids"].fill_in_variables(vardict)
 
