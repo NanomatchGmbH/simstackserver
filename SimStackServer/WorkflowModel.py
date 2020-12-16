@@ -1172,7 +1172,7 @@ class IfGraph(XMLYMLInstantiationBase):
                 try:
                     int(item)
                     float(item)
-                except TypeError as e:
+                except ValueError as e:
                     #if its not int or float, we assume it is string
                     item = '"%s"'%str(item)
                 condition = condition.replace(key, item)
