@@ -1768,7 +1768,9 @@ class Workflow(WorkflowBase):
                     if mynode.class_node_type == 'data.singlefile.SinglefileData.':
                         stagingfilename = mynode.filename
                         with mynode.open(mode="rb") as infile:
-                            with open(jobdirectory + '/' + stagingfilename, 'wb') as outfile:
+                            myfolder = os.path.split(absfile)[0]
+                            os.makedirs(myfolder, exist_ok=True)
+                            with open(absfile, 'wb') as outfile:
                                 outfile.write(infile.read())
 
             # In case of a glob pattern, we need special care

@@ -178,6 +178,8 @@ class WaNoCalcJob(CalcJob):
             .replace(",","_")\
             .replace("+","_")\
             .replace("-","_")\
+            .replace("/","_")\
+            .replace("\\","_")\
             .replace("__","_")\
             .strip("_")
 
@@ -188,12 +190,12 @@ class WaNoCalcJob(CalcJob):
         inputfile_paths = []
         for path, mytype in mypaths.items():
             namespace = cls.clean_path(".".join(path.split(".")[:-1]))
+            if mytype == "File":
+                inputfile_paths.append(path)
             if namespace == "":
                 continue
             else:
                 namespaces.add(namespace)
-            if mytype == "File":
-                inputfile_paths.append(path)
             #else:
             #    print("found type",mytype)
         outpaths = {}
@@ -263,7 +265,7 @@ class WaNoCalcJob(CalcJob):
 
         retrieve_list = []
         for outputfile in self.output_files():
-            retrieve_list.append(outputfile)
+            retrieve_list.append(( outputfile, ".", outputfile.count("/")+1 ))
         calcinfo.retrieve_list = retrieve_list
 
         # codeinfo wird mit verdi code an lokale exe gekoppelt
