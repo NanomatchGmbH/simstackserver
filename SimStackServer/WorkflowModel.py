@@ -1141,10 +1141,9 @@ class IfGraph(XMLYMLInstantiationBase):
         ("truegraph", SubGraph, None, "Graph to instantiate If in case condition is true", "m"),
         ("falsegraph", SubGraph, None, "Graph to instantiate If in case condition is false", "m"),
         ("true_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
-        ("false_final_ids", StringList, [],
-         "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
+        ("false_final_ids", StringList, [],"These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
         ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
-        ("condition", str, "", "Condition, which evaluates to true or false"),
+        ("condition", str, "", "Condition, which evaluates to true or false", "a"),
         ("uid", str, "", "UID of this Foreach","a")
     ]
     def __init__(self, *args, **kwargs):
