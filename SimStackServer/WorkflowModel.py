@@ -1163,7 +1163,7 @@ class IfGraph(XMLYMLInstantiationBase):
 
     @property
     def false_final_ids(self) -> StringList:
-        return self._field_values["true_final_ids"]
+        return self._field_values["false_final_ids"]
 
     def resolve_connect(self, base_storage, input_variables, output_variables):
         condition = self.condition
