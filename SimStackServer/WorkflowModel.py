@@ -1367,6 +1367,126 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def fields(cls):
         return cls._fields
 
+
+class WhileGraph(XMLYMLInstantiationBase):
+    _fields = [
+        ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
+        ("iterator_name", str, "", "Name of my iterator", "a"),
+        ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
+        ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
+        ("condition", str, "", "Condition, which evaluates to true or false", "a"),
+        ("current_id", np.int64, 0, "Value of current iterator", "a"),
+        ("uid", str, "", "UID of this Foreach","a")
+    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not "uid" in kwargs:
+            self._field_values["uid"] = str(uuid.uuid4())
+        self._name = "WhileGraph"
+        self._logger = logging.getLogger("WhileGraph")
+
+    @property
+    def iterator_name(self) -> str:
+        return self._field_values["iterator_name"]
+
+    @property
+    def current_id(self) -> np.int64:
+        return self._field_values["current_id"]
+
+    def fill_in_variables(self, vardict):
+        self._field_values["subgraph"].fill_in_variables(vardict)
+
+    @property
+    def subgraph_final_ids(self) -> StringList:
+        return self._field_values["subgraph_final_ids"]
+
+    def resolve_connect(self, base_storage, input_variables, output_variables):
+        condition = self.condition
+        for vardict in output_variables, input_variables:
+            for key, item in vardict.items():
+                try:
+                    int(item)
+                    float(item)
+                except ValueError as e:
+                    #if its not int or float, we assume it is string
+                    item = '"%s"'%str(item)
+                condition = condition.replace(key, item)
+        from ast import literal_eval
+        self._logger.info("Condition %s resolved to %s"%(self.condition, condition))
+        #outcome = literal_eval(condition)
+        outcome = eval(condition)
+        if type(outcome) != bool:
+            raise WorkflowAbort("Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
+        return self._multiply_connect_subgraph(condition_is_true_or_false = outcome)
+
+    def _multiply_connect_subgraph(self,condition_is_true_or_false):
+
+        # We copy the graph once:
+        mygraph = copy.deepcopy(self.subgraph)
+        replacedict = {
+            "${%s_VALUE}"%self.iterator_name : str(self.current_id),
+            "${%s}"%self.iterator_name : str(self.current_id),
+            "%s_VALUE"%self.iterator_name :str(self.current_id),
+            "%s"%self.iterator_name : str(self.current_id)
+        }
+        mygraph.fill_in_variables(replacedict)
+        # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
+        nextgraph = WhileGraph(subgraph = self.subgraph,
+                               iterator_name = self.iterator_name,
+                               subgraph_final_ids = self.subgraph_final_ids,
+                               finish_uid = self.finish_uid,
+                               condition = self.condition,
+                               current_id = 1 + self.current_id)
+
+        override = {"temporary_connector": self.uid}
+        rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
+        if not "temporary_connector" in rename_dict:
+            raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s"%(",".join(rename_dict.keys())))
+
+        for uid in self.subgraph_final_ids:
+            if not uid in rename_dict:
+                raise WorkflowAbort(
+                    "mygraph did not contain final id %s. Renamed keys were: %s" % (uid,",".join(rename_dict.keys())))
+
+        if condition_is_true_or_false:
+            for uid in self.subgraph_final_ids:
+                mygraph.graph.add_new_unstarted_connection((rename_dict[uid],nextgraph.uid))
+
+            #We manage new connections above already
+            new_connections = []
+
+            new_activity_elementlists = []
+            new_graphs = [mygraph.graph]
+            new_activity_elementlists.append(mygraph.elements)
+            new_activity_elementlists.append(nextgraph)
+        else:
+            new_graphs = []
+            new_activity_elementlists = []
+            # We don't add anything and link from us to finish uid.
+            new_connections = [(self.uid, self.finish_uid)]
+
+        return new_connections, new_activity_elementlists, new_graphs
+
+    @property
+    def finish_uid(self) -> str:
+        return self._field_values["finish_uid"]
+
+    @property
+    def uid(self):
+        return self._field_values["uid"]
+
+    @property
+    def subgraph(self) -> SubGraph:
+        return self._field_values["subgraph"]
+
+    @property
+    def condition(self) -> str:
+        return self._field_values["condition"]
+
+    def fields(cls):
+        return cls._fields
+
+
 class WFPass(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a")
