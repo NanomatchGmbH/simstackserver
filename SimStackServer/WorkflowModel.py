@@ -1404,6 +1404,13 @@ class WhileGraph(XMLYMLInstantiationBase):
 
     def resolve_connect(self, base_storage, input_variables, output_variables):
         condition = self.condition
+        replacedict = {
+            "${%s_VALUE}"%self.iterator_name : self.current_id,
+            "${%s}"%self.iterator_name : self.current_id,
+            "%s_VALUE"%self.iterator_name : self.current_id,
+            "%s"%self.iterator_name : self.current_id
+        }
+        input_variables.update(replacedict)
         for vardict in output_variables, input_variables:
             for key, item in vardict.items():
                 try:
@@ -1412,13 +1419,13 @@ class WhileGraph(XMLYMLInstantiationBase):
                 except ValueError as e:
                     #if its not int or float, we assume it is string
                     item = '"%s"'%str(item)
-                condition = condition.replace(key, item)
+                condition = condition.replace(key, str(item))
         from ast import literal_eval
-        self._logger.info("Condition %s resolved to %s"%(self.condition, condition))
+        self._logger.info("While Condition %s resolved to %s"%(self.condition, condition))
         #outcome = literal_eval(condition)
         outcome = eval(condition)
         if type(outcome) != bool:
-            raise WorkflowAbort("Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
+            raise WorkflowAbort("While Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
         return self._multiply_connect_subgraph(condition_is_true_or_false = outcome)
 
     def _multiply_connect_subgraph(self,condition_is_true_or_false):
@@ -1440,6 +1447,7 @@ class WhileGraph(XMLYMLInstantiationBase):
                                condition = self.condition,
                                current_id = 1 + self.current_id)
 
+        nextgraph_elelist = WorkflowElementList([("WhileGraph",nextgraph)])
         override = {"temporary_connector": self.uid}
         rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
         if not "temporary_connector" in rename_dict:
@@ -1460,7 +1468,7 @@ class WhileGraph(XMLYMLInstantiationBase):
             new_activity_elementlists = []
             new_graphs = [mygraph.graph]
             new_activity_elementlists.append(mygraph.elements)
-            new_activity_elementlists.append(nextgraph)
+            new_activity_elementlists.append(nextgraph_elelist)
         else:
             new_graphs = []
             new_activity_elementlists = []
@@ -1711,7 +1719,7 @@ class Workflow(WorkflowBase):
                 # If this is encountered it is just passed on. These can be used as anchors inside the workflow.
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
-            elif isinstance(tostart, ForEachGraph) or isinstance(tostart, IfGraph):
+            elif isinstance(tostart, ForEachGraph) or isinstance(tostart, IfGraph) or isinstance(tostart,  WhileGraph):
                 new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
                                                                                                  input_variables = self._input_variables,
                                                                                                  output_variables = self._output_variables)
