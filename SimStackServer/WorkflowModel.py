@@ -262,6 +262,8 @@ def workflow_element_factory(name):
         return ForEachGraph
     elif name == "IfGraph":
         return IfGraph
+    elif name == "WhileGraph":
+        return WhileGraph
     elif name == "SubGraph":
         return SubGraph
     elif name == "int":
