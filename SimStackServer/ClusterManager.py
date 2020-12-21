@@ -421,18 +421,22 @@ class ClusterManager(object):
     def get_newest_version_directory(self, path):
         VDIRS=[]
         largest_version = 2 # we started using this server with V2
-        for entry in self._sftp_client.listdir_attr(path):
-            mode = entry.st_mode
-            if stat.S_ISDIR(mode):
-                fn = entry.filename
-                if fn[0] == "V":
-                    try:
-                        myint = int(fn[1:])
-                        if myint > largest_version:
-                            largest_version = myint
-                        VDIRS.append(myint)
-                    except ValueError:
-                        pass
+        try:
+            for entry in self._sftp_client.listdir_attr(path):
+                mode = entry.st_mode
+                if stat.S_ISDIR(mode):
+                    fn = entry.filename
+                    if fn[0] == "V":
+                        try:
+                            myint = int(fn[1:])
+                            if myint > largest_version:
+                                largest_version = myint
+                            VDIRS.append(myint)
+                        except ValueError:
+                            pass
+        except FileNotFoundError as e:
+            newfilenotfounderror = FileNotFoundError(e.errno,"No such file %s on remote %s"%(path,self._url), path)
+            raise newfilenotfounderror from e
 
         return "V%d"%largest_version
 
