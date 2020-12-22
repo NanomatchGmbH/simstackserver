@@ -1497,6 +1497,47 @@ class WhileGraph(XMLYMLInstantiationBase):
         return cls._fields
 
 
+class VariableElement(XMLYMLInstantiationBase):
+    _fields = [
+        ("variable_name", str, "", "Name of this variable", "a"),
+        ("equation", str, "", "Equation to set the new variable to", "a"),
+        ("uid", str, "", "UID of this variable setter element.","a")
+    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not "uid" in kwargs:
+            self._field_values["uid"] = str(uuid.uuid4())
+        self._name = "VariableElement"
+        self._logger = logging.getLogger("VariableElement")
+
+    @property
+    def equation(self) -> str:
+        return self._field_values["equation"]
+
+    @property
+    def variable_name(self) -> str:
+        return self._field_values["variable_name"]
+
+    def evaluate_equation(self, input_variables, output_variables):
+        equation = self.equation
+        for vardict in [input_variables, output_variables]:
+            for myvar, myvarres in vardict.items():
+                equation = equation.replace(myvar, myvarres)
+        result = eval(equation)
+
+    @property
+    def subgraph_final_ids(self) -> StringList:
+        return self._field_values["subgraph_final_ids"]
+
+    @property
+    def uid(self):
+        return self._field_values["uid"]
+
+    def fields(cls):
+        return cls._fields
+
+
+
 class WFPass(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a")
@@ -1718,6 +1759,11 @@ class Workflow(WorkflowBase):
             elif isinstance(tostart, WFPass):
                 # If this is encountered it is just passed on. These can be used as anchors inside the workflow.
                 self.graph.start(rdjob)
+                self.graph.finish(rdjob)
+            elif isinstance(tostart, VariableElement):
+                self.graph.start(rdjob)
+                result = tostart.evaluate_equation(input_variables=self._input_variables, output_variables=self._output_variables)
+                self._output_variables[tostart.variable_name] = result
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph) or isinstance(tostart, IfGraph) or isinstance(tostart,  WhileGraph):
                 new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
