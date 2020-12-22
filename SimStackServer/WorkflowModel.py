@@ -1183,7 +1183,15 @@ class IfGraph(XMLYMLInstantiationBase):
         from ast import literal_eval
         self._logger.info("Condition %s resolved to %s"%(self.condition, condition))
         #outcome = literal_eval(condition)
-        outcome = eval(condition)
+        try:
+            outcome = eval(condition)
+        except (NameError,SyntaxError) as e:
+            self._logger.exception("Exception during evaluation of condition.")
+            self._logger.error("Variables during exception were:")
+            self._logger.error("Input var: {0}".format(input_variables))
+            self._logger.error("Output var: {0}".format(output_variables))
+            raise WorkflowAbort from e
+
         if type(outcome) != bool:
             raise WorkflowAbort("Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
         return self._connect_subgraph(outcome)
@@ -1413,7 +1421,8 @@ class WhileGraph(XMLYMLInstantiationBase):
             "%s"%self.iterator_name : self.current_id
         }
         input_variables.update(replacedict)
-        for vardict in output_variables, input_variables:
+        # Replacedict has to be done both in input_vars and first, because when replacing the iterators, this might resolve to a variable name, inside input vars.
+        for vardict in replacedict, output_variables, input_variables:
             for key, item in vardict.items():
                 try:
                     int(item)
@@ -1425,7 +1434,14 @@ class WhileGraph(XMLYMLInstantiationBase):
         from ast import literal_eval
         self._logger.info("While Condition %s resolved to %s"%(self.condition, condition))
         #outcome = literal_eval(condition)
-        outcome = eval(condition)
+        try:
+            outcome = eval(condition)
+        except (NameError,SyntaxError) as e:
+            self._logger.exception("Exception during evaluation of condition.")
+            self._logger.error("Variables during exception were:")
+            self._logger.error("Input var: {0}".format(input_variables))
+            self._logger.error("Output var: {0}".format(output_variables))
+            raise WorkflowAbort from e
         if type(outcome) != bool:
             raise WorkflowAbort("While Condition %s was resolved to %s of type: %s"%(condition, outcome, type(outcome)))
         return self._multiply_connect_subgraph(condition_is_true_or_false = outcome)
@@ -1516,16 +1532,41 @@ class VariableElement(XMLYMLInstantiationBase):
     def equation(self) -> str:
         return self._field_values["equation"]
 
+    def rename(self, renamedict):
+        myuid = self.uid
+        if not myuid in renamedict:
+            raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
+        newuid = renamedict[myuid]
+        self._field_values["uid"] = newuid
+
     @property
     def variable_name(self) -> str:
         return self._field_values["variable_name"]
 
+    def fill_in_variables(self, vardict):
+        pass
+
     def evaluate_equation(self, input_variables, output_variables):
         equation = self.equation
         for vardict in [input_variables, output_variables]:
-            for myvar, myvarres in vardict.items():
-                equation = equation.replace(myvar, myvarres)
-        result = eval(equation)
+            for myvar, item in vardict.items():
+                try:
+                    int(item)
+                    float(item)
+                except ValueError as e:
+                    #if its not int or float, we assume it is string
+                    item = '"%s"'%str(item)
+                equation = equation.replace(myvar, str(item))
+        try:
+            result = eval(equation)
+        except (NameError,SyntaxError) as e:
+            self._logger.exception("Exception during evaluation of condition.")
+            self._logger.error("Variables during exception were:")
+            self._logger.error("Input var: {0}".format(input_variables))
+            self._logger.error("Output var: {0}".format(output_variables))
+            raise WorkflowAbort from e
+
+        return result
 
     @property
     def subgraph_final_ids(self) -> StringList:
@@ -1763,9 +1804,9 @@ class Workflow(WorkflowBase):
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
             elif isinstance(tostart, VariableElement):
-                self.graph.start(rdjob)
                 result = tostart.evaluate_equation(input_variables=self._input_variables, output_variables=self._output_variables)
                 self._output_variables[tostart.variable_name] = result
+                self.graph.start(rdjob)
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph) or isinstance(tostart, IfGraph) or isinstance(tostart,  WhileGraph):
                 new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
@@ -1847,7 +1888,7 @@ class Workflow(WorkflowBase):
         else:
             do_aiida = False
         input_vars = wmr.get_paths_and_data_dict()
-        topath = wfem.path.replace('/','.')
+        topath = wfem.outputpath.replace('/','.')
         rendered_exec_command = wmr.render_exec_command(rendered_wano)
         wfem.set_exec_command(rendered_exec_command)
         self._logger.info("Preparing job with exec command: %s"%wfem.exec_command)
