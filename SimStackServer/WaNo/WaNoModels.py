@@ -27,6 +27,9 @@ import ast
 
 from jinja2 import Template
 
+from SimStackServer.WaNo.WaNoExceptions import WorkflowSubmitError
+
+
 class FileNotFoundErrorSimStack(FileNotFoundError):
     pass
 
@@ -1465,7 +1468,10 @@ class WaNoItemFileModel(AbstractWanoModel):
             mkdir_p(destdir)
             destfile = os.path.join(destdir, rendered_logical_name)
             #print("Copying",self._root.wano_dir_root,rendered_logical_name,destdir)
-            shutil.copy(self.mystring,destfile)
+            try:
+                shutil.copy(self.mystring,destfile)
+            except IsADirectoryError as e:
+                raise WorkflowSubmitError("%s points to a directory, but a filename was expected in %s"%(e.filename,self.path))
         if sys.version_info >= (3,0):
             outfile = rendered_logical_name
         else:
