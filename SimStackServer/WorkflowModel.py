@@ -1730,14 +1730,17 @@ class WorkflowBase(XMLYMLInstantiationBase):
 
         for node in self.graph.report_order_generator():
 
-            myelement = self.elements.get_element_by_uid(node)
-            myelement:WorkflowExecModule
-            body_html = myelement.get_rendered_body_html()
-            single_element = etree.tounicode(body_html, pretty_print=True)
-            outstring_body+= """  <ul>
-               %s
-            </ul>
-            """ %single_element
+            try:
+                myelement = self.elements.get_element_by_uid(node)
+                myelement:WorkflowExecModule
+                body_html = myelement.get_rendered_body_html()
+                single_element = etree.tounicode(body_html, pretty_print=True)
+                outstring_body+= """  <ul>
+                   %s
+                </ul>
+                """ %single_element
+            except KeyError:
+                pass
         html_doc = html_doc%(head, outstring_body)
         reportname = join(self.storage, "workflow_report.html")
         with open(reportname, 'w') as outfile:
