@@ -526,6 +526,10 @@ class CurrentTrash(object):
         return self._instantiated_directory
 
 
+class ReportError(Exception):
+    pass
+
+
 class WorkflowExecModule(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
@@ -551,6 +555,8 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._runtime_variables = {}
         self._aiida_valuedict = None
         self._xmlbasename = os.path.basename(self.wano_xml)
+        self._rendered_body_html = None
+        self._failed = False
 
     @classmethod
     def fields(cls):
@@ -562,6 +568,13 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         for key, item in vardict.items():
             self._field_values["outputpath"] = self._field_values["outputpath"].replace(key,item)
         self._runtime_variables.update(vardict)
+
+    def set_failed(self):
+        self._failed = True
+
+    @property
+    def failed(self):
+        return self._failed
 
     def get_runtime_variables(self):
         return self._runtime_variables
@@ -879,7 +892,52 @@ export NANOMATCH=%s
             except Exception as e:
                 self._logger.exception("Could not create report_renderer for variable instruction. Something went very wrong.")
                 raise WorkflowAbort("Could not create report_renderer for variable instruction. Something went very wrong.")
+            self._rendered_body_html = report_renderer.get_body()
+        else:
+            self._rendered_body_html = ""
+
         return report_renderer.consolidate_export_dictionaries()
+
+    def get_rendered_body_html(self):
+        # We have to write this:
+        """
+            <details class="wano" open="">
+              <summary>Epcot Center</summary>
+              <p class="report">Epcot is a theme park at Walt Disney World
+                Resort featuring exciting attractions, international pavilions,
+                award-winning fireworks and seasonal special events.</p>
+              <p class="files">Epcot is a theme park at Walt Disney World Resort
+                featuring exciting attractions, international pavilions,
+                award-winning fireworks and seasonal special events.</p>
+              <p class="result">Epcot is a theme park at Walt Disney World
+                Resort featuring exciting attractions, international pavilions,
+                award-winning fireworks and seasonal special events.</p>
+            </details>
+        :return:
+        """
+        detail_html = etree.Element("details")
+        myclass = "wano"
+        if self.failed:
+            myclass += " failed"
+
+        detail_html.attrib["class"] = "wano "
+
+        summary_html = etree.SubElement(detail_html, "summary")
+        summary_html.text = "wano_name"
+
+        if self._rendered_body_html is None:
+            raise ReportError("Report was not rendered yet.")
+        elif self._rendered_body_html == "":
+            pass
+        else:
+            body_html = '<p class="report">%s</p>'%(self._rendered_body_html)
+            body_html_parsed = etree.parse(body_html)
+            detail_html.append(body_html_parsed)
+
+        result = etree.SubElement(detail_html, "p")
+        result.attrib["class"] = "result"
+        result.text = "This is the space for result conditions, such as filesize too small. Or Tag in resultfile"
+        return detail_html
 
     @property
     def uid(self):
@@ -1058,6 +1116,11 @@ class DirectedGraph(object):
                 break
         if not found:
             raise ParserError("No graph element found.")
+
+    def report_order_generator(self):
+        nodes = self._graph.nodes
+        for a in nx.bfs_tree(self._graph, "0"):
+            yield a
 
     def get_next_ready(self):
         nodes = self._graph.nodes
@@ -1598,6 +1661,15 @@ class WFPass(XMLYMLInstantiationBase):
     def uid(self):
         return self._field_values["uid"]
 
+"""
+    Plan:
+       render report via graph
+       cycle over completed graph from 0 and then DFS
+       if somebody has more than one child: 
+            indent
+       if somebody has more than one parent: unindent
+"""
+
 
 class WorkflowBase(XMLYMLInstantiationBase):
     _fields = [
@@ -1630,6 +1702,37 @@ class WorkflowBase(XMLYMLInstantiationBase):
 
     def from_dict(self, in_dict):
         super().from_dict(in_dict)
+
+    def finalize(self):
+        html_doc = """<!DOCTYPE html>
+<html lang="en-us">
+<head>
+%s
+</head>
+<body>
+<li class="indent">
+%s
+</li>
+</body>
+</html>
+"""
+
+        outstring_body = """"""
+
+        for node in self.graph.report_order_generator():
+
+            myelement = self.elements.get_element_by_uid(node)
+            myelement:WorkflowExecModule
+            body_html = myelement.get_rendered_body_html()
+            single_element = etree.tounicode(body_html, pretty_print=True)
+            outstring_body+= """  <ul>
+               %s
+            </ul>
+            """ %single_element
+        html_doc = html_doc%outstring_body
+        reportname = join(self.storage, "workflow_report.html")
+        with open(reportname, 'w') as outfile:
+            outfile.write(html_doc)
 
     @abc.abstractmethod
     def abort(self):
@@ -1710,6 +1813,14 @@ class WorkflowBase(XMLYMLInstantiationBase):
     def get_running_finished_job_list_formatted(self):
         raise NotImplementedError("Has to be implemented in child class")
 
+class ReportCollector:
+    def __init__(self):
+        self._parents_by_uid = {}
+
+    def announce_report(self, uid, parent_uid):
+        self._parents_by_uid[uid] = parent_uid
+
+
 class Workflow(WorkflowBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1718,6 +1829,9 @@ class Workflow(WorkflowBase):
         self._input_variables = {}
         self._output_variables = {}
         self._prepared_aiida_variables = None
+        self._report_collector = None
+        # self._report_collector  should record uids, when they happen and there place during execution
+        # Assembly then knows their uid.
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -1725,6 +1839,7 @@ class Workflow(WorkflowBase):
             myjob: WorkflowExecModule
             myjob.abort_job()
             self.graph.fail(job)
+            myjob.set_failed()
 
     def delete_storage(self):
         """
@@ -1766,8 +1881,11 @@ class Workflow(WorkflowBase):
                 try:
                     wfvars = self._postjob_care(running)
                     self.graph.finish(running_job)
+                    # REPORT HOOK HERE: Get the report back here and put it in.
+                    # Hierarchy?
                 except WorkflowAbort as e:
                     self.graph.fail(running_job)
+                    running.set_failed()
                     self._logger.error(str(e))
                     self._logger.error("Aborting workflow %s due to error in Job."%self.submit_name)
                     self.abort()
@@ -1796,6 +1914,7 @@ class Workflow(WorkflowBase):
                         self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
                 except Exception as e:
                     self.graph.fail(rdjob)
+                    tostart.set_failed()
                     self._logger.exception("Uncaught exception during job preparation. Aborting workflow %s"%self.submit_name)
                     self.abort()
                     return True
@@ -1848,6 +1967,7 @@ class Workflow(WorkflowBase):
         if self.graph.is_workflow_finished():
             self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." %self.name)
+            self.finalize()
             return True
         return False
 
@@ -2021,6 +2141,7 @@ class Workflow(WorkflowBase):
                     raise WorkflowAbort(mystdout)
 
         myvars = wfem.get_output_variables(render_report = True)
+        # REPORT We need to collect the body files here -
         if isinstance(myvars, dict):
             flattened_output_variables = flatten_dict(myvars)
             topath = wfem.path.replace('/','.')

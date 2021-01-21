@@ -26,6 +26,7 @@ class ReportRenderer():
 </html>
 """
     def __init__(self, export_dictionaries):
+        self._body_html = None
         self._export_dictionaries = {}
         for dict_name, filename in export_dictionaries.items():
             if filename.endswith(".ini"):
@@ -82,12 +83,16 @@ class ReportRenderer():
         torender = self.render_string%(title,style,body)
         tm = Template(torender)
         outstring = tm.render(**self._export_dictionaries)
+        tmbody = Template(body)
+        body_only_render = tmbody.render(**self._export_dictionaries)
+        self._body_html = body_only_render
         return outstring
-    
+
+    def get_body(self):
+        return self._body_html
+
     @staticmethod
     def render_everything(basepath, do_render = True):
-
-
         export_dictionaries = {}
         oci = join(basepath, "output_config.ini")
 
