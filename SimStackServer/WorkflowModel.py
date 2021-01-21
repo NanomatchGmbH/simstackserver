@@ -26,6 +26,7 @@ import numpy as np
 import networkx as nx
 
 from SimStackServer.MessageTypes import JobStatus
+from SimStackServer.Reporting import Templates
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
 from external.clusterjob.clusterjob import FAILED
@@ -1697,6 +1698,11 @@ class WorkflowBase(XMLYMLInstantiationBase):
     def fields(cls):
         return cls._fields
 
+    @staticmethod
+    def _get_template_dir():
+        data_dir = os.path.dirname(os.path.realpath(Templates.__file__))
+        return data_dir
+
     def from_xml(self, in_xml):
         super().from_xml(in_xml)
 
@@ -1718,6 +1724,9 @@ class WorkflowBase(XMLYMLInstantiationBase):
 """
 
         outstring_body = """"""
+        headfile = join(self._get_template_dir(), "head.html")
+        with open(headfile, "r") as headin:
+            head = headin.read()
 
         for node in self.graph.report_order_generator():
 
@@ -1729,7 +1738,7 @@ class WorkflowBase(XMLYMLInstantiationBase):
                %s
             </ul>
             """ %single_element
-        html_doc = html_doc%outstring_body
+        html_doc = html_doc%(head, outstring_body)
         reportname = join(self.storage, "workflow_report.html")
         with open(reportname, 'w') as outfile:
             outfile.write(html_doc)
