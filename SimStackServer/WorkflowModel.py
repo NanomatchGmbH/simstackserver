@@ -925,13 +925,10 @@ export NANOMATCH=%s
             myclass += " failed"
 
         detail_html.attrib["class"] = "wano "
-
         summary_html = etree.SubElement(detail_html, "summary")
-        summary_html.text = "wano_name"
+        summary_html.text = self.name
 
-        if self._rendered_body_html is None:
-            raise ReportError("Report was not rendered yet.")
-        elif self._rendered_body_html == "":
+        if self._rendered_body_html is None or self._rendered_body_html == "":
             pass
         else:
             #body_html = '<p class="report">%s</p>'%(self._rendered_body_html)
@@ -1736,8 +1733,24 @@ class WorkflowBase(XMLYMLInstantiationBase):
 
             try:
                 myelement = self.elements.get_element_by_uid(node)
+
+                cp = path.commonprefix([self.storage, myelement.runtime_directory])
+                relruntimedir = myelement.runtime_directory[len(cp):]
+                if relruntimedir.startswith("/"):
+                    relruntimedir = relruntimedir[1:]
                 myelement:WorkflowExecModule
                 body_html = myelement.get_rendered_body_html()
+                # Here we rewrite sources:
+                for element in body_html.iter():
+                    for atr in ["src", "href"]:
+                        if atr in element.attrib:
+                            content = element.attrib[atr]
+                            if content.startswith("http") or content.startswith("/"):
+                                continue
+                            else:
+                                element.attrib[atr] = relruntimedir + "/" + content
+
+                    body_html.iter()
                 single_element = etree.tounicode(body_html, pretty_print=True, method="html")
                 outstring_body+= """  <ul>
                    %s
@@ -1745,6 +1758,8 @@ class WorkflowBase(XMLYMLInstantiationBase):
                 """ %single_element
             except KeyError:
                 pass
+            except Exception as e:
+                self._logger.exception("Exception during report rendering. Skipping.")
         html_doc = html_doc%(head, outstring_body)
         reportname = join(self.storage, "workflow_report.html")
         with open(reportname, 'w') as outfile:
