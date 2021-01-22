@@ -21,6 +21,7 @@ from os import path
 
 import yaml
 from lxml import etree
+import lxml.html
 
 import numpy as np
 import networkx as nx
@@ -893,6 +894,8 @@ export NANOMATCH=%s
             except Exception as e:
                 self._logger.exception("Could not create report_renderer for variable instruction. Something went very wrong.")
                 raise WorkflowAbort("Could not create report_renderer for variable instruction. Something went very wrong.")
+
+        if not report_renderer is None:
             self._rendered_body_html = report_renderer.get_body()
         else:
             self._rendered_body_html = ""
@@ -931,8 +934,9 @@ export NANOMATCH=%s
         elif self._rendered_body_html == "":
             pass
         else:
-            body_html = '<p class="report">%s</p>'%(self._rendered_body_html)
-            body_html_parsed = etree.parse(body_html)
+            #body_html = '<p class="report">%s</p>'%(self._rendered_body_html)
+            body_html_parsed = lxml.html.fragment_fromstring(self._rendered_body_html, create_parent="p")
+            body_html_parsed.attrib["class"] = "report"
             detail_html.append(body_html_parsed)
 
         result = etree.SubElement(detail_html, "p")
@@ -1734,7 +1738,7 @@ class WorkflowBase(XMLYMLInstantiationBase):
                 myelement = self.elements.get_element_by_uid(node)
                 myelement:WorkflowExecModule
                 body_html = myelement.get_rendered_body_html()
-                single_element = etree.tounicode(body_html, pretty_print=True)
+                single_element = etree.tounicode(body_html, pretty_print=True, method="html")
                 outstring_body+= """  <ul>
                    %s
                 </ul>
