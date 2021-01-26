@@ -1919,6 +1919,7 @@ class Workflow(WorkflowBase):
 
             for myfile in allfiles:
                 if not path.isfile(myfile):
+                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                     return False
 
         aiida_files = []
@@ -2039,6 +2040,7 @@ class Workflow(WorkflowBase):
             absfile = jobdirectory + '/' + output
 
             tofiledir = path.dirname(tofile)
+            self._logger.info("Staging %s to %s" % (absfile, tofiledir))
             mkdir_p(tofiledir)
 
             doglob = "*" in absfile
