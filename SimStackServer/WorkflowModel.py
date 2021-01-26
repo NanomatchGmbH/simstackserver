@@ -2040,6 +2040,7 @@ class Workflow(WorkflowBase):
             absfile = jobdirectory + '/' + output
 
             tofiledir = path.dirname(tofile)
+            self._logger.info("Staging %s to %s" % (absfile, tofiledir))
             mkdir_p(tofiledir)
 
             doglob = "*" in absfile
