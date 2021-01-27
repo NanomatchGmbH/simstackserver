@@ -1883,15 +1883,17 @@ class Workflow(WorkflowBase):
         exec_dir_path = join(self.storage,"exec_directories")
         workflow_data_path = join(self.storage,"workflow_data")
         rendered_workflow_path = join(self.storage,"rendered_workflow.xml")
+        rendered_report_path = join(self.storage, "workflow_report.html")
         shutil.rmtree(exec_dir_path,ignore_errors=True)
         shutil.rmtree(workflow_data_path, ignore_errors=True)
         try:
             os.remove(rendered_workflow_path)
+            os.remove(rendered_report_path)
         except FileNotFoundError as e:
             pass
         try:
             os.rmdir(self.storage)
-        except FileNotFoundError as e:
+        except (OSError, FileNotFoundError) as e:
             pass
 
     def jobloop(self):
