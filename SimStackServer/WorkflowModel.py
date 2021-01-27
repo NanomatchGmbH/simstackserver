@@ -926,7 +926,7 @@ export NANOMATCH=%s
 
         detail_html.attrib["class"] = "wano "
         summary_html = etree.SubElement(detail_html, "summary")
-        summary_html.text = self.name
+        summary_html.text = self.given_name
 
         if self._rendered_body_html is None or self._rendered_body_html == "":
             pass
