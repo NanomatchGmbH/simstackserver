@@ -739,7 +739,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.input_files.append((child.attrib["logical_filename"],child.text))
 
         el = self.full_xml.find("./WaNoMeta")
-        if el:
+        if not el is None:
             self.metas = xmltodict.parse(etree.tostring(el))
 
         self.exec_command = self.full_xml.find("WaNoExecCommand").text
