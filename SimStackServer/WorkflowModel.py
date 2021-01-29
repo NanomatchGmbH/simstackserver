@@ -25,6 +25,7 @@ from lxml import etree
 import numpy as np
 import networkx as nx
 
+from SimStackServer.EvalHandler import eval_numpyexpression
 from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
@@ -1248,6 +1249,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
         ("subgraph", SubGraph, None, "Graph to instantiate For Each Element","m"),
         ("iterator_files", StringList, [], "Files and globpatterns to iterate over", "m"),
         ("iterator_variables", StringList, [], "Variables, which have to be iterated over", "m"),
+        ("iterator_definestring", str, "", "String, which defines variable iterators", "m"),
         ("iterator_name", str, "", "Name of my iterator", "a"),
         #("parent_ids", StringList, [] , "Before a single job in this foreach starts, parent_ids has to be fulfilled","m"),
         ("subgraph_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
@@ -1273,6 +1275,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def iterator_variables(self) -> StringList:
         return self._field_values["iterator_variables"]
 
+    @property
+    def iterator_definestring(self) -> StringList:
+        return self._field_values["iterator_definestring"]
+
     def fill_in_variables(self, vardict):
         self._field_values["subgraph"].fill_in_variables(vardict)
 
@@ -1284,11 +1290,29 @@ class ForEachGraph(XMLYMLInstantiationBase):
         allvars = []
         if len(self.iterator_files) != 0:
             allvars = self._resolve_file_iterator(base_storage)
+            iterator_names = [self.iterator_name]
         elif len(self.iterator_variables) != 0:
             allvars = self._resolve_variable_iterator(input_variables, output_variables)
+            iterator_names = [self.iterator_name]
+        elif self.iterator_definestring != "":
+            # TODO: continue here
+            iterator_names, allvars = self._resolve_multivar_iterator()
         if len(allvars) == 0:
             self._logger.warning("Empty variable iterator. Skipping ForEach.")
-        return self._multiply_connect_subgraph(allvars)
+        return self._multiply_connect_subgraph(iterator_names, allvars)
+
+    def _resolve_multivar_iterator(self):
+        iterator_names = self.iterator_name.replace(" ", "").split(",")
+        num_iters = len(iterator_names)
+        results = []
+        iteresult_generator = eval_numpyexpression(self.iterator_definestring)
+        for result in iteresult_generator:
+            if len(result) != num_iters:
+                raise WorkflowAbort("Define iterators cannot be unpacked")
+            # We unpack the iterator here to have actual lists and check for the correct sizing
+            results.append(result)
+        return iterator_names, results
+
 
     def _resolve_file_iterator(self, base_storage):
         relfiles = self.iterator_files
@@ -1328,18 +1352,29 @@ class ForEachGraph(XMLYMLInstantiationBase):
         # This function will do a list of all matched variables
         return outvars
 
-    def _multiply_connect_subgraph(self, resolved_files):
+    def _multiply_connect_subgraph(self, iterator_names, resolved_files):
+        #duplicate this and iterate over multi_iterator
         new_connections = []
         new_activity_elementlists = []
         new_graphs = []
-        for iterator_value, myfile in enumerate(resolved_files):
+        comma_iter_name = ",".join(iterator_names)
+        comma_iter_name = "${%s}"%comma_iter_name
+        for iterator_value, myvalues in enumerate(resolved_files):
             mygraph = copy.deepcopy(self.subgraph)
-            replacedict = {
-                "${%s_VALUE}"%self.iterator_name :myfile,
-                "${%s}"%self.iterator_name : str(iterator_value),
-                "%s_VALUE"%self.iterator_name :myfile,
-                "%s"%self.iterator_name : str(iterator_value)
-            }
+
+            if len(myvalues) != len(iterator_names):
+                raise WorkflowAbort("Mismatch between iterator values and number of declared iterators.")
+            if len(myvalues) == 1:
+                myvalues = [myvalues]
+            comma_iter_vals = ",".join([str(value) for value in myvalues])
+            replacedict = { comma_iter_name : comma_iter_vals }
+
+            for iterator_name, myvalue in zip(iterator_names, myvalues):
+                replacedict.update ({
+                    "${%s_VALUE}"%self.iterator_name :myvalue,
+                    "${%s}"%self.iterator_name : str(iterator_value)
+                })
+
             mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
             override = {"temporary_connector": self.uid}
