@@ -1311,6 +1311,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 raise WorkflowAbort("Define iterators cannot be unpacked")
             # We unpack the iterator here to have actual lists and check for the correct sizing
             results.append(result)
+        print(iterator_names, results)
         return iterator_names, results
 
 
@@ -1361,6 +1362,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
         comma_iter_name = "${%s}"%comma_iter_name
         for iterator_value, myvalues in enumerate(resolved_files):
             mygraph = copy.deepcopy(self.subgraph)
+            print("Entering with ",myvalues)
 
             if len(myvalues) != len(iterator_names):
                 raise WorkflowAbort("Mismatch between iterator values and number of declared iterators.")
@@ -1370,10 +1372,13 @@ class ForEachGraph(XMLYMLInstantiationBase):
             replacedict = { comma_iter_name : comma_iter_vals }
 
             for iterator_name, myvalue in zip(iterator_names, myvalues):
-                replacedict.update ({
-                    "${%s_VALUE}"%self.iterator_name :myvalue,
-                    "${%s}"%self.iterator_name : str(iterator_value)
-                })
+                updatedict = {
+                    "${%s_VALUE}"%iterator_name :str(myvalue),
+                    "${%s}"%iterator_name : str(iterator_value)
+                }
+                print(updatedict)
+                replacedict.update(updatedict)
+            print(replacedict)
 
             mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
