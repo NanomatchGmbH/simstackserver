@@ -1359,7 +1359,7 @@ class ForEachGraph(XMLYMLInstantiationBase):
         new_activity_elementlists = []
         new_graphs = []
         comma_iter_name = ",".join(iterator_names)
-        comma_iter_name = "${%s}"%comma_iter_name
+        comma_iter_name = "${%s_ITER}"%comma_iter_name
         for iterator_value, myvalues in enumerate(resolved_files):
             mygraph = copy.deepcopy(self.subgraph)
             print("Entering with ",myvalues)
@@ -1368,17 +1368,15 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 raise WorkflowAbort("Mismatch between iterator values and number of declared iterators.")
             if len(myvalues) == 1:
                 myvalues = [myvalues]
-            comma_iter_vals = ",".join([str(value) for value in myvalues])
-            replacedict = { comma_iter_name : comma_iter_vals }
+            #comma_iter_vals = ",".join([str(value) for value in myvalues])
+            replacedict = { comma_iter_name : str(iterator_value) }
 
             for iterator_name, myvalue in zip(iterator_names, myvalues):
                 updatedict = {
-                    "${%s_VALUE}"%iterator_name :str(myvalue),
-                    "${%s}"%iterator_name : str(iterator_value)
+                    "${%s}"%iterator_name :str(myvalue),
+                    #"${%s_ITER}"%iterator_name : str(iterator_value)
                 }
-                print(updatedict)
                 replacedict.update(updatedict)
-            print(replacedict)
 
             mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
@@ -1455,10 +1453,10 @@ class WhileGraph(XMLYMLInstantiationBase):
     def resolve_connect(self, base_storage, input_variables, output_variables):
         condition = self.condition
         replacedict = {
-            "${%s_VALUE}"%self.iterator_name : self.current_id,
-            "${%s}"%self.iterator_name : self.current_id,
-            "%s_VALUE"%self.iterator_name : self.current_id,
-            "%s"%self.iterator_name : self.current_id
+            "${%s_ITER}"%self.iterator_name : self.current_id,
+            "${%s}"%self.iterator_name : self.current_id
+            #"%s_VALUE"%self.iterator_name : self.current_id,
+            #"%s"%self.iterator_name : self.current_id
         }
         input_variables.update(replacedict)
         # Replacedict has to be done both in input_vars and first, because when replacing the iterators, this might resolve to a variable name, inside input vars.
@@ -1491,10 +1489,10 @@ class WhileGraph(XMLYMLInstantiationBase):
         # We copy the graph once:
         mygraph = copy.deepcopy(self.subgraph)
         replacedict = {
-            "${%s_VALUE}"%self.iterator_name : str(self.current_id),
-            "${%s}"%self.iterator_name : str(self.current_id),
-            "%s_VALUE"%self.iterator_name :str(self.current_id),
-            "%s"%self.iterator_name : str(self.current_id)
+            "${%s_ITER}"%self.iterator_name : str(self.current_id),
+            "${%s}"%self.iterator_name : str(self.current_id)
+            #"%s_VALUE"%self.iterator_name :str(self.current_id),
+            #"%s"%self.iterator_name : str(self.current_id)
         }
         mygraph.fill_in_variables(replacedict)
         # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
