@@ -1364,10 +1364,10 @@ class ForEachGraph(XMLYMLInstantiationBase):
             mygraph = copy.deepcopy(self.subgraph)
             print("Entering with ",myvalues)
 
+            if not isinstance(myvalues, list):
+                myvalues = [myvalues]
             if len(myvalues) != len(iterator_names):
                 raise WorkflowAbort("Mismatch between iterator values and number of declared iterators.")
-            if len(myvalues) == 1:
-                myvalues = [myvalues]
             #comma_iter_vals = ",".join([str(value) for value in myvalues])
             replacedict = { comma_iter_name : str(iterator_value) }
 
