@@ -1358,16 +1358,22 @@ class ForEachGraph(XMLYMLInstantiationBase):
         new_connections = []
         new_activity_elementlists = []
         new_graphs = []
-        comma_iter_name = ",".join(iterator_names)
+        comma_iter_name = ",".join(iterator_names).replace(" ","")
         comma_iter_name = "${%s_ITER}"%comma_iter_name
         for iterator_value, myvalues in enumerate(resolved_files):
             mygraph = copy.deepcopy(self.subgraph)
             print("Entering with ",myvalues)
 
+            if isinstance(myvalues, tuple):
+                myvalues = list(myvalues)
             if not isinstance(myvalues, list):
                 myvalues = [myvalues]
             if len(myvalues) != len(iterator_names):
-                raise WorkflowAbort("Mismatch between iterator values and number of declared iterators.")
+                out = StringIO()
+                out.write("Mismatch between iterator values and number of declared iterators.")
+                out.write("Values were: %s" %str(myvalues))
+                out.write("Names were: %s" % str(iterator_names))
+                raise WorkflowAbort(out.getvalue())
             #comma_iter_vals = ",".join([str(value) for value in myvalues])
             replacedict = { comma_iter_name : str(iterator_value) }
 
