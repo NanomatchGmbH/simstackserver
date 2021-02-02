@@ -3,6 +3,7 @@
 
 #from pyura.pyura.helpers import trace_to_logger
 import logging
+import re
 from functools import partial
 from os.path import join
 
@@ -938,6 +939,12 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         return listlike, dictlike
 
+    @classmethod
+    def _filename_is_global_var(cls, filename):
+        if not re.match(r"^\$\{.*\}$",filename) is None:
+            return True
+        return False
+
     def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="",
                                 flat_variable_list = None,
                                 input_var_db = None,
@@ -1018,7 +1025,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                         #filename = "BFT:${STORAGE_ID}/%s" % relpath
                         #filename = os.path.join("inputs",relpath)
                         #Absolute filenames will be replace with BFT:STORAGEID etc. below.
-                    elif not filename.endswith("_VALUE}"):
+                    elif not self._filename_is_global_var(filename):
                         if "outputs/" in filename:
                             # Newer handling, not rewriting filename, because it's already taken care of
                             filename = "c9m:${STORAGE}/workflow_data/%s" % (filename)
@@ -1078,7 +1085,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                 log_path_on_cluster = var[1].replace('\\','/')
                 if var[1].startswith("c9m:"):
                     runtime_stagein_files.append([var[0],log_path_on_cluster])
-                elif var[1].endswith("_VALUE}"):
+                elif self._filename_is_global_var(var[1]):
 
                     runtime_stagein_files.append([var[0], log_path_on_cluster])
                 else:
@@ -1097,7 +1104,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         for otherfiles in self.get_import_model().get_contents():
             name,importloc,tostage = otherfiles[0],otherfiles[1],otherfiles[2]
-            if importloc.endswith("_VALUE}"):
+            if self._filename_is_global_var(importloc):
                 runtime_stagein_files.append([name,importloc])
             else:
                 if "outputs/" in importloc:
