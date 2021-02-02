@@ -1003,7 +1003,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
                     if runtime_variables is not None:
                         for runtime_varname, runtime_varvalue in runtime_variables.items():
-                            varname = varname.replace("${%s}"%runtime_varname,runtime_varvalue)
+                            varname = varname.replace(runtime_varname,runtime_varvalue)
                             rendered_parent = varname
 
                     if varname in input_var_db:
