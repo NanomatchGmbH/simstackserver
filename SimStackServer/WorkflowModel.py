@@ -238,6 +238,9 @@ class XMLYMLInstantiationBase(object):
         with open(filename, 'wt') as infile:
             infile.write(etree.tostring(me,encoding="utf8",pretty_print=True).decode()+"\n")
 
+    def fill_in_variables(self, vardict):
+        pass
+
 
 
 # Tomorrow: Modify this factory to play nice with TreeWalker
@@ -468,6 +471,11 @@ class StringList(WorkflowElementList):
         self._storage = strings
         for i in strings:
             self._typelist.append("str")
+
+    def rename(self, replacedict):
+        for i in range(0, len(self._storage)):
+            if self._storage[i] in replacedict:
+                self._storage[i] = replacedict[self._storage[i]]
 
 class Resources(XMLYMLInstantiationBase):
     """
@@ -1161,10 +1169,26 @@ class IfGraph(XMLYMLInstantiationBase):
     def fill_in_variables(self, vardict):
         self._field_values["true_final_ids"].fill_in_variables(vardict)
         self._field_values["false_final_ids"].fill_in_variables(vardict)
+        self.truegraph.fill_in_variables(vardict)
+        self.falsegraph.fill_in_variables(vardict)
 
     @property
     def true_final_ids(self) -> StringList:
         return self._field_values["true_final_ids"]
+
+    def rename(self, renamedict):
+        myuid = self.uid
+        if not myuid in renamedict:
+            raise KeyError("%s not found in renamedict. Dict contained: %s" % (myuid, ",".join(renamedict.keys())))
+        newuid = renamedict[myuid]
+        self._field_values["uid"] = newuid
+
+        finish_uid = self.finish_uid
+        if finish_uid in renamedict:
+            raise KeyError("finish_uid %s explicitly rewritten. This should not happen on rename. Dict contained: %s" % (finish_uid, ",".join(renamedict.keys())))
+        newuid = uuid.uuid4()
+        self._field_values["finish_uid"] = newuid
+        renamedict[finish_uid] = newuid
 
     @property
     def false_final_ids(self) -> StringList:
@@ -1180,7 +1204,7 @@ class IfGraph(XMLYMLInstantiationBase):
                 except ValueError as e:
                     #if its not int or float, we assume it is string
                     item = '"%s"'%str(item)
-                condition = condition.replace(key, item)
+                condition = condition.replace(key, str(item))
         from ast import literal_eval
         self._logger.info("Condition %s resolved to %s"%(self.condition, condition))
         #outcome = literal_eval(condition)
@@ -1199,13 +1223,15 @@ class IfGraph(XMLYMLInstantiationBase):
 
     def _connect_subgraph(self, condition_is_true_or_false):
         if condition_is_true_or_false:
-            mygraph = self.truegraph
+            mygraph = copy.deepcopy(self.truegraph)
             final_ids = self.true_final_ids
         else:
-            mygraph = self.falsegraph
+            mygraph = copy.deepcopy(self.falsegraph)
             final_ids = self.false_final_ids
+
         override = {"temporary_connector": self.uid}
         rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
+
         new_connections = []
         if not "temporary_connector" in rename_dict:
             raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s" % (
@@ -1214,9 +1240,12 @@ class IfGraph(XMLYMLInstantiationBase):
             if not uid in rename_dict:
                 raise WorkflowAbort(
                     "mygraph did not contain final id %s. Renamed keys were: %s" % (uid,",".join(rename_dict.keys())))
+        print(final_ids._storage)
         for uid in final_ids:
             new_connections.append((rename_dict[uid],self.finish_uid))
 
+
+        print(mygraph.elements, mygraph.graph, new_connections)
         # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
         # we return all subgraph.elements and all connections and get this communicated into the base graph
         return new_connections, [mygraph.elements], [mygraph.graph]
@@ -1270,6 +1299,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
     @property
     def iterator_files(self) -> StringList:
         return self._field_values["iterator_files"]
+
+    def rename(self, renamedict):
+        raise WorkflowAbort("ForEach inside of ForEach still not resolved rename")
 
     @property
     def iterator_variables(self) -> StringList:
@@ -1411,6 +1443,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
     #@property
     #def parent_ids(self) -> str:
     #    return self._field_values["parent_ids"]
+
+    def rename(self, renamedict):
+        raise WorkflowAbort("While inside of While still not resolved rename")
 
     @property
     def uid(self):
@@ -1602,6 +1637,8 @@ class VariableElement(XMLYMLInstantiationBase):
                     item = '"%s"'%str(item)
                 equation = equation.replace(myvar, str(item))
         try:
+            print("Evaluating",equation)
+            print(input_variables, output_variables)
             result = eval(equation)
         except (NameError,SyntaxError) as e:
             self._logger.exception("Exception during evaluation of condition.")
@@ -1641,6 +1678,13 @@ class WFPass(XMLYMLInstantiationBase):
     @property
     def uid(self):
         return self._field_values["uid"]
+
+    def rename(self, renamedict):
+        myuid = self.uid
+        if not myuid in renamedict:
+            raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
+        newuid = renamedict[myuid]
+        self._field_values["uid"] = newuid
 
 
 class WorkflowBase(XMLYMLInstantiationBase):
@@ -1810,6 +1854,7 @@ class Workflow(WorkflowBase):
                 try:
                     wfvars = self._postjob_care(running)
                     self.graph.finish(running_job)
+                    print("Finished ",running_job)
                 except WorkflowAbort as e:
                     self.graph.fail(running_job)
                     self._logger.error(str(e))
@@ -1864,21 +1909,7 @@ class Workflow(WorkflowBase):
                     self.graph.add_new_unstarted_connection(connection)
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
-                # What do we need to do here? We need to extend the graph, because it should be disjunct at the moment.
-                # ForEach has to integrate itself into the main graph, i.e.
-                # ForEach knows its parent id,
-                #    Stage 1:
-                #          For Each has to actually resolve the iterator and make the actual list
-                #    Stage 2:
-                #          For Each iterator value, we need to copy the digraph and connect it to all parent ids
-                #    Stage 3:
-                #          We have to replace all occurences of the iterator name with the actual iterator, this is hard
-                #    Stage 4:
-                #          We have to rename all Elements and all id occurences in the graph. DiGraph has a function for this.
-                #    Stage :
-                #          We need to attach this graph to the WFPass uid. It has to be different from the starter id
-                #    Stage :
-                #          We set the ForEachElement starter id as finished immediately so that the new jobs will be run.
+
         current_time = time.time()
         #if current_time - self._last_dump_time > 2:
         if False:
@@ -2068,7 +2099,7 @@ class Workflow(WorkflowBase):
         myvars = wfem.get_output_variables(render_report = True)
         if isinstance(myvars, dict):
             flattened_output_variables = flatten_dict(myvars)
-            topath = wfem.path.replace('/','.')
+            topath = wfem.outputpath.replace('/','.')
             for key,value in flattened_output_variables.items():
                 self._output_variables["%s.%s"%(topath,key)] = value
 
