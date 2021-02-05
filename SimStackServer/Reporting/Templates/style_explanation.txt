@@ -1,0 +1,49 @@
+The report is basically an indented list of modules, which were run. Modules can have submodules like this
+
+|Module1
+|-Module2
+|-Module3
+|Module4
+|-Module5
+|--Module6
+|--Module7
+|--Module8
+|Module9
+
+Currently we model the indentation in the tree above using <li, ul elements, i.e
+Module1, Module4 and Module9 are in the same list <li>
+Module2 and Module3 are a sublist of Module1
+
+<li has class indent>, ul has no class itself, but a class can be added on request.
+
+
+
+
+Every single WaNo generates a report such as this:
+
+If WaNo failed, class will be class="wano failed" -> red-ish background
+If WaNo not failed, class will be class="wano"
+
+Two or three subelements will be generate
+
+<p (or div)>, can be changed on request of Style Generator:
+p class report: First part of the report, should be presented centrally
+
+p clsas files: List of files, should expose a nice table style for a nice file exporer view
+
+p class result: List of result conditions, which were met (green style) or not (red style)
+
+
+
+            <details class="wano" open="">
+              <summary>Epcot Center</summary>
+              <p class="report">Epcot is a theme park at Walt Disney World
+                Resort featuring exciting attractions, international pavilions,
+                award-winning fireworks and seasonal special events.</p>
+              <p class="files">Epcot is a theme park at Walt Disney World Resort
+                featuring exciting attractions, international pavilions,
+                award-winning fireworks and seasonal special events.</p>
+              <p class="result">Epcot is a theme park at Walt Disney World
+                Resort featuring exciting attractions, international pavilions,
+                award-winning fireworks and seasonal special events.</p>
+            </details>
