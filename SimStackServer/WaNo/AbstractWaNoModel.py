@@ -39,6 +39,7 @@ class AbstractWanoModel:
 
         self._do_import = False
         self._import_from = ""
+        self._tooltip_text = ""
 
         super(AbstractWanoModel, self).__init__()
 
@@ -87,6 +88,9 @@ class AbstractWanoModel:
         if "import_from" in xml.attrib:
             self._do_import = True
             self._import_from = xml.attrib["import_from"]
+
+        if "description" in xml.attrib:
+            self._tooltip_text = xml.attrib["description"]
 
     def set_parent(self, parent):
         self._parent = parent
@@ -160,6 +164,10 @@ class AbstractWanoModel:
     @property
     def dictlike(self):
         return False
+
+    @property
+    def tooltip_text(self):
+        return self._tooltip_text
 
     # To access Wanomodels belonging to this one:
     # <Box>
