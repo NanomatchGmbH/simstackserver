@@ -89,8 +89,8 @@ class AbstractWanoModel:
             self._do_import = True
             self._import_from = xml.attrib["import_from"]
 
-        if "tooltip" in xml.attrib:
-            self._tooltip_text = xml.attrib["tooltip"]
+        if "description" in xml.attrib:
+            self._tooltip_text = xml.attrib["description"]
 
     def set_parent(self, parent):
         self._parent = parent
