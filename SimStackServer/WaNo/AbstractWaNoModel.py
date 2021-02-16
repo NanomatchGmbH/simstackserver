@@ -39,7 +39,7 @@ class AbstractWanoModel:
 
         self._do_import = False
         self._import_from = ""
-        self._tooltip_text = "Placeholder"
+        self._tooltip_text = ""
 
         super(AbstractWanoModel, self).__init__()
 
