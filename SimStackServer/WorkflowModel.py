@@ -1339,8 +1339,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
         results = []
         iteresult_generator = eval_numpyexpression(self.iterator_definestring)
         for result in iteresult_generator:
-            if len(result) != num_iters:
-                raise WorkflowAbort("Define iterators cannot be unpacked")
+            if num_iters > 1:
+                if len(result) != num_iters:
+                    raise WorkflowAbort("Define iterators cannot be unpacked")
             # We unpack the iterator here to have actual lists and check for the correct sizing
             results.append(result)
         print(iterator_names, results)
