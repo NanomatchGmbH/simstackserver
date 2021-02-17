@@ -1848,6 +1848,9 @@ class WorkflowBase(XMLYMLInstantiationBase):
                 """ %single_element
             except KeyError:
                 pass
+            except AttributeError:
+                # runtime directory is not setup upstairs everywhere
+                pass
             except Exception as e:
                 self._logger.exception("Exception during report rendering. Skipping.")
         html_doc = html_doc%(head, outstring_body)
