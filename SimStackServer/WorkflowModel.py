@@ -317,9 +317,11 @@ class WorkflowElementList(object):
     def fill_in_variables(self, vardict):
         for myid, my_str in enumerate(self._storage):
             if isinstance(my_str,str):
+                current_string = my_str
                 for key,item in vardict.items():
-                    self._storage[myid] = my_str.replace(key,item)
-                    self._logger.info("Replacing %s with %s and %s, Outcome was: %s"%(my_str, key, item, self._storage[myid]))
+                    current_string = current_string.replace(key,item)
+                    self._logger.info("Replacing %s with %s and %s, Outcome was: %s"%(my_str, key, item, current_string))
+                self._storage[myid] = current_string
             else:
                 if not _is_basetype(my_str):
                     my_str.fill_in_variables(vardict)
@@ -566,8 +568,11 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         return cls._fields
 
     def fill_in_variables(self, vardict):
+        self._logger.info("Doing inputs of wanoid %s"%self.uid)
         self._field_values["inputs"].fill_in_variables(vardict)
+        self._logger.info("Doing outputs of wanoid %s"%self.uid)
         self._field_values["outputs"].fill_in_variables(vardict)
+        self._logger.info("Done")
         for key, item in vardict.items():
             self._field_values["outputpath"] = self._field_values["outputpath"].replace(key,item)
         self._runtime_variables.update(vardict)
@@ -1339,8 +1344,9 @@ class ForEachGraph(XMLYMLInstantiationBase):
         results = []
         iteresult_generator = eval_numpyexpression(self.iterator_definestring)
         for result in iteresult_generator:
-            if len(result) != num_iters:
-                raise WorkflowAbort("Define iterators cannot be unpacked")
+            if num_iters > 1:
+                if len(result) != num_iters:
+                    raise WorkflowAbort("Define iterators cannot be unpacked")
             # We unpack the iterator here to have actual lists and check for the correct sizing
             results.append(result)
         print(iterator_names, results)
@@ -1416,12 +1422,17 @@ class ForEachGraph(XMLYMLInstantiationBase):
                 }
                 replacedict.update(updatedict)
 
-            mygraph.fill_in_variables(replacedict)
             # We rename temporary connector to us. Like this we don't have to remove temporary connector in the end.
             override = {"temporary_connector": self.uid}
             rename_dict = mygraph.rename_all_nodes(explicit_overrides=override)
             if not "temporary_connector" in rename_dict:
                 raise WorkflowAbort("mygraph did not contain start id temporary_connector. Renamed keys were: %s"%(",".join(rename_dict.keys())))
+
+
+            mygraph.fill_in_variables(replacedict)
+
+
+
 
             for uid in self.subgraph_final_ids:
                 if not uid in rename_dict:
@@ -1994,7 +2005,7 @@ class Workflow(WorkflowBase):
 
             for myfile in allfiles:
                 if not path.isfile(myfile):
-                    self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
+                    self._logger.error("Could not find file %s (expected at %s) for wanoid %s on disk. Canceling workflow. Target was: %s"%(source,absfile, wfem.uid, tofile))
                     return False
 
         aiida_files = []
