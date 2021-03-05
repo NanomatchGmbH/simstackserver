@@ -821,12 +821,25 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._outputfile_callbacks.append(function)
 
     def get_output_files(self, only_static = False):
+        return_files = []
+
+        rendered_wano = None
+        for outputfile in self.output_files:
+            if "{{" in outputfile and "}}" in outputfile:
+                if rendered_wano is None:
+                    rendered_wano = self.wano_walker()
+                outfile = Template(outputfile,newline_sequence='\n').render(wano = rendered_wano)
+                return_files.append(outfile)
+            else:
+                return_files.append(outputfile)
+
         if only_static:
-            return self.output_files
-        output_files = self.output_files + [ a[0] for a in self.export_model.get_contents() ]
+            return return_files
+
+        return_files = return_files + [ a[0] for a in self.export_model.get_contents() ]
         for callback in self._outputfile_callbacks:
-            output_files += callback()
-        return output_files
+            return_files += callback()
+        return return_files
 
     def datachanged_force(self):
         self.notify_datachanged("force")
