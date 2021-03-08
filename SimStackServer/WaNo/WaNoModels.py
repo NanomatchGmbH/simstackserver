@@ -1137,7 +1137,8 @@ class WaNoModelRoot(WaNoModelDictLike):
                 runtime_stagein_files.append([tostage, filename])
 
 
-        for filename in self.output_files + [ a[0] for a in self.export_model.get_contents() ]:
+        #for filename in self.output_files + [ a[0] for a in self.export_model.get_contents() ]:
+        for filename in self.get_output_files(only_static=False):
             #runtime_stageout_files.append([filename,"${STORAGE}/workflow_data/%s/outputs/%s"%(stageout_basedir,filename)])
             runtime_stageout_files.append([filename, filename])
 
