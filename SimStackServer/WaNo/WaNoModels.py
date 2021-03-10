@@ -301,11 +301,21 @@ class WaNoMatrixModel(AbstractWanoModel):
         for row in ar:
             returnstring += "[ "
             for val in row[:-1]:
-                returnstring += " %g ," %val
-            returnstring +=" %g ] , " %row[-1]
+                returnstring += f" {val} ,"
+            returnstring += f" {row[-1]} ] , "
         returnstring = returnstring[:-3]
         returnstring += " ] "
         return returnstring
+
+    def _cast_to_correct_type(self, value):
+        try:
+            a = float(value)
+            return a
+        except ValueError as e:
+            return str(value)
+
+    def set_data(self,i,j,data):
+        self.storage[i][j] = self._cast_to_correct_type(data)
 
     def _fromstring(self,stri):
         list_of_lists = ast.literal_eval(stri)
@@ -313,7 +323,7 @@ class WaNoMatrixModel(AbstractWanoModel):
             raise SyntaxError("Expected list of lists")
         for i in range(len(list_of_lists)):
             for j in range(len(list_of_lists[i])):
-                list_of_lists[i][j] = float(list_of_lists[i][j])
+                list_of_lists[i][j] = self._cast_to_correct_type(list_of_lists[i][j])
         return list_of_lists
 
     def __getitem__(self,item):
