@@ -300,11 +300,20 @@ class WaNoMatrixModel(AbstractWanoModel):
         for row in ar:
             returnstring += "[ "
             for val in row[:-1]:
-                returnstring += f" {val} ,"
-            returnstring += f" {row[-1]} ] , "
+                myval = self._add_explicit_quotes_if_string(val)
+                returnstring += f" {myval} ,"
+            myval = self._add_explicit_quotes_if_string(row[-1])
+            returnstring += f" {myval} ] , "
         returnstring = returnstring[:-3]
         returnstring += " ] "
         return returnstring
+
+    def _add_explicit_quotes_if_string(self, value):
+        try:
+            a = float(value)
+            return a
+        except ValueError as e:
+            return f'"{value}"'
 
     def _cast_to_correct_type(self, value):
         try:
