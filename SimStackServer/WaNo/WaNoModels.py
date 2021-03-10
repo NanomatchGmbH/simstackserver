@@ -286,15 +286,14 @@ class WaNoMatrixModel(AbstractWanoModel):
         if "row_header" in self.xml.attrib:
             self.row_header = self.xml.attrib["row_header"].split(";")
 
-        try:
-            self.storage = self._fromstring(self.xml.text)
-
-        except Exception as e:
+        if self.xml.text.strip() == ""
             self.storage = [[] for i in range(self.rows)]
             for i in range(self.rows):
                 self.storage[i] = []
                 for j in range(self.cols):
-                    self.storage[i].append(0.0)
+                    self.storage[i].append("")
+        else:
+            self.storage = self._fromstring(self.xml.text)
 
     def _tostring(self, ar):
         returnstring = "[ "
