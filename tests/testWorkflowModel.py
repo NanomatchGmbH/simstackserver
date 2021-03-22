@@ -119,6 +119,8 @@ class TestWorkflowModel(unittest.TestCase):
         ooommmm.finish(12)
         outnodes = ooommmm.get_next_ready()
         assert len(outnodes) == 0
+        for node in ooommmm.report_order_generator():
+            print(node)
 
     def testWorkflow(self):
         myworkflow = join(self._input_dir, "rendered_workflow.xml")
