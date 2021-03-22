@@ -99,7 +99,7 @@ class ClusterManager(object):
 
         if connect_to_unknown_hosts:
             self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-        self._ssh_client.connect(self._url,self._port, username=self._user, key_filename=key_filename)
+        self._ssh_client.connect(self._url,self._port, username=self._user, key_filename=key_filename, compress=True)
         if connect_to_unknown_hosts:
             self._ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy)
         self._ssh_client.get_transport().set_keepalive(30)
