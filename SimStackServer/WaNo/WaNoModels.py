@@ -286,7 +286,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         if "row_header" in self.xml.attrib:
             self.row_header = self.xml.attrib["row_header"].split(";")
 
-        if self.xml.text.strip() == "":
+        if self.xml.text is None or self.xml.text.strip() == "":
             self.storage = [[] for i in range(self.rows)]
             for i in range(self.rows):
                 self.storage[i] = []
