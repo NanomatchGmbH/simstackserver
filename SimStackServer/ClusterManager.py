@@ -272,7 +272,7 @@ class ClusterManager(object):
             "slurm": "sbatch",
             "pbs": "qsub",
             "lsf": "bsub",
-            "sge": "qsub"
+            "sge_smp": "qsub"
         }
         if not self._queueing_system in ["Internal", "AiiDA"]:
             mycom = queue_to_submission_com[self._queueing_system]
