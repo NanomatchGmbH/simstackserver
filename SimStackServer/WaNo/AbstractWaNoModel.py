@@ -226,8 +226,8 @@ class AbstractWanoModel:
         if self._do_import:
             self.xml.attrib["import_from"] = self._import_from
         else:
-            if "import_from" in self.xml:
-                del self.xml["import_from"]
+            if "import_from" in self.xml.attrib:
+                del self.xml.attrib["import_from"]
 
     def decommission(self):
         if self._view != None:
