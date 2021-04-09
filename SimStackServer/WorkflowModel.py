@@ -642,9 +642,9 @@ export NANOMATCH=%s
         timestring = ""
         if days > 0:
             timestring += "%d-"%days
-        if hours > 0:
+        if hours > 0 or days > 0:
             timestring += "%d:"%hours
-        if minutes > 0:
+        if minutes > 0 or hours > 0 or days > 0:
             timestring += "%02d:"%minutes
         timestring += "%02d"%seconds
         return timestring
