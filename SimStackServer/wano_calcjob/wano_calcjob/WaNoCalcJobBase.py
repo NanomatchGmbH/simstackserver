@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from aiida import orm
 from aiida.common import datastructures
@@ -157,7 +158,7 @@ class WaNoCalcJob(CalcJob):
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
         with open(wfxml, 'rt') as infile:
             xml = etree.parse(infile)
-        wano_dir_root = os.path.dirname(wfxml)
+        wano_dir_root = Path(os.path.dirname(wfxml))
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
         wmr.parse_from_xml(xml)

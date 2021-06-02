@@ -7,6 +7,8 @@ from os import path
 
 import sys
 #sys.path.append()
+from pathlib import Path
+
 from lxml import etree
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoFactory import wano_constructor_helper, wano_without_view_constructor_helper
@@ -80,7 +82,7 @@ class TestWaNoModels(unittest.TestCase):
     def _construct_wano_nogui(self,wanofile):
         with open(wanofile, 'rt') as infile:
             xml = etree.parse(infile)
-        wano_dir_root = os.path.dirname(os.path.realpath(wanofile))
+        wano_dir_root = Path(os.path.dirname(os.path.realpath(wanofile)))
 
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only=True)
         wmr.parse_from_xml(xml)

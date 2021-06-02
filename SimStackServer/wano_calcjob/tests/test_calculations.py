@@ -4,6 +4,7 @@
 import os
 from os import path
 from os.path import join
+from pathlib import Path
 
 import yaml
 from aiida import orm
@@ -43,7 +44,7 @@ from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 
 
 def get_parsed_em_xml():
-    wmr = WaNoModelRoot(wano_dir_root=emdir(), model_only=True)
+    wmr = WaNoModelRoot(wano_dir_root=Path(emdir()), model_only=True)
     with open(emxml(), 'rt') as infile:
         xml = etree.parse(infile)
     wmr.parse_from_xml(xml)
@@ -83,7 +84,7 @@ def get_parsed_em_xml():
     return rendered_wano
 
 def get_parsed_dep_xml():
-    wmr = WaNoModelRoot(wano_dir_root=depdir(), model_only=True)
+    wmr = WaNoModelRoot(wano_dir_root=Path(depdir()), model_only=True)
     with open(depxml(), 'rt') as infile:
         xml = etree.parse(infile)
     wmr.parse_from_xml(xml)

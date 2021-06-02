@@ -6,9 +6,11 @@ import logging
 import re
 from functools import partial
 from os.path import join
+from pathlib import Path
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.XMLUtils import is_regular_element
+from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path
 from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
 
 import collections
@@ -673,12 +675,12 @@ class MultipleOfModel(AbstractWanoModel):
 
 # This is the parent class and grandfather. Children have to be unique, no lists here
 class WaNoModelRoot(WaNoModelDictLike):
-    def _exists_read_load(self, object, filename):
-        if os.path.exists(filename):
-            object.load(filename)
+    def _exists_read_load(self, object, pathobj: Path):
+        if pathobj.exists():
+            object.load(pathobj)
         else:
             object.make_default_list()
-            object.save(filename)
+            #object.save(pathobj)
 
     def set_parent_wf(self, parent_wf):
         self._parent_wf = parent_wf
@@ -710,14 +712,13 @@ class WaNoModelRoot(WaNoModelDictLike):
 
             self.export_model = ExportTableModel(parent=None,wano_parent=self)
             self.export_model.make_default_list()
-
-            imports_fn = os.path.join(self._wano_dir_root, "imports.yml")
+            imports_fn = self._wano_dir_root / "imports.yml"
             self._exists_read_load(self.import_model, imports_fn)
 
-            exports_fn = os.path.join(self._wano_dir_root, "exports.yml")
+            exports_fn = self._wano_dir_root / "exports.yml"
             self._exists_read_load(self.export_model, exports_fn)
 
-            resources_fn = os.path.join(self._wano_dir_root, "resources.yml")
+            resources_fn = self._wano_dir_root / "resources.yml"
             self._exists_read_load(self.resources, resources_fn)
         self._root = self
 
@@ -862,21 +863,22 @@ class WaNoModelRoot(WaNoModelDictLike):
     def datachanged_force(self):
         self.notify_datachanged("force")
 
-    def save_xml(self,filename):
+    def save_xml(self, wano : WaNoListEntry):
+        filename = get_wano_xml_path(wano)
         print("Writing to ",filename)
-        self.wano_dir_root = os.path.dirname(filename)
+        self.wano_dir_root = wano.folder
         success = False
         try:
-            with open(filename,'w',newline='\n') as outfile:
+            with filename.open('wt',newline='\n') as outfile:
                 outfile.write(etree.tostring(self.full_xml,pretty_print=True).decode("utf-8"))
             success = True
-            resources_fn = os.path.join(self.wano_dir_root, "resources.yml")
+            resources_fn = self.wano_dir_root / "resources.yml"
             self.resources.save(resources_fn)
 
-            imports_fn = os.path.join(self.wano_dir_root, "imports.yml")
+            imports_fn = self.wano_dir_root / "imports.yml"
             self.import_model.save(imports_fn)
 
-            exports_fn = os.path.join(self.wano_dir_root, "exports.yml")
+            exports_fn = self.wano_dir_root / "exports.yml"
             self.export_model.save(exports_fn)
 
         except Exception as e:

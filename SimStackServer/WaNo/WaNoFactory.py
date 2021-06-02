@@ -5,6 +5,8 @@ import os
 from lxml import etree
 
 from SimStackServer.WaNo.WaNoTreeWalker import ViewCollector, WaNoTreeWalker
+from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path
+
 
 
 def wano_without_view_constructor_helper(wmr, start_path = None):
@@ -85,11 +87,12 @@ def wano_constructor_helper(wmr, start_path = None, parent_view = None):
     return wmr,rootview
 
 
-def wano_constructor(wanofile):
+def wano_constructor(wano: WaNoListEntry):
     # Timo: Begin path, Begin parse, etc. in the function above. Then call the function above
     # and make this the main entry point
-    wano_dir_root = os.path.dirname(os.path.realpath(wanofile))
-    with open(wanofile, 'rt') as infile:
+    wano_dir_root = wano.folder
+    xml = get_wano_xml_path(wano)
+    with xml.open("rt") as infile:
         xml = etree.parse(infile)
 
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
