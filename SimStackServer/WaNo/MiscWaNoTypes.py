@@ -13,8 +13,7 @@ class WaNoListEntry:
     folder: pathlib.Path
     icon: Any
 
-def get_wano_xml_path(wle: WaNoListEntry) -> pathlib.Path:
-    myfolder = wle.folder
+def get_wano_xml_path(myfolder: pathlib.Path) -> pathlib.Path:
     if isinstance(myfolder, zipfile.Path):
         pp = pathlib.PurePath(str(myfolder))
         name = pp.name[:-4]
