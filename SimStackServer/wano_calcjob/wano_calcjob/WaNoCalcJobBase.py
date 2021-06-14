@@ -1,6 +1,8 @@
 import os
+import re
 from pathlib import Path
 
+import yaml
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
@@ -9,7 +11,9 @@ from jinja2 import Template
 from lxml import etree
 
 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+from SimStackServer.wano_calcjob.wano_calcjob.wano_calcjob_exceptions import UnknownTypeError
 from TreeWalker.TreeWalker import TreeWalker
+from TreeWalker.flatten_dict import flatten_dict
 
 
 class WaNoCalcJob(CalcJob):
@@ -35,6 +39,19 @@ class WaNoCalcJob(CalcJob):
     _myxml = None
     _wano_path = None
 
+    @staticmethod
+    def _guess_type(input_value):
+        if isinstance(input_value, float):
+            return "Float"
+        if isinstance(input_value, int):
+            return "Int"
+        if isinstance(input_value, str):
+            return "String"
+        if isinstance(input_value, bool):
+            return "Boolean"
+        else:
+            raise UnknownTypeError("Could not find type of %s: %s" % (input_value, type(input_value)))
+
     @classmethod
     def wano_repo_path(cls):
         if cls._wano_path is None:
@@ -45,6 +62,23 @@ class WaNoCalcJob(CalcJob):
             return wanodir
         else:
             return cls._wano_path
+
+    @classmethod
+    def _get_output_dict_from_wano_dir(cls):
+        myxml = cls._myxml
+        mydir = Path(myxml).parent
+        outdict_fn = mydir/"output_dict.yml"
+        returndict = {}
+        if outdict_fn.is_file():
+            with open(outdict_fn, 'rt') as infile:
+                outdict = yaml.safe_load(infile.read())
+            flattened_outdict = flatten_dict(outdict)
+            for entry, value in flattened_outdict.items():
+                mytype = cls._guess_type(value)
+                returndict[entry] = mytype
+        return returndict
+        ## outconf still todo:
+        #outconf_fn = mydir/"output_config.ini"
 
     @classmethod
     def define(cls, spec):
@@ -63,8 +97,7 @@ class WaNoCalcJob(CalcJob):
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES', message='Calculation did not produce all expected output files.')
         spec.exit_code(0, 'EXIT_NORMAL', message='Normal exit condition.')
 
-
-
+    #Todo TImo, here: you need to test this. It should be complete now.
 
     @classmethod
     def _build_spec_from_wano(cls, wfxml, spec):
@@ -82,12 +115,18 @@ class WaNoCalcJob(CalcJob):
             spec.input(dotpath, valid_type = orm.SinglefileData, required = True)
         spec.input("static_extra_files.rendered_wanoyml", valid_type=orm.SinglefileData)
 
-        wmr:WaNoModelRoot
+        wmr: WaNoModelRoot
         output_files = cls.output_files()
         output_namespaces = cls.output_namespaces()
+        output_vars = cls.output_vars()
 
         for ons in output_namespaces:
             spec.output_namespace(ons)
+        with open("/home/strunk/debug.txt", 'at') as outfile:
+
+            for path, vartype in output_vars.items():
+                outfile.write(path)
+                spec.output(path, valid_type=cls.typemap[vartype], required = False)
 
         for myfile in output_files:
             spec.output(cls.clean_path(cls.dot_to_none(myfile)), valid_type=SinglefileData)
@@ -102,14 +141,14 @@ class WaNoCalcJob(CalcJob):
     @classmethod
     def _set_caches(cls):
         wmr = cls._parse_wano_xml(cls._myxml)
-        namespaces, vars, output_namespaces, outputs, outputfiles, inputfile_paths, extra_inputfiles = cls._wano_to_namespaces_and_vars(wmr)
-        cls._cached_input_namespaces = namespaces
-        cls._cached_inputs = vars
-        cls._cached_outputs = outputs
-        cls._cached_output_namespaces = output_namespaces
-        cls._cached_output_files = outputfiles
-        cls._cached_inputfile_paths = inputfile_paths
-        cls._cached_extra_inputfiles = extra_inputfiles
+        wano_namespaces_and_vars_dict = cls._wano_to_namespaces_and_vars(wmr)
+        cls._cached_input_namespaces = wano_namespaces_and_vars_dict["namespaces"]
+        cls._cached_inputs = wano_namespaces_and_vars_dict["input_types_by_cleaned_path"]
+        cls._cached_outputs = wano_namespaces_and_vars_dict["output_types_by_cleaned_path"]
+        cls._cached_output_namespaces = wano_namespaces_and_vars_dict["output_namespaces"]
+        cls._cached_output_files = wano_namespaces_and_vars_dict["outputfiles"]
+        cls._cached_inputfile_paths = wano_namespaces_and_vars_dict["inputfile_paths"]
+        cls._cached_extra_inputfiles = wano_namespaces_and_vars_dict["extra_inputfile_paths"]
 
     @classmethod
     def input_namespaces(cls):
@@ -169,6 +208,7 @@ class WaNoCalcJob(CalcJob):
 
     @classmethod
     def clean_path(cls, path):
+        path = re.sub(r"(\.|^)(\d*)(\.|$)",r"\1ELE_\2\3", path)
         if isinstance(path, int):
             return "L_ELE_%d"%path
         return path.replace(" ","_")\
@@ -199,20 +239,47 @@ class WaNoCalcJob(CalcJob):
                 namespaces.add(namespace)
             #else:
             #    print("found type",mytype)
-        outpaths = {}
+        inpaths = {}
         for path in mypaths:
-            outpaths[cls.clean_path(path)] = mypaths[path]
+            inpaths[cls.clean_path(path)] = mypaths[path]
         
         output_namespaces = ["files"]
         outputfiles = wmr.get_output_files(only_static=True)
+        outputfiles = set(outputfiles)
+        outputfiles.add("output_config.ini")
+        outputfiles.add("output_dict.yml")
+        outputfiles = list(outputfiles)
         outputs_in_namespace = []
-        outputs = []
         for myfile in outputfiles:
             outputs_in_namespace.append("files.%s"%myfile)
 
+        outpaths = {}
+
+        output_namespaces = set(output_namespaces)
+        non_file_outputs = cls._get_output_dict_from_wano_dir()
+        for path, mytype in non_file_outputs.items():
+            namespace = cls.clean_path(".".join(path.split(".")[:-1]))
+            if namespace == "":
+                continue
+            else:
+                output_namespaces.add(namespace)
+
+        for path in non_file_outputs:
+            outpaths[cls.clean_path(path)] = non_file_outputs[path]
+
+        output_namespaces = list(output_namespaces)
+
         extra_inputfile_paths = wmr.get_extra_inputs_aiida()
         # We return input_namepsaces, input_paths, output_namespaces, output_paths (without files), outputfiles
-        return namespaces, outpaths, output_namespaces, outputs, outputfiles, inputfile_paths, extra_inputfile_paths
+        return {
+            "namespaces": namespaces,
+            "input_types_by_cleaned_path": inpaths,
+            "output_namespaces": output_namespaces,
+            "output_types_by_cleaned_path": outpaths,
+            "outputfiles": outputfiles,
+            "inputfile_paths": inputfile_paths,
+            "extra_inputfile_paths": extra_inputfile_paths
+        }
 
     @classmethod
     def deref_by_listpath(cls, toderef, listpath):
