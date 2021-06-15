@@ -27,6 +27,8 @@ class WaNoCalcJob(CalcJob):
     _cached_output_files = None
     _cached_inputfile_paths = None
     _cached_extra_inputfiles = None
+    _cached_simstack_to_aiida_pathmap = None
+    _cached_aiida_to_simstack_pathmap = None
     _parser_name = None
 
     typemap = {
@@ -121,12 +123,13 @@ class WaNoCalcJob(CalcJob):
         output_vars = cls.output_vars()
 
         for ons in output_namespaces:
-            spec.output_namespace(ons)
-        with open("/home/strunk/debug.txt", 'at') as outfile:
+            if ons == "files":
+                spec.output_namespace(ons, dynamic = True)
+            else:
+                spec.output_namespace(ons)
 
-            for path, vartype in output_vars.items():
-                outfile.write(path)
-                spec.output(path, valid_type=cls.typemap[vartype], required = False)
+        for path, vartype in output_vars.items():
+            spec.output(path, valid_type=cls.typemap[vartype], required = False)
 
         for myfile in output_files:
             spec.output(cls.clean_path(cls.dot_to_none(myfile)), valid_type=SinglefileData)
@@ -139,6 +142,10 @@ class WaNoCalcJob(CalcJob):
         return inputpath.replace(".","")
 
     @classmethod
+    def dot_to_two_underscores(cls, inputpath):
+        return inputpath.replace(".", "__")
+
+    @classmethod
     def _set_caches(cls):
         wmr = cls._parse_wano_xml(cls._myxml)
         wano_namespaces_and_vars_dict = cls._wano_to_namespaces_and_vars(wmr)
@@ -149,6 +156,8 @@ class WaNoCalcJob(CalcJob):
         cls._cached_output_files = wano_namespaces_and_vars_dict["outputfiles"]
         cls._cached_inputfile_paths = wano_namespaces_and_vars_dict["inputfile_paths"]
         cls._cached_extra_inputfiles = wano_namespaces_and_vars_dict["extra_inputfile_paths"]
+        cls._cached_simstack_to_aiida_pathmap = wano_namespaces_and_vars_dict["simstack_to_aiida_pathmap"]
+        cls._cached_aiida_to_simstack_pathmap = wano_namespaces_and_vars_dict["aiida_to_simstack_pathmap"]
 
     @classmethod
     def input_namespaces(cls):
@@ -167,6 +176,18 @@ class WaNoCalcJob(CalcJob):
         if cls._cached_extra_inputfiles is None:
             cls._set_caches()
         return cls._cached_extra_inputfiles
+
+    @classmethod
+    def get_simstack_to_aiida_pathmap(cls):
+        if cls._cached_simstack_to_aiida_pathmap is None:
+            cls._set_caches()
+        return cls._cached_simstack_to_aiida_pathmap
+
+    @classmethod
+    def get_aiida_to_simstack_pathmap(cls):
+        if cls._cached_aiida_to_simstack_pathmap is None:
+            cls._set_caches()
+        return cls._cached_aiida_to_simstack_pathmap
 
     @classmethod
     def input_vars(cls):
@@ -208,6 +229,7 @@ class WaNoCalcJob(CalcJob):
 
     @classmethod
     def clean_path(cls, path):
+        # replaces "45.gdg.2.1421.j55.33" with "ELE_45.gdg.ELE_2.ELE_1421.j55.ELE_33" because aiida does not like integer ports
         path = re.sub(r"(\.|^)(\d*)(\.|$)",r"\1ELE_\2\3", path)
         if isinstance(path, int):
             return "L_ELE_%d"%path
@@ -250,10 +272,20 @@ class WaNoCalcJob(CalcJob):
         outputfiles.add("output_dict.yml")
         outputfiles = list(outputfiles)
         outputs_in_namespace = []
-        for myfile in outputfiles:
-            outputs_in_namespace.append("files.%s"%myfile)
+
 
         outpaths = {}
+
+        simstack_to_aiida_pathmap = {}
+        aiida_to_simstack_pathmap = {}
+
+        for myfile in outputfiles:
+            outputs_in_namespace.append("files.%s"%myfile)
+            simstack_file = "files." + myfile
+            aiida_file = "files__" + cls.dot_to_none(myfile)
+            simstack_to_aiida_pathmap[simstack_file] = aiida_file
+            aiida_to_simstack_pathmap[aiida_file] = simstack_file
+
 
         output_namespaces = set(output_namespaces)
         non_file_outputs = cls._get_output_dict_from_wano_dir()
@@ -265,7 +297,13 @@ class WaNoCalcJob(CalcJob):
                 output_namespaces.add(namespace)
 
         for path in non_file_outputs:
-            outpaths[cls.clean_path(path)] = non_file_outputs[path]
+            clean_path = cls.clean_path(path)
+
+            # When querying paths from AiiDA it somehow translates dots into double underscores.
+            double_underscore_clean_path = cls.dot_to_two_underscores(clean_path)
+            simstack_to_aiida_pathmap[path] = double_underscore_clean_path
+            aiida_to_simstack_pathmap[double_underscore_clean_path] = path
+            outpaths[clean_path] = non_file_outputs[path]
 
         output_namespaces = list(output_namespaces)
 
@@ -278,7 +316,9 @@ class WaNoCalcJob(CalcJob):
             "output_types_by_cleaned_path": outpaths,
             "outputfiles": outputfiles,
             "inputfile_paths": inputfile_paths,
-            "extra_inputfile_paths": extra_inputfile_paths
+            "extra_inputfile_paths": extra_inputfile_paths,
+            "simstack_to_aiida_pathmap" : simstack_to_aiida_pathmap,
+            "aiida_to_simstack_pathmap": aiida_to_simstack_pathmap
         }
 
     @classmethod

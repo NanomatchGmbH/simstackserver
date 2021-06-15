@@ -64,7 +64,7 @@ class WaNoCalcJobParser(Parser):
             try:
                 with self.retrieved.open(myfile, 'rb') as opened_file:
                     output_node = SinglefileData(file=opened_file)
-                    self.out(mycls.clean_path(mycls.dot_to_none(myfile)), output_node)
+                    self.out("files." + mycls.clean_path(mycls.dot_to_none(myfile)), output_node)
             except (NotExistent, FileNotFoundError) as _:
                 if myfile in ["output_config.ini","output_dict.yml"]:
                     continue

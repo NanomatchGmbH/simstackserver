@@ -1956,6 +1956,7 @@ class Workflow(WorkflowBase):
         self._report_collector = None
         # self._report_collector  should record uids, when they happen and there place during execution
         # Assembly then knows their uid.
+        self._path_to_aiida_uuid = {}
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -2219,6 +2220,12 @@ class Workflow(WorkflowBase):
         jobdirectory = wfem.runtime_directory
 
         myjobid = wfem.jobid
+        if self.queueing_system == "AiiDA":
+            from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
+            myjob = AiiDAJob(myjobid)
+            process_class = myjob.get_process_class()
+            aiida_to_simstack_pathmap = process_class.get_aiida_to_simstack_pathmap()
+            simstack_path_to_aiida_uuid = {}
 
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
@@ -2226,11 +2233,16 @@ class Workflow(WorkflowBase):
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
             if self.queueing_system == "AiiDA":
-                from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
-                myjob = AiiDAJob(wfem.jobid)
+                #from aiida.plugins import CalculationFactory
+                #calcjob_class = CalculationFactory(wfem.name)
+                pc = myjob.get_process_class()
+                self._logger.info(f"Staging out {pc.__name__}")
+
                 outputs = myjob.get_outputs()
                 for myoutput in outputs:
                     mynode = outputs[myoutput]
+                    self._logger.info(f"Storing myoutput {myoutput}")
+
                     if mynode.class_node_type == 'data.singlefile.SinglefileData.':
                         stagingfilename = mynode.filename
                         with mynode.open(mode="rb") as infile:
@@ -2238,6 +2250,14 @@ class Workflow(WorkflowBase):
                             os.makedirs(myfolder, exist_ok=True)
                             with open(absfile, 'wb') as outfile:
                                 outfile.write(infile.read())
+                    try:
+                        simstack_path = aiida_to_simstack_pathmap[myoutput]
+                    except KeyError as e:
+                        self._logger.exception("Expected Exception here")
+                        self._logger.error("keys were: %s"%( ",".join([str(key) for key in aiida_to_simstack_pathmap]) ))
+                        #If it does not have a simstack_path, we don't need it for further things.
+                        continue
+                    simstack_path_to_aiida_uuid[simstack_path] = mynode.uuid
 
             # In case of a glob pattern, we need special care
             if "*" in absfile:

@@ -10,6 +10,9 @@ class AiiDAJob:
         if self._mynode.is_excepted:
             print(self._mynode.exception)
 
+    def get_process_class(self):
+        return self._mynode.process_class
+
     def kill(self):
         controller = manager.get_manager().get_process_controller()
         if not self._mynode.is_killed:
