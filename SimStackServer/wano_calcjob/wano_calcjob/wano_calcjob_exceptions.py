@@ -1,0 +1,3 @@
+
+class UnknownTypeError(Exception):
+    pass
