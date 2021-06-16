@@ -2227,37 +2227,42 @@ class Workflow(WorkflowBase):
             aiida_to_simstack_pathmap = process_class.get_aiida_to_simstack_pathmap()
             simstack_path_to_aiida_uuid = {}
 
+
+        if self.queueing_system == "AiiDA":
+            #from aiida.plugins import CalculationFactory
+            #calcjob_class = CalculationFactory(wfem.name)
+            pc = myjob.get_process_class()
+            self._logger.info(f"Staging out {pc.__name__}")
+
+            outputs = myjob.get_outputs()
+            for myoutput in outputs:
+                mynode = outputs[myoutput]
+
+
+                if mynode.class_node_type == 'data.singlefile.SinglefileData.':
+                    stagingfilename = mynode.filename
+                    with mynode.open(mode="rb") as infile:
+                        myfolder = jobdirectory
+                        os.makedirs(myfolder, exist_ok=True)
+                        absfile = join(myfolder, stagingfilename)
+                        with open(absfile, 'wb') as outfile:
+                            outfile.write(infile.read())
+                try:
+                    simstack_path = aiida_to_simstack_pathmap[myoutput]
+                except KeyError as e:
+                    if myoutput not in ["retrieved","remote_folder"]:
+                        self._logger.exception("Expected Exception here trying to stage out %s"%myoutput)
+                        self._logger.error("keys were: %s"%( ",".join([str(key) for key in aiida_to_simstack_pathmap]) ))
+                    #If it does not have a simstack_path, we don't need it for further things.
+                    continue
+                simstack_path_to_aiida_uuid[simstack_path] = mynode.uuid
+
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
             # tofile = myinput[0]
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
-            if self.queueing_system == "AiiDA":
-                #from aiida.plugins import CalculationFactory
-                #calcjob_class = CalculationFactory(wfem.name)
-                pc = myjob.get_process_class()
-                self._logger.info(f"Staging out {pc.__name__}")
 
-                outputs = myjob.get_outputs()
-                for myoutput in outputs:
-                    mynode = outputs[myoutput]
-                    self._logger.info(f"Storing myoutput {myoutput}")
-
-                    if mynode.class_node_type == 'data.singlefile.SinglefileData.':
-                        stagingfilename = mynode.filename
-                        with mynode.open(mode="rb") as infile:
-                            myfolder = os.path.split(absfile)[0]
-                            os.makedirs(myfolder, exist_ok=True)
-                            with open(absfile, 'wb') as outfile:
-                                outfile.write(infile.read())
-                    try:
-                        simstack_path = aiida_to_simstack_pathmap[myoutput]
-                    except KeyError as e:
-                        self._logger.exception("Expected Exception here")
-                        self._logger.error("keys were: %s"%( ",".join([str(key) for key in aiida_to_simstack_pathmap]) ))
-                        #If it does not have a simstack_path, we don't need it for further things.
-                        continue
-                    simstack_path_to_aiida_uuid[simstack_path] = mynode.uuid
 
             # In case of a glob pattern, we need special care
             if "*" in absfile:
@@ -2279,6 +2284,9 @@ class Workflow(WorkflowBase):
             topath = wfem.outputpath.replace('/','.')
             for key,value in flattened_output_variables.items():
                 self._output_variables["%s.%s"%(topath,key)] = value
+            if self.queueing_system == "AiiDA":
+                for sims_path, uuid in simstack_path_to_aiida_uuid.items():
+                    self._path_to_aiida_uuid["%s.%s"%(topath, sims_path)] = uuid
 
         """ Same loop again this time copying files """
         for myoutput in wfem.outputs:
