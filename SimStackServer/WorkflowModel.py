@@ -2087,7 +2087,7 @@ class Workflow(WorkflowBase):
 
         jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
         counter = 0
-        while path.isdir(jobdirectory):
+        while os.path.isdir(jobdirectory):
             jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem) + "%d"%counter
             counter += 1
             if counter == 20:
@@ -2110,11 +2110,14 @@ class Workflow(WorkflowBase):
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
+
         rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
                                                     input_var_db = self._input_variables,
                                                     output_var_db = self._output_variables,
                                                     runtime_variables = wfem.get_runtime_variables()
                                                     )
+        render_substitutions = wmr.get_render_substitutions()
+        print(render_substitutions)
         if self.queueing_system == "AiiDA":
             do_aiida = True
         else:
@@ -2204,6 +2207,13 @@ class Workflow(WorkflowBase):
             from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
             aiida_rw = wmr.get_valuedict_with_aiida_types(aiida_files_by_relpath = aiida_files_by_relpath)
+            for mypath in render_substitutions.keys():
+                print("I would try to replace",mypath)
+                substituted_to = render_substitutions[mypath]
+                print(substituted_to in self._path_to_aiida_uuid)
+
+            #tw_aiida_rw = TreeWalker(aiida_rw)
+            #tw_aiida_rw.get
             aiida_rw["static_extra_files"] = {}
             aiida_files.append(SinglefileData("%s/rendered_wano.yml"%jobdirectory, filename="rendered_wano.yml"))
             for myfile in aiida_files:

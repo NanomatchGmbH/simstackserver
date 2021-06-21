@@ -688,6 +688,9 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_parent_wf(self):
         return self._parent_wf
 
+    def get_render_substitutions(self):
+        return self._render_substitutions
+
     def __init__(self, *args, **kwargs):
         super(WaNoModelRoot, self).__init__(*args, **kwargs)
         self._logger = logging.getLogger("WaNoModelRoot")
@@ -699,6 +702,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._wano_dir_root = kwargs["wano_dir_root"]
         self._my_export_paths = []
         self._block_signals = False
+        self._render_substitutions = {}
 
         if "model_only" in kwargs and kwargs["model_only"] is True:
             pass
@@ -1040,8 +1044,10 @@ class WaNoModelRoot(WaNoModelDictLike):
                             rendered_parent = varname
 
                     if varname in input_var_db:
+                        self._render_substitutions[path] = varname
                         rendered_parent = input_var_db[varname]
                     if varname in output_var_db:
+                        self._render_substitutions[path] = varname
                         rendered_parent = output_var_db[varname]
 
             if flat_variable_list is not None:
@@ -1278,7 +1284,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                   )
         return pc.path_to_value
 
-    def get_valuedict_with_aiida_types(self, aiida_files_by_relpath = None):
+    def get_valuedict_with_aiida_types(self, aiida_files_by_relpath = None, aiida_vars_by_relpath = None):
         if aiida_files_by_relpath is None:
             aiida_files_by_relpath = {}
         outdict = {}
