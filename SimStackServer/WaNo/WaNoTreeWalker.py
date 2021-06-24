@@ -273,6 +273,12 @@ def subdict_skiplevel_to_type(subdict,
         )
     return None
 
+def subdict_skiplevel_path_version(inpath):
+    if inpath.startswith("TABS."):
+        inpath = inpath[5:]
+    inpath = inpath.replace(".content.","")
+    return inpath
+
 def subdict_skiplevel_to_aiida_type(subdict,
                       call_info, aiida_files_by_relpath):
     newsubdict = None

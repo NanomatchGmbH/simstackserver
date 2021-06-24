@@ -112,6 +112,7 @@ class WaNoCalcJob(CalcJob):
             spec.input(path, valid_type=cls.typemap[vartype], required = False)
 
         spec.input_namespace("static_extra_files", dynamic=True)
+        spec.input_namespace("filename_locations", dynamic=True)
         for path in cls.extra_inputfiles():
             dotpath = "static_extra_files." + cls.clean_path(cls.dot_to_none(path))
             spec.input(dotpath, valid_type = orm.SinglefileData, required = True)
@@ -273,6 +274,8 @@ class WaNoCalcJob(CalcJob):
         outputfiles = list(outputfiles)
         outputs_in_namespace = []
 
+        # wmr needs a
+
 
         outpaths = {}
 
@@ -358,15 +361,22 @@ class WaNoCalcJob(CalcJob):
         calcinfo.codes_info = [codeinfo]
         local_copy_list = []
         #calcinfo.remote_copy_list = []
+        uuid_to_loc = {}
+        for uuidkey, loc in self.inputs["filename_locations"].items():
+            uuid_to_loc[uuidkey[1:].replace("_","-")] = loc
+
+
         for localfile_path_without in self.extra_inputfiles():
             localfile_path = "static_extra_files." + self.dot_to_none(localfile_path_without)
             fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
-            local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
+            myname = uuid_to_loc[str(fileobj.uuid)].value
+            local_copy_list.append((fileobj.uuid, fileobj.filename, myname))
 
         local_copy_list.append( (self.inputs.static_extra_files.rendered_wanoyml.uuid, "rendered_wano.yml", "rendered_wano.yml") )
         for localfile_path in self.inputfile_paths():
             fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
-            local_copy_list.append((fileobj.uuid, fileobj.filename, fileobj.filename))
+            myname = uuid_to_loc[str(fileobj.uuid)].value
+            local_copy_list.append((fileobj.uuid, fileobj.filename, myname))
 
         calcinfo.local_copy_list = local_copy_list
 

@@ -22,6 +22,9 @@ from os import path
 import yaml
 from lxml import etree
 import lxml.html
+from TreeWalker.TreeWalker import TreeWalker
+from SimStackServer.WaNo.WaNoTreeWalker import subdict_skiplevel_path_version
+
 
 import numpy as np
 import networkx as nx
@@ -40,6 +43,9 @@ class ParserError(Exception):
     pass
 
 class JobSubmitException(Exception):
+    pass
+
+class JustCopyException(Exception):
     pass
 
 class Status(Flag):
@@ -1953,10 +1959,12 @@ class Workflow(WorkflowBase):
         self._input_variables = {}
         self._output_variables = {}
         self._prepared_aiida_variables = None
+
         self._report_collector = None
         # self._report_collector  should record uids, when they happen and there place during execution
         # Assembly then knows their uid.
         self._path_to_aiida_uuid = {}
+        self._filepath_to_aiida_uuid = {}
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -2120,6 +2128,8 @@ class Workflow(WorkflowBase):
         print(render_substitutions)
         if self.queueing_system == "AiiDA":
             do_aiida = True
+            from aiida.orm import load_node, SinglefileData
+            import aiida.orm as orm
         else:
             do_aiida = False
         input_vars = wmr.get_paths_and_data_dict()
@@ -2135,6 +2145,16 @@ class Workflow(WorkflowBase):
 
         # Debug dump
         if False:
+            #Plan:
+            """
+                1.) Take care of fi1es. Check provenance graph of running simulation for their namespaces
+                 # Record dict mapping stageout filename to AiiDA uuid.
+                 # When staging in files, overwrite
+                 # Stagein Filename has to be considered in WaNoCalcJob still. Right now we use filename
+                2.) Write translation layer: FILESYSTEM Path -> AiiDA output variable name
+                3.) Input variables are still missing in the aiida path to uuid dict
+            
+            """
             with open(join(jobdirectory, "inputvardb.yml"), 'wt') as outfile:
                 yaml.safe_dump(self._input_variables,outfile)
 
@@ -2146,6 +2166,7 @@ class Workflow(WorkflowBase):
             tofile = myinput[0]
             source = myinput[1]
             absfile = self.storage + '/' + source
+            print(source)
             allfiles = []
             if "*" in absfile:
                 allfiles = glob(absfile)
@@ -2186,6 +2207,8 @@ class Workflow(WorkflowBase):
                     actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
                     actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                 try:
+                    if absfile.endswith("output_dict.yml") or absfile.endswith("output_config.ini"):
+                        raise JustCopyException()
                     with open(absfile, 'r') as infile:
                         absfile_content = infile.read()
                     rendered_content = Template(absfile_content).render(wano = rendered_wano,
@@ -2194,23 +2217,36 @@ class Workflow(WorkflowBase):
                     )
                     with open(actual_tofile, 'w') as outfile:
                         outfile.write(rendered_content)
+                except JustCopyException as e:
+                    shutil.copyfile(absfile, tofile)
                 except Exception as e:
                     self._logger.warning("Unable to render input file %s. Copying instead. Exception was: %s"%(absfile,e))
                     shutil.copyfile(absfile, tofile)
                 if do_aiida:
-                    from aiida.orm import SinglefileData
-                    afile = SinglefileData(actual_tofile, filename=actual_tofile_rel)
+                    if absfile in self._filepath_to_aiida_uuid:
+                        myuuid = self._filepath_to_aiida_uuid[absfile]
+                        afile = load_node(myuuid)
+                    else:
+                        afile = SinglefileData(actual_tofile, filename=actual_tofile_rel)
                     aiida_files.append(afile)
                     aiida_files_by_relpath[actual_tofile_rel] = afile
         if do_aiida:
             # Here we prep the aiida value dict:
             from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
+            from aiida.orm import load_node
+
             aiida_rw = wmr.get_valuedict_with_aiida_types(aiida_files_by_relpath = aiida_files_by_relpath)
+            aiida_rw_tw = TreeWalker(aiida_rw)
             for mypath in render_substitutions.keys():
-                print("I would try to replace",mypath)
+                #print("I would try to replace",mypath)
+                cleaned_path = subdict_skiplevel_path_version(mypath)
                 substituted_to = render_substitutions[mypath]
-                print(substituted_to in self._path_to_aiida_uuid)
+                if substituted_to in self._path_to_aiida_uuid:
+                    splitpath = cleaned_path.split(".")
+                    myuuid = self._path_to_aiida_uuid[substituted_to]
+                    datanode = load_node(uuid=myuuid)
+                    aiida_rw_tw[splitpath] = datanode
 
             #tw_aiida_rw = TreeWalker(aiida_rw)
             #tw_aiida_rw.get
@@ -2219,6 +2255,11 @@ class Workflow(WorkflowBase):
             for myfile in aiida_files:
                 cleaned_filename = WCJ.dot_to_none(myfile.filename)
                 aiida_rw["static_extra_files"][cleaned_filename] = myfile
+            aiida_rw["filename_locations"] = {}
+            for logical_path, fileobj in aiida_files_by_relpath.items():
+                aiida_rw["filename_locations"]["a%s"%fileobj.uuid] = orm.Str(logical_path)
+            print(aiida_rw)
+
             aiida_rw = clean_dict_for_aiida(aiida_rw)
             aiida_rw["wano_name"] = wmr.name
             wfem.set_aiida_valuedict(aiida_rw)
@@ -2236,6 +2277,7 @@ class Workflow(WorkflowBase):
             process_class = myjob.get_process_class()
             aiida_to_simstack_pathmap = process_class.get_aiida_to_simstack_pathmap()
             simstack_path_to_aiida_uuid = {}
+            staging_filename_to_aiida_obj = {}
 
 
         if self.queueing_system == "AiiDA":
@@ -2251,10 +2293,12 @@ class Workflow(WorkflowBase):
 
                 if mynode.class_node_type == 'data.singlefile.SinglefileData.':
                     stagingfilename = mynode.filename
+
                     with mynode.open(mode="rb") as infile:
                         myfolder = jobdirectory
                         os.makedirs(myfolder, exist_ok=True)
                         absfile = join(myfolder, stagingfilename)
+                        staging_filename_to_aiida_obj[absfile] = mynode
                         with open(absfile, 'wb') as outfile:
                             outfile.write(infile.read())
                 try:
@@ -2309,6 +2353,8 @@ class Workflow(WorkflowBase):
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
+
+
             tofiledir = path.dirname(tofile)
             self._logger.info("Staging %s to %s" % (absfile, tofiledir))
             mkdir_p(tofiledir)
@@ -2328,6 +2374,8 @@ class Workflow(WorkflowBase):
                     basename = os.path.basename(tocopy)
                     tofile = join(tofiledir,basename)
                 shutil.copyfile(tocopy, tofile)
+                if tocopy in staging_filename_to_aiida_obj:
+                    self._filepath_to_aiida_uuid[tofile] = staging_filename_to_aiida_obj[tocopy].uuid
 
         return myvars
 
