@@ -706,7 +706,9 @@ export NANOMATCH=%s
                         queue_to_qsub = {
                             "lsf": "bsub",
                             "slurm": "sbatch",
-                            "pbs": "qsub"
+                            "pbs": "qsub",
+                            "sge": "qsub",
+                            "sge_smp": "qsub"
                         }
                         myexe = queue_to_qsub[queueing_system]
                         exists = shutil.which(myexe)
