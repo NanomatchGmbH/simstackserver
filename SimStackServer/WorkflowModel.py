@@ -958,7 +958,7 @@ export NANOMATCH=%s
 
         result = etree.SubElement(detail_html, "p")
         result.attrib["class"] = "result"
-        result.text = "This is the space for result conditions, such as filesize too small. Or Tag in resultfile"
+        result.text = ""
         return detail_html
 
     @property

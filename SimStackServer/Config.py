@@ -5,7 +5,7 @@ from appdirs import AppDirs
 from os import path
 import json
 import psutil
-from crontab import CronTab
+#from crontab import CronTab
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -120,6 +120,9 @@ class Config(object):
         :param name_of_process (str): This process will be restarted in the crontab. Has to be absolute.
         :return:
         """
+        return
+        """
+        # This is old Code - we don't use the crontab anymore.
         ct = CronTab(user=True)
         for _ in ct.find_comment(self._servertag_full):
             return
@@ -127,11 +130,15 @@ class Config(object):
         job = ct.new(command=name_of_process+" > /dev/null", comment = self._servertag_full)
         job.minute.every(10)
         ct.write()
+        """
 
     def unregister_crontab(self):
         """
         Undoes what register_crontab does.
         :return:
+        """
+        return
+        # This is old code, we don't use the crontab anymore.
         """
         to_unregister = []
         ct = CronTab(user=True)
@@ -140,6 +147,7 @@ class Config(object):
         for job in to_unregister:
             ct.remove(job)
         ct.write()
+        """
 
     @classmethod
     def backup_config(cls):
