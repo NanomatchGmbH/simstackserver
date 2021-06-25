@@ -2125,7 +2125,6 @@ class Workflow(WorkflowBase):
                                                     runtime_variables = wfem.get_runtime_variables()
                                                     )
         render_substitutions = wmr.get_render_substitutions()
-        print(render_substitutions)
         if self.queueing_system == "AiiDA":
             do_aiida = True
             from aiida.orm import load_node, SinglefileData
@@ -2185,15 +2184,15 @@ class Workflow(WorkflowBase):
         for myinput in wfem.inputs:
             tofile = jobdirectory + '/' + myinput[0]
             source = myinput[1]
-            absfile = self.storage + '/' + source
+            myabsfile = self.storage + '/' + source
 
             allfiles = []
             already_copied = []
             globmode = False # In this case we need to rewrite something
-            if "*" in absfile:
-                allfiles = glob(absfile)
+            if "*" in myabsfile:
+                allfiles = glob(myabsfile)
             else:
-                allfiles = [absfile]
+                allfiles = [myabsfile]
             if len(allfiles) > 1:
                 globmode = True
 
@@ -2201,6 +2200,7 @@ class Workflow(WorkflowBase):
                 if not path.isfile(absfile):
                     self._logger.error("Could not find file %s (expected at %s) on disk. Canceling workflow. Target was: %s"%(source,absfile, tofile))
                     return False
+                absfile = os.path.abspath(absfile)
                 actual_tofile = tofile
                 actual_tofile_rel = myinput[0]
                 if globmode:
@@ -2258,8 +2258,6 @@ class Workflow(WorkflowBase):
             aiida_rw["filename_locations"] = {}
             for logical_path, fileobj in aiida_files_by_relpath.items():
                 aiida_rw["filename_locations"]["a%s"%fileobj.uuid] = orm.Str(logical_path)
-            print(aiida_rw)
-
             aiida_rw = clean_dict_for_aiida(aiida_rw)
             aiida_rw["wano_name"] = wmr.name
             wfem.set_aiida_valuedict(aiida_rw)
