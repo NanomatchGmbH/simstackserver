@@ -39,7 +39,7 @@ class FileNotFoundErrorSimStack(FileNotFoundError):
 from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type, \
     subdict_skiplevel_to_aiida_type
 from TreeWalker.flatten_dict import flatten_dict
-from TreeWalker.tree_list_to_dict import tree_list_to_dict
+from TreeWalker.tree_list_to_dict import tree_list_to_dict, tree_list_to_dict_multiply
 
 
 class WaNoParseError(Exception):
@@ -1272,7 +1272,7 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_paths_and_type_dict_aiida(self):
         outdict = {}
         self.model_to_dict(outdict)
-        outdict = tree_list_to_dict(outdict)
+        outdict = tree_list_to_dict_multiply(outdict)
         tw = TreeWalker(outdict)
         skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel_to_type,
                              data_visitor_function=None)
@@ -1484,7 +1484,7 @@ class WaNoItemFileModel(AbstractWanoModel):
         if self.visible():
             return "File"
         else:
-            return "String"
+            return "FString"
 
     def update_xml(self):
         self.xml.text = self.mystring

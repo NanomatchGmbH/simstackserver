@@ -2238,6 +2238,7 @@ class Workflow(WorkflowBase):
 
             aiida_rw = wmr.get_valuedict_with_aiida_types(aiida_files_by_relpath = aiida_files_by_relpath)
             aiida_rw_tw = TreeWalker(aiida_rw)
+            topath = wfem.outputpath.replace('/','.')
             for mypath in render_substitutions.keys():
                 #print("I would try to replace",mypath)
                 cleaned_path = subdict_skiplevel_path_version(mypath)
@@ -2247,6 +2248,10 @@ class Workflow(WorkflowBase):
                     myuuid = self._path_to_aiida_uuid[substituted_to]
                     datanode = load_node(uuid=myuuid)
                     aiida_rw_tw[splitpath] = datanode
+                else:
+                    print("Did not find", substituted_to)
+                    print("Keys were", self._path_to_aiida_uuid.keys())
+
 
             #tw_aiida_rw = TreeWalker(aiida_rw)
             #tw_aiida_rw.get
@@ -2258,6 +2263,13 @@ class Workflow(WorkflowBase):
             aiida_rw["filename_locations"] = {}
             for logical_path, fileobj in aiida_files_by_relpath.items():
                 aiida_rw["filename_locations"]["a%s"%fileobj.uuid] = orm.Str(logical_path)
+
+            flat_dict = flatten_dict(aiida_rw)
+            # Here we make the aiida objects known to the server:
+            for key, aiida_obj in flat_dict.items():
+                fullpath = "%s.%s"%(topath,key)
+                self._path_to_aiida_uuid[fullpath] = aiida_obj.uuid
+
             aiida_rw = clean_dict_for_aiida(aiida_rw)
             aiida_rw["wano_name"] = wmr.name
             wfem.set_aiida_valuedict(aiida_rw)
@@ -2269,13 +2281,14 @@ class Workflow(WorkflowBase):
         jobdirectory = wfem.runtime_directory
 
         myjobid = wfem.jobid
+
+        staging_filename_to_aiida_obj = {}
         if self.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(myjobid)
             process_class = myjob.get_process_class()
             aiida_to_simstack_pathmap = process_class.get_aiida_to_simstack_pathmap()
             simstack_path_to_aiida_uuid = {}
-            staging_filename_to_aiida_obj = {}
 
 
         if self.queueing_system == "AiiDA":

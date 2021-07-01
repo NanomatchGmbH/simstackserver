@@ -26,7 +26,7 @@ class TestClusterManager(unittest.TestCase):
         rmtree(self._exec_dir)
 
     def test_connect(self):
-        cm = ClusterManager("nanomatch.int.kit.edu", 22, self._remote_dir, self._username,"UseSystemDefault", "None Required", "slurm", "default")
+        cm = ClusterManager("nmc.nanomatch.de", 37321, self._remote_dir, self._username,"UseSystemDefault", "None Required", "slurm", "default")
         cm.connect()
         cm.exec_command("uptime")
         cm.put_file(self._testfilename,"unittest_testfile.txt")

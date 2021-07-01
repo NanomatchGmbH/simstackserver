@@ -25,11 +25,17 @@ class ExcitonPreProcessorCalcJob(WaNoCalcJob):
 class ExcitonPreProcessorParser(WaNoCalcJobParser):
     _calcJobClass = ExcitonPreProcessorCalcJob
 
-class DihedralParametrizer2CalcJob(WaNoCalcJob):
-    _myxml = join(WaNoCalcJob.wano_repo_path(), "DihedralParametrizer2", "DihedralParametrizer2.xml")
-    _parser_name = "DihedralParametrizer2"
-class DihedralParametrizer2Parser(WaNoCalcJobParser):
-    _calcJobClass = DihedralParametrizer2CalcJob
+class DihedralParametrizer3_expertCalcJob(WaNoCalcJob):
+    _myxml = join(WaNoCalcJob.wano_repo_path(), "DihedralParametrizer3_expert", "DihedralParametrizer3_expert.xml")
+    _parser_name = "DihedralParametrizer3_expert"
+class DihedralParametrizer3_expertParser(WaNoCalcJobParser):
+    _calcJobClass = DihedralParametrizer3_expertCalcJob
+
+class MatrixLambdaCalcJob(WaNoCalcJob):
+    _myxml = join(WaNoCalcJob.wano_repo_path(), "MatrixLambda", "MatrixLambda.xml")
+    _parser_name = "MatrixLambda"
+class MatrixLambdaParser(WaNoCalcJobParser):
+    _calcJobClass = MatrixLambdaCalcJob
 
 class StokesShiftAnalysisCalcJob(WaNoCalcJob):
     _myxml = join(WaNoCalcJob.wano_repo_path(), "StokesShiftAnalysis", "StokesShiftAnalysis.xml")
@@ -73,6 +79,12 @@ class OrientationAnalysisCalcJob(WaNoCalcJob):
 class OrientationAnalysisParser(WaNoCalcJobParser):
     _calcJobClass = OrientationAnalysisCalcJob
 
+class TestNMSetupCalcJob(WaNoCalcJob):
+    _myxml = join(WaNoCalcJob.wano_repo_path(), "TestNMSetup", "TestNMSetup.xml")
+    _parser_name = "TestNMSetup"
+class TestNMSetupParser(WaNoCalcJobParser):
+    _calcJobClass = TestNMSetupCalcJob
+
 class ExtendJsCalcJob(WaNoCalcJob):
     _myxml = join(WaNoCalcJob.wano_repo_path(), "ExtendJs", "ExtendJs.xml")
     _parser_name = "ExtendJs"
@@ -90,6 +102,12 @@ class GSPAnalysisCalcJob(WaNoCalcJob):
     _parser_name = "GSPAnalysis"
 class GSPAnalysisParser(WaNoCalcJobParser):
     _calcJobClass = GSPAnalysisCalcJob
+
+class DihedralParametrizer3CalcJob(WaNoCalcJob):
+    _myxml = join(WaNoCalcJob.wano_repo_path(), "DihedralParametrizer3", "DihedralParametrizer3.xml")
+    _parser_name = "DihedralParametrizer3"
+class DihedralParametrizer3Parser(WaNoCalcJobParser):
+    _calcJobClass = DihedralParametrizer3CalcJob
 
 class Parametrizer3CalcJob(WaNoCalcJob):
     _myxml = join(WaNoCalcJob.wano_repo_path(), "Parametrizer3", "Parametrizer3.xml")

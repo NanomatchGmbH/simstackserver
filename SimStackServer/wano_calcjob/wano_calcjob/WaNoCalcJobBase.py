@@ -33,11 +33,13 @@ class WaNoCalcJob(CalcJob):
 
     typemap = {
         "Float": orm.Float,
+        "FString": (orm.SinglefileData, orm.Str),
         "Boolean": orm.Bool,
         "String": orm.Str,
         "Int": orm.Int,
-        "File": orm.SinglefileData
+        "File": (orm.SinglefileData, orm.Str)
     }
+
     _myxml = None
     _wano_path = None
 
@@ -254,7 +256,7 @@ class WaNoCalcJob(CalcJob):
         inputfile_paths = []
         for path, mytype in mypaths.items():
             namespace = cls.clean_path(".".join(path.split(".")[:-1]))
-            if mytype == "File":
+            if mytype in ["File", "FString"]:
                 inputfile_paths.append(path)
             if namespace == "":
                 continue
@@ -367,16 +369,24 @@ class WaNoCalcJob(CalcJob):
 
 
         for localfile_path_without in self.extra_inputfiles():
-            localfile_path = "static_extra_files." + self.dot_to_none(localfile_path_without)
-            fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
-            myname = uuid_to_loc[str(fileobj.uuid)].value
-            local_copy_list.append((fileobj.uuid, fileobj.filename, myname))
+            try:
+                localfile_path = "static_extra_files." + self.dot_to_none(localfile_path_without)
+                fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
+                myname = uuid_to_loc[str(fileobj.uuid)].value
+                local_copy_list.append((fileobj.uuid, fileobj.filename, myname))
+            except KeyError as e:
+                pass
+                #print("Most probably encountered during multipleof", localfile_path)
 
         local_copy_list.append( (self.inputs.static_extra_files.rendered_wanoyml.uuid, "rendered_wano.yml", "rendered_wano.yml") )
         for localfile_path in self.inputfile_paths():
-            fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
-            myname = uuid_to_loc[str(fileobj.uuid)].value
-            local_copy_list.append((fileobj.uuid, fileobj.filename, myname))
+            try:
+                fileobj = self.deref_by_listpath(self.inputs, localfile_path.split("."))
+                myname = uuid_to_loc[str(fileobj.uuid)].value
+                local_copy_list.append((fileobj.uuid, fileobj.filename, myname))
+            except KeyError as e:
+                pass
+                #print("Most probably encountered during multipleof", localfile_path)
 
         calcinfo.local_copy_list = local_copy_list
 

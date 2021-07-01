@@ -1,6 +1,7 @@
 from os.path import join
 
-from TreeWalker.TreeWalker import TreeWalker
+from TreeWalker.TreeWalker import TreeWalker, EraseEntryError
+
 
 def attribute_dict_to_normal_dict(attribute_dict):
     pass
@@ -258,7 +259,7 @@ def subdict_skiplevel_to_type(subdict,
 
     if "Type" in subdict:
         mytype = subdict["Type"]
-        basetypes = ["Int", "Boolean", "Float", "String", "File"]
+        basetypes = ["Int", "Boolean", "Float", "String", "File", "FString"]
         if mytype in basetypes:
             newsubdict = subdict["Type"]
 
@@ -299,11 +300,12 @@ def subdict_skiplevel_to_aiida_type(subdict,
             "Float": orm.Float,
             "Boolean": orm.Bool,
             "String": orm.Str,
+            "FString" : orm.Str,
             "Int": orm.Int,
             "File": orm.SinglefileData
         }
         if mytype in basetypes:
-            if mytype != "File":
+            if mytype not in ["File"]:
                 newsubdict = basetypes[subdict["Type"]](subdict["content"])
             else:
                 relfilename = subdict["logical_name"]
