@@ -91,7 +91,7 @@ def wano_constructor(wano: WaNoListEntry):
     # Timo: Begin path, Begin parse, etc. in the function above. Then call the function above
     # and make this the main entry point
     wano_dir_root = wano.folder
-    xml = get_wano_xml_path(wano.folder)
+    xml = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
     with xml.open("rt") as infile:
         xml = etree.parse(infile)
 

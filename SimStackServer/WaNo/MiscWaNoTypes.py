@@ -13,13 +13,15 @@ class WaNoListEntry:
     folder: pathlib.Path
     icon: Any
 
-def get_wano_xml_path(myfolder: pathlib.Path) -> pathlib.Path:
+def get_wano_xml_path(myfolder: pathlib.Path, wano_name_override = None) -> pathlib.Path:
     if isinstance(myfolder, zipfile.Path):
         pp = pathlib.PurePath(str(myfolder))
         name = pp.name[:-4]
     else:
         name = myfolder.name
     meta_json = myfolder / "meta.json"
+    if wano_name_override is not None:
+        name = wano_name_override
     xmlabs = myfolder / (name + ".xml")
 
     try:
@@ -31,4 +33,5 @@ def get_wano_xml_path(myfolder: pathlib.Path) -> pathlib.Path:
     except KeyError as e:
         # Might be an old meta.json, might be something else, we fallback to default xml name
         pass
+
     return xmlabs

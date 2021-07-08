@@ -868,7 +868,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.notify_datachanged("force")
 
     def save_xml(self, wano : WaNoListEntry):
-        filename = get_wano_xml_path(wano.folder)
+        filename = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
         print("Writing to ",filename)
         self.wano_dir_root = wano.folder
         success = False
