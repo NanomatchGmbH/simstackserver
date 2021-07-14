@@ -1,7 +1,8 @@
 #!/bin/bash
 
 username=$1
-COMMAND=$2
+MYCOM="${@:2}"
+echo "Executing >$MYCOM< as $username"
 
 if [ "AA$1" == "AA" ]
 then
@@ -27,6 +28,6 @@ then
 fi
 
 sudo -u $username bash -c "source $NANOMATCH/$NANOVER/local_anaconda/etc/profile.d/conda.sh; conda activate aiida;\
-verdi daemon $COMMAND ;\
+$MYCOM ;\
 "
 
