@@ -27,7 +27,7 @@ then
     exit 1
 fi
 
-sudo -u $username bash -c "source $NANOMATCH/$NANOVER/local_anaconda/etc/profile.d/conda.sh; conda activate aiida;\
+sudo -u $username bash -c "cd ; source $NANOMATCH/$NANOVER/local_anaconda/etc/profile.d/conda.sh; conda activate aiida;\
 $MYCOM ;\
 "
 
