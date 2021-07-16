@@ -5,7 +5,7 @@
 import logging
 import re
 from functools import partial
-from os.path import join
+from os.path import join, isabs
 from pathlib import Path
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
@@ -1128,7 +1128,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
                     runtime_stagein_files.append([var[0], log_path_on_cluster])
                 else:
-                    if var[1].startswith("/"):
+                    if isabs(var[1]):
                         #In this case this will be a local import.
                         runtime_stagein_files.append(
                             [var[0], "${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, var[0])])
