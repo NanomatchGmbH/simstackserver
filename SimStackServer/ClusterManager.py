@@ -35,7 +35,11 @@ class ClusterManager(object):
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
-        self._port = int(port)
+        try:
+            self._port = int(port)
+        except ValueError as e:
+            print("Port was set to >%s<. Using default port of 22")
+            self._port = 22
         self._calculation_basepath = calculation_basepath
         self._extra_config = extra_config
         self._user = user
