@@ -32,7 +32,7 @@ rabbitmqctl add_vhost $vhostname
 rabbitmqctl set_permissions -p $vhostname $mquser ".*" ".*" ".*"
 
 
-aiidaexec=`realpath wano-aiida-exec`
+aiidaexec="$NANOMATCH/$NANOVER/SimStackServer/SimStackServer/wano_calcjob/tools/wano-aiida-exec"
 sudo -u $username bash -c "source $NANOMATCH/$NANOVER/local_anaconda/etc/profile.d/conda.sh; conda activate aiida;\
 reentry scan;\
 verdi setup --profile $username --db-engine postgresql_psycopg2 --db-backend django --db-host \"\" --db-port 5432 \
