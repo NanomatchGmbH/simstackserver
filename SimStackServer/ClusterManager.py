@@ -253,7 +253,8 @@ class ClusterManager(object):
                 :param command (str): Command to execute remotely.
                 :return: Nothing (currently)
                 """
-        stdin, stdout, stderr = self._ssh_client.exec_command(command)
+        my_session = self._ssh_client.get_transport().open_session()
+        stdin, stdout, stderr = my_session.exec_command(command)
         return stdout, stderr
 
     def connect_zmq_tunnel(self, command):
