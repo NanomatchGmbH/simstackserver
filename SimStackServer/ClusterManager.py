@@ -285,7 +285,7 @@ class ClusterManager(object):
                 com = '"source %s; which %s"'%(self._extra_config, mycom)
             else:
                 com = '"which %s"'%mycom
-            stdin, stdout, stderr = self._ssh_client.exec_command("bash -c %s" % com)
+            stdout, stderr = self.exec_command("bash -c %s" % com)
             stdout_line = None
             for line in stdout:
                 stdout_line = line[:-1]
@@ -300,7 +300,7 @@ class ClusterManager(object):
         else:
             command = '"%s"' % command
 
-        stdin, stdout, stderr = self._ssh_client.exec_command("bash -c %s"%command)
+        stdout, stderr = self.exec_command("bash -c %s"%command)
         stderrmessage = None
         password = None
         port = None
