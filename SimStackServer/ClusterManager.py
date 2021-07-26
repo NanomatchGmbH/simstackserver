@@ -38,7 +38,7 @@ class ClusterManager(object):
         try:
             self._port = int(port)
         except ValueError as e:
-            print("Port was set to >%s<. Using default port of 22")
+            print(f"Port was set to >{port}<. Using default port of 22")
             self._port = 22
         self._calculation_basepath = calculation_basepath
         self._extra_config = extra_config
@@ -59,6 +59,8 @@ class ClusterManager(object):
         self._http_user = None
         self._http_pass = None
         self._http_base_address = None
+        self._unknown_host_connect_workaround = False
+        self._extra_hostkey_file = None
 
 
     def _dummy_callback(self, bytes_written, total_bytes):
@@ -81,6 +83,7 @@ class ClusterManager(object):
         :return:
         """
         assert self._ssh_client is not None, "SSH Client not yet initialized"
+        self._extra_hostkey_file = filename
         self._ssh_client.load_host_keys(filename)
 
     def save_hostkeyfile(self, filename):
@@ -92,7 +95,26 @@ class ClusterManager(object):
         self._ssh_client.save_host_keys(filename)
 
 
-    def connect(self, connect_to_unknown_hosts = False):
+    def get_new_connected_ssh_channel(self):
+        key_filename = None
+        if self._sshprivatekeyfilename != "UseSystemDefault":
+            key_filename = self._sshprivatekeyfilename
+
+
+        local_ssh_client = paramiko.SSHClient()
+        local_ssh_client.load_system_host_keys()
+        if self._extra_hostkey_file is not None:
+            local_ssh_client.load_host_keys(self._extra_hostkey_file)
+        if self._unknown_host_connect_workaround:
+            local_ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
+
+        local_ssh_client.connect(self._url, self._port, username=self._user, key_filename = key_filename, compress=True)
+        return local_ssh_client
+
+    def set_connect_to_unknown_hosts(self, connect_to_unknown_hosts):
+        self._unknown_host_connect_workaround = connect_to_unknown_hosts
+
+    def connect(self):
         """
         Connect the ssh_client and setup the sftp tunnel.
         :return: Nothing
@@ -101,11 +123,9 @@ class ClusterManager(object):
         if self._sshprivatekeyfilename != "UseSystemDefault":
             key_filename = self._sshprivatekeyfilename
 
-        if connect_to_unknown_hosts:
+        if self._unknown_host_connect_workaround:
             self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
         self._ssh_client.connect(self._url,self._port, username=self._user, key_filename=key_filename, compress=True)
-        if connect_to_unknown_hosts:
-            self._ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy)
         self._ssh_client.get_transport().set_keepalive(30)
         self._should_be_connected = True
         self._sftp_client = self._ssh_client.open_sftp()
@@ -248,13 +268,14 @@ class ClusterManager(object):
 
     def exec_command(self, command):
         """
-                Executes a command.
+            Executes a command.
 
-                :param command (str): Command to execute remotely.
-                :return: Nothing (currently)
-                """
-        my_session = self._ssh_client.get_transport().open_session()
-        stdin, stdout, stderr = my_session.exec_command(command)
+            :param command (str): Command to execute remotely.
+            :return: Nothing (currently)
+        """
+
+        myclient = self.get_new_connected_ssh_channel()
+        stdin, stdout, stderr = myclient.exec_command(command)
         return stdout, stderr
 
     def connect_zmq_tunnel(self, command):
