@@ -1249,6 +1249,10 @@ class IfGraph(XMLYMLInstantiationBase):
         self._field_values["false_final_ids"].fill_in_variables(vardict)
         self.truegraph.fill_in_variables(vardict)
         self.falsegraph.fill_in_variables(vardict)
+        for key,value in vardict.items():
+            if key.startswith("${"):
+                self._field_values["condition"] = self._field_values["condition"].replace(key,value)
+
 
     @property
     def true_final_ids(self) -> StringList:
