@@ -1465,6 +1465,28 @@ class ForEachGraph(XMLYMLInstantiationBase):
             if result is not None:
                 outvars.append(var)
 
+        # In case we did not find explicit matches, the user might have requested to import a dictionary.
+
+        if len(outvars) == 0:
+            resultvarset = set()
+
+            asteriskvar = myvar.replace("*","[^.]+")
+            # we only check if the start matches:
+            asteriskvar = "^%s"%asteriskvar
+            myregex = re.compile(asteriskvar)
+
+            for var in input_variables.keys():
+                result = myregex.match(var)
+                if result is not None:
+                    resultvarset.add(result.group())
+
+            for var in output_variables.keys():
+                result = myregex.match(var)
+                if result is not None:
+                    resultvarset.add(result.group())
+
+            outvars = list(resultvarset)
+
         # This function will do a list of all matched variables
         return outvars
 
