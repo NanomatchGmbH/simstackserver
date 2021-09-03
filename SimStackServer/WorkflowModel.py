@@ -689,7 +689,7 @@ export NANOMATCH=%s
                 # In case of pbs and slurm we let the queueing system decide:
                 del kwargs["queue"]
 
-            if self.resources.custom_requests.strip() != "":
+            if self.resources.custom_requests.strip() != "" and self.resources.custom_requests != "None":
                 #we expect stuff like:
                 # -m "hostgroup1 hostgroup2", -B "fwiefj"
                 c_requests = self.resources.custom_requests
