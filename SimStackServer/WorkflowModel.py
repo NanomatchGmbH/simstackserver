@@ -497,7 +497,8 @@ class Resources(XMLYMLInstantiationBase):
         ("nodes",np.uint64, 1, "Number of Nodes", "a"),
         ("queue", str, "default", "String representation of queue", "m"),
         ("host", str, "localhost", "String representation of host, might include port with :, might be ipv4 or ipv6","m"),
-        ("memory", np.uint64, 4096,  "Memory in Megabytes", "a")
+        ("memory", np.uint64, 4096,  "Memory in Megabytes", "a"),
+        ("custom_requests", str, "", "Comma separated list specifying additional parameters not covered here.","m")
     ]
 
     def __init__(self, *args, **kwargs):
@@ -526,6 +527,10 @@ class Resources(XMLYMLInstantiationBase):
     @property
     def host(self):
         return self._field_values["host"]
+
+    @property
+    def custom_requests(self):
+        return self._field_values["custom_requests"]
 
     @property
     def memory(self):
@@ -683,6 +688,20 @@ export NANOMATCH=%s
             if queue  == "default" and queueing_system in ["pbs","slurm"]:
                 # In case of pbs and slurm we let the queueing system decide:
                 del kwargs["queue"]
+
+            if self.resources.custom_requests.strip() != "":
+                #we expect stuff like:
+                # -m "hostgroup1 hostgroup2", -B "fwiefj"
+                c_requests = self.resources.custom_requests
+                crsplit = c_requests.strip().split(",")
+
+                for field in crsplit:
+                    splitfield = field.strip().split(" ")
+                    if len(splitfield) < 2:
+                        raise JobSubmitException("Could not interpret additional resource specifiers. They were: %s"%c_requests)
+                    key = splitfield[0]
+                    val = " ".join(splitfield[1:])
+                    kwargs[key] = val
 
             mytime = self.resources.walltime
             if mytime < 61:
