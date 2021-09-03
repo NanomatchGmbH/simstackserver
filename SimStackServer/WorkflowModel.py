@@ -1249,6 +1249,10 @@ class IfGraph(XMLYMLInstantiationBase):
         self._field_values["false_final_ids"].fill_in_variables(vardict)
         self.truegraph.fill_in_variables(vardict)
         self.falsegraph.fill_in_variables(vardict)
+        for key,value in vardict.items():
+            if key.startswith("${"):
+                self._field_values["condition"] = self._field_values["condition"].replace(key,value)
+
 
     @property
     def true_final_ids(self) -> StringList:
@@ -1460,6 +1464,28 @@ class ForEachGraph(XMLYMLInstantiationBase):
             result = myregex.match(var)
             if result is not None:
                 outvars.append(var)
+
+        # In case we did not find explicit matches, the user might have requested to import a dictionary.
+
+        if len(outvars) == 0:
+            resultvarset = set()
+
+            asteriskvar = myvar.replace("*","[^.]+")
+            # we only check if the start matches:
+            asteriskvar = "^%s"%asteriskvar
+            myregex = re.compile(asteriskvar)
+
+            for var in input_variables.keys():
+                result = myregex.match(var)
+                if result is not None:
+                    resultvarset.add(result.group())
+
+            for var in output_variables.keys():
+                result = myregex.match(var)
+                if result is not None:
+                    resultvarset.add(result.group())
+
+            outvars = list(resultvarset)
 
         # This function will do a list of all matched variables
         return outvars
