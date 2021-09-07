@@ -1409,11 +1409,13 @@ class ForEachGraph(XMLYMLInstantiationBase):
         return self._field_values["iterator_variables"]
 
     @property
-    def iterator_definestring(self) -> StringList:
+    def iterator_definestring(self) -> str:
         return self._field_values["iterator_definestring"]
 
     def fill_in_variables(self, vardict):
         self._field_values["subgraph"].fill_in_variables(vardict)
+        for key, value in vardict.items():
+            self._field_values["iterator_definestring"] = self._field_values["iterator_definestring"].replace(str(key),str(value))
 
     @property
     def subgraph_final_ids(self) -> StringList:
@@ -1429,16 +1431,22 @@ class ForEachGraph(XMLYMLInstantiationBase):
             iterator_names = [self.iterator_name]
         elif self.iterator_definestring != "":
             # TODO: continue here
-            iterator_names, allvars = self._resolve_multivar_iterator()
+            iterator_names, allvars = self._resolve_multivar_iterator(input_variables, output_variables)
         if len(allvars) == 0:
             self._logger.warning("Empty variable iterator. Skipping ForEach.")
         return self._multiply_connect_subgraph(iterator_names, allvars)
 
-    def _resolve_multivar_iterator(self):
+    def _resolve_multivar_iterator(self, input_variables, output_variables):
         iterator_names = self.iterator_name.replace(" ", "").split(",")
         num_iters = len(iterator_names)
         results = []
-        iteresult_generator = eval_numpyexpression(self.iterator_definestring)
+        expression = self.iterator_definestring
+        for key, value in output_variables.items():
+            expression = expression.replace(str(key), str(value))
+        for key, value in input_variables.items():
+            expression = expression.replace(str(key), str(value))
+        print(expression, input_variables, output_variables)
+        iteresult_generator = eval_numpyexpression(expression)
         for result in iteresult_generator:
             if num_iters > 1:
                 if len(result) != num_iters:
