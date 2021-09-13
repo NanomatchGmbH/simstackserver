@@ -2153,6 +2153,8 @@ class Workflow(WorkflowBase):
         while os.path.isdir(jobdirectory):
             jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem) + "%d"%counter
             counter += 1
+            if counter == 10:
+                time.sleep(0.1)
             if counter == 20:
                 raise WorkflowAbort("Job directory could not be generated even after 20 attempts.")
         mkdir_p(jobdirectory)

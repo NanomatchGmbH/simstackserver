@@ -6,4 +6,5 @@ def eval_numpyexpression(expression):
     :return:
     """
     import numpy as np
+    import itertools
     return eval(expression)
