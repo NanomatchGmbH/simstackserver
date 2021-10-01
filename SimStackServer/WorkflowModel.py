@@ -1298,7 +1298,8 @@ class IfGraph(XMLYMLInstantiationBase):
     def resolve_connect(self, base_storage, input_variables, output_variables):
         condition = self.condition
         for vardict in output_variables, input_variables:
-            for key, item in vardict.items():
+            for key in sorted(vardict, key=len, reverse = True):
+                item = vardict[key]
                 try:
                     int(item)
                     float(item)
