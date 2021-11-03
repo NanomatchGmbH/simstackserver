@@ -1272,7 +1272,6 @@ class IfGraph(XMLYMLInstantiationBase):
             if key.startswith("${"):
                 self._field_values["condition"] = self._field_values["condition"].replace(key,value)
 
-
     @property
     def true_final_ids(self) -> StringList:
         return self._field_values["true_final_ids"]
@@ -1402,9 +1401,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def iterator_files(self) -> StringList:
         return self._field_values["iterator_files"]
 
-    def rename(self, renamedict):
-        raise WorkflowAbort("ForEach inside of ForEach still not resolved rename")
-
     @property
     def iterator_variables(self) -> StringList:
         return self._field_values["iterator_variables"]
@@ -1446,7 +1442,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
             expression = expression.replace(str(key), str(value))
         for key, value in input_variables.items():
             expression = expression.replace(str(key), str(value))
-        print(expression, input_variables, output_variables)
         iteresult_generator = eval_numpyexpression(expression)
         for result in iteresult_generator:
             if num_iters > 1:
@@ -1454,7 +1449,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
                     raise WorkflowAbort("Define iterators cannot be unpacked")
             # We unpack the iterator here to have actual lists and check for the correct sizing
             results.append(result)
-        print(iterator_names, results)
         return iterator_names, results
 
 
@@ -1558,9 +1552,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
 
             mygraph.fill_in_variables(replacedict)
 
-
-
-
             for uid in self.subgraph_final_ids:
                 if not uid in rename_dict:
                     raise WorkflowAbort(
@@ -1583,7 +1574,21 @@ class ForEachGraph(XMLYMLInstantiationBase):
     #    return self._field_values["parent_ids"]
 
     def rename(self, renamedict):
-        raise WorkflowAbort("While inside of While still not resolved rename")
+        # First we rename our own uid:
+        myuid = self.uid
+        if not myuid in renamedict:
+            raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
+        newuid = renamedict[myuid]
+        self._field_values["uid"] = newuid
+
+        finish_uid = self.finish_uid
+        if finish_uid in renamedict:
+            raise KeyError("finish_uid %s explicitly rewritten. This should not happen on rename. Dict contained: %s" % (finish_uid, ",".join(renamedict.keys())))
+        newuid = uuid.uuid4()
+        self._field_values["finish_uid"] = newuid
+        renamedict[finish_uid] = newuid
+        # We should not rename_all_nodes in subgraph here. Subgraph will be resolved again, when resolve_connect is done
+        # Variable replacements are in fill_in_variables
 
     @property
     def uid(self):
@@ -1628,6 +1633,23 @@ class WhileGraph(XMLYMLInstantiationBase):
     @property
     def subgraph_final_ids(self) -> StringList:
         return self._field_values["subgraph_final_ids"]
+
+    def rename(self, renamedict):
+        # First we rename our own uid:
+        myuid = self.uid
+        if not myuid in renamedict:
+            raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
+        newuid = renamedict[myuid]
+        self._field_values["uid"] = newuid
+
+        finish_uid = self.finish_uid
+        if finish_uid in renamedict:
+            raise KeyError("finish_uid %s explicitly rewritten. This should not happen on rename. Dict contained: %s" % (finish_uid, ",".join(renamedict.keys())))
+        newuid = uuid.uuid4()
+        self._field_values["finish_uid"] = newuid
+        renamedict[finish_uid] = newuid
+        # We should not rename_all_nodes in subgraph here. Subgraph will be resolved again, when resolve_connect is done
+        # Variable replacements are in fill_in_variables
 
     def resolve_connect(self, base_storage, input_variables, output_variables):
         condition = self.condition
@@ -2176,7 +2198,6 @@ class Workflow(WorkflowBase):
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
-
         rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
                                                     input_var_db = self._input_variables,
                                                     output_var_db = self._output_variables,
