@@ -7,6 +7,7 @@ import logging
 
 from boolexp import Expression
 import abc
+import ast
 
 class WaNoNotImplementedError(Exception):
     pass
@@ -18,6 +19,9 @@ class OrderedDictIterHelper(OrderedDict):
             other_wano_model.model_to_dict(suboutdict)
             outdict[name] = suboutdict
 
+
+def bool_from_string(mystring : str):
+    return ast.literal_eval(mystring.title())
 
 
 class AbstractWanoModel:
@@ -31,6 +35,7 @@ class AbstractWanoModel:
         self._root = None
         self._is_wano = True
         self._name = "unset"
+        self._force_disabled = False
 
         self._visibility_condition = None
         self._visibility_var_path = None
@@ -91,6 +96,14 @@ class AbstractWanoModel:
 
         if "description" in xml.attrib:
             self._tooltip_text = xml.attrib["description"]
+
+        if "force_disable" in xml.attrib:
+            self._force_disabled = bool_from_string(xml.attrib["force_disable"])
+        else:
+            self._force_disabled = False
+
+    def is_force_disabled(self):
+        return self._force_disabled
 
     def set_parent(self, parent):
         self._parent = parent
