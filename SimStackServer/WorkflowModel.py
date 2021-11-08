@@ -2286,7 +2286,7 @@ class Workflow(WorkflowBase):
                     actual_tofile = "%s/%d_%s"%(jobdirectory, absfilenum, myinput[0])
                     actual_tofile_rel = "%d_%s"%(absfilenum, myinput[0])
                 try:
-                    if absfile.endswith("output_dict.yml") or absfile.endswith("output_config.ini"):
+                    if absfile.endswith("output_dict.yml") or absfile.endswith("output_config.ini") or absfile.endswith("report_template.body"):
                         raise JustCopyException()
                     with open(absfile, 'r') as infile:
                         absfile_content = infile.read()
