@@ -101,7 +101,9 @@ class ReportRenderer():
         ody = join(basepath, "output_dict.yml")
         if os.path.isfile(ody):
             export_dictionaries["output_dict"] = ody
-
+        wanof = join(basepath, "rendered_wano.yml")
+        if os.path.isfile(wanof):
+            export_dictionaries["wano"] = wanof
         a = ReportRenderer(export_dictionaries)
         if do_render:
             html_parts_dict = {}
