@@ -135,7 +135,10 @@ class AbstractWanoModel:
         truefalse = Expression(self._visibility_condition%value).evaluate()
         if self._view is not None:
             self._view.set_visible(truefalse)
-        self._isvisible = truefalse
+        self.set_visible(truefalse)
+
+    def set_visible(self, is_visible):
+        self._isvisible = is_visible
 
     def get_name(self):
         return self._name

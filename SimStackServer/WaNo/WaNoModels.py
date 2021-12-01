@@ -105,6 +105,11 @@ class WaNoModelDictLike(AbstractWanoModel):
     def wanos(self):
         return self.wano_dict.values()
 
+    def set_visible(self, is_visible):
+        super().set_visible(is_visible)
+        for model in self.wanos():
+            model.set_visible(is_visible)
+
     def get_type_str(self):
         return "Dict"
 
@@ -393,6 +398,11 @@ class WaNoModelListLike(AbstractWanoModel):
     def wanos(self):
         return enumerate(self.wano_list)
 
+    def set_visible(self, is_visible):
+        super().set_visible(is_visible)
+        for model in self.wano_list():
+            model.set_visible(is_visible)
+
     def update_xml(self):
         for wano in self.wano_list:
             wano.update_xml()
@@ -658,7 +668,11 @@ class MultipleOfModel(AbstractWanoModel):
         if self.view is not None:
             self.view.init_from_model()
 
-
+    def set_visible(self, is_visible):
+        super().set_visible(is_visible)
+        for wano_dict in self.list_of_dicts:
+            for wano in wano_dict.values():
+                wano.set_visible(is_visible)
 
     def update_xml(self):
         for wano_dict in self.list_of_dicts:
