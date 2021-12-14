@@ -105,10 +105,16 @@ class WaNoModelDictLike(AbstractWanoModel):
     def wanos(self):
         return self.wano_dict.values()
 
+    def set_parent_visible(self, is_visible):
+        super().set_parent_visible(is_visible)
+        if self._isvisible:
+            for model in self.wanos():
+                model.set_parent_visible(is_visible)
+
     def set_visible(self, is_visible):
         super().set_visible(is_visible)
         for model in self.wanos():
-            model.set_visible(is_visible)
+            model.set_parent_visible(is_visible)
 
     def get_type_str(self):
         return "Dict"
@@ -199,7 +205,7 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         super().set_root(root)
         self._connected = True
         if not self._registered:
-            root.register_callback(self._collection_path, self._update_choices)
+            root.register_callback(self._collection_path, self._update_choices, self.path_depth())
             self._registered = True
 
     def _update_choices(self, changed_path):
@@ -221,7 +227,7 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         delete_later = []
         for path in self._registered_paths:
             if path not in register_paths:
-                self._root.unregister_callback(path, self._update_choices)
+                self._root.unregister_callback(path, self._update_choices, self.path_depth())
                 delete_later.append(path)
         for path in delete_later:
             self._registered_paths.remove(path)
@@ -229,7 +235,7 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         for path in register_paths:
             if path in self._registered_paths:
                 continue
-            self._root.register_callback(path, self._update_choices)
+            self._root.register_callback(path, self._update_choices, self.path_depth())
             self._registered_paths.append(path)
 
         if len(self.choices) == 0:
@@ -260,10 +266,10 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
 
     def decommission(self):
         if self._registered:
-            self.get_root().unregister_callback(self._collection_path, self._update_choices)
+            self.get_root().unregister_callback(self._collection_path, self._update_choices, self.path_depth())
             self._registered = False
         for path in self._registered_paths:
-            self._root.unregister_callback(path, self._update_choices)
+            self._root.unregister_callback(path, self._update_choices, self.path_depth())
         self._registered_paths.clear()
 
         super().decommission()
@@ -398,10 +404,16 @@ class WaNoModelListLike(AbstractWanoModel):
     def wanos(self):
         return enumerate(self.wano_list)
 
+    def set_parent_visible(self, is_visible):
+        super().set_parent_visible(is_visible)
+        if self._isvisible:
+            for model in self.wano_list:
+                model.set_parent_visible(is_visible)
+
     def set_visible(self, is_visible):
         super().set_visible(is_visible)
-        for model in self.wano_list():
-            model.set_visible(is_visible)
+        for model in self.wano_list:
+            model.set_parent_visible(is_visible)
 
     def update_xml(self):
         for wano in self.wano_list:
@@ -524,7 +536,7 @@ class WaNoSwitchModel(WaNoModelListLike):
         super().set_path(path)
         self._switch_path = Template(self._switch_path).render(path = self._path.split("."))
         if not self._registered:
-            self._root.register_callback(self._switch_path, self._evaluate_switch_condition)
+            self._root.register_callback(self._switch_path, self._evaluate_switch_condition, self.path_depth())
             self._registered = True
 
     def get_parent(self):
@@ -540,7 +552,7 @@ class WaNoSwitchModel(WaNoModelListLike):
         self._switch_path  = xml.attrib["switch_path"]
 
     def decommission(self):
-        self._root.unregister_callback(self._switch_path, self._evaluate_switch_condition)
+        self._root.unregister_callback(self._switch_path, self._evaluate_switch_condition, self.path_depth())
         self._registered = False
         for wano in self.wano_list:
             wano.decommission()
@@ -668,11 +680,18 @@ class MultipleOfModel(AbstractWanoModel):
         if self.view is not None:
             self.view.init_from_model()
 
+    def set_parent_visible(self, is_visible):
+        super().set_parent_visible(is_visible)
+        if self._isvisible:
+            for wano_dict in self.list_of_dicts:
+                for wano in wano_dict.values():
+                    wano.set_parent_visible(is_visible)
+
     def set_visible(self, is_visible):
         super().set_visible(is_visible)
         for wano_dict in self.list_of_dicts:
             for wano in wano_dict.values():
-                wano.set_visible(is_visible)
+                wano.set_parent_visible(is_visible)
 
     def update_xml(self):
         for wano_dict in self.list_of_dicts:
@@ -789,12 +808,12 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def _tidy_lists(self):
         while len(self._unregister_list) > 0:
-            key,func = self._unregister_list.pop()
-            self.unregister_callback(key,func)
+            key, func, depth = self._unregister_list.pop()
+            self.unregister_callback(key,func, depth)
 
         while len(self._register_list) > 0:
-            key,func = self._register_list.pop()
-            self.register_callback(key,func)
+            key, func, depth = self._register_list.pop()
+            self.register_callback(key, func, depth)
 
 
     def notify_datachanged(self, path):
@@ -810,37 +829,49 @@ class WaNoModelRoot(WaNoModelDictLike):
             print("Found unset in path %s"%path)
         self._notifying = True
         if path == "force":
-            for callbacks in self._datachanged_callbacks.values():
-                for callback in callbacks:
+            toeval_by_prio = {}
+            for callback_prio_dict in self._datachanged_callbacks.values():
+                for callback_prio in reversed(callback_prio_dict):
+                    if callback_prio not in toeval_by_prio:
+                        toeval_by_prio[callback_prio] = []
+                    for callback in callback_prio_dict[callback_prio]:
+                        toeval_by_prio[callback_prio].append(callback)
+                        #callback(path)
+            for callback_prio in reversed(toeval_by_prio):
+                for callback in toeval_by_prio[callback_prio]:
                     callback(path)
 
         if path in self._datachanged_callbacks:
-            for callback in self._datachanged_callbacks[path]:
-                callback(path)
+            callback_prio_dict = self._datachanged_callbacks[path]
+            for callback_prio in reversed(callback_prio_dict):
+                for callback in callback_prio_dict[callback_prio]:
+                    callback(path)
         self._notifying = False
 
         self._tidy_lists()
 
-    def register_callback(self, path, callback_function):
+    def register_callback(self, path, callback_function, depth):
         if self._notifying:
-            toregister = (path, callback_function)
+            toregister = (path, callback_function, depth)
             if not toregister in self._register_list:
                 self._register_list.append(toregister)
         else:
             if path not in self._datachanged_callbacks:
-                self._datachanged_callbacks[path] = []
+                self._datachanged_callbacks[path] = {}
+            if depth not in self._datachanged_callbacks[path]:
+                self._datachanged_callbacks[path][depth] = []
 
-            if callback_function not in self._datachanged_callbacks[path]:
-                self._datachanged_callbacks[path].append(callback_function)
+            if callback_function not in self._datachanged_callbacks[path][depth]:
+                self._datachanged_callbacks[path][depth].append(callback_function)
 
-    def unregister_callback(self, path, callback_function):
+    def unregister_callback(self, path, callback_function, depth):
         assert path in self._datachanged_callbacks, "When unregistering a function, it has to exist in datachanged_callbacks."
-        assert callback_function in self._datachanged_callbacks[path], "Function not found in callbacks. Has to exist."
+        assert callback_function in self._datachanged_callbacks[path][depth], "Function not found in callbacks. Has to exist."
         #print("Removing %s for %s"%(path, callback_function))
         if self._notifying:
-            self._unregister_list.append((path, callback_function))
+            self._unregister_list.append((path, callback_function, depth))
         else:
-            self._datachanged_callbacks[path].remove(callback_function)
+            self._datachanged_callbacks[path][depth].remove(callback_function)
 
     def get_type_str(self):
         return "WaNoRoot"

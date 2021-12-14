@@ -45,6 +45,7 @@ class AbstractWanoModel:
         self._do_import = False
         self._import_from = ""
         self._tooltip_text = ""
+        self._parent_visible = True
 
         super(AbstractWanoModel, self).__init__()
 
@@ -78,11 +79,22 @@ class AbstractWanoModel:
     def path(self):
         return self._path
 
+    def path_depth(self) -> int:
+        """
+        Counts the number of path segments - 1
+        For example:
+        This.is.my.path return 3. Important for knowing if some element could in theory be part of another element.
+        house.child has depth 1
+        house has depth 0, therefore child could be in house.
+        :return:
+        """
+        return self._path.count(".")
+
     def set_path(self, path):
         self._path = path
         if self._visibility_condition is not None:
             self._visibility_var_path = Template(self._visibility_var_path).render(path = self._path.split("."))
-            self._root.register_callback(self._visibility_var_path, self.evaluate_visibility_condition)
+            self._root.register_callback(self._visibility_var_path, self.evaluate_visibility_condition, self.path_depth())
 
     def parse_from_xml(self, xml):
         self._name = xml.attrib["name"]
@@ -118,7 +130,7 @@ class AbstractWanoModel:
         self._root = root
 
     def visible(self):
-        return self._isvisible
+        return self._isvisible and self._parent_visible
 
     def set_name(self, new_name):
         self._name = new_name
@@ -139,6 +151,23 @@ class AbstractWanoModel:
 
     def set_visible(self, is_visible):
         self._isvisible = is_visible
+
+    def set_parent_visible(self, is_visible):
+        """
+        Do not call this method from inside the class itself
+        Forcing a model to be visible or invisible. Our visibility condition tree works like this
+        First the leafs are evaluated
+        House.Room.Person , i.e. Person
+        then Room
+        then House
+        if House is invisible, it will propagate this to Room and Person and set them invisible.
+        The problem arises, if Person is invisible, even though Room is not.
+        Room will update Person to be visible, therefore: If Person has a visibility condition and we are
+        currently invisible, we should ignore this call
+        :param is_visible: 
+        :return: 
+        """
+        self._parent_visible = is_visible
 
     def get_name(self):
         return self._name
@@ -252,7 +281,7 @@ class AbstractWanoModel:
         if self._root is not None:
             if self._visibility_condition is not None:
                 try:
-                    self._root.unregister_callback(self._visibility_var_path, self.evaluate_visibility_condition)
+                    self._root.unregister_callback(self._visibility_var_path, self.evaluate_visibility_condition, self.path_depth())
                 except AssertionError as e:
                     print("Path for callback function was not registered. Path was: %s"%self._visibility_var_path)
 
