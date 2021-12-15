@@ -1,4 +1,7 @@
 from enum import IntEnum
+import pathlib
+
+import yaml
 
 
 class ResourceROWTYPE(IntEnum):
@@ -8,6 +11,29 @@ class ResourceROWTYPE(IntEnum):
     time = 3
     queue = 4
     custom_requests = 5
+
+def get_default_resource_list():
+    return [
+        [False, "CPUs per Node", 1],
+        [False, "Number of Nodes", 1],
+        [False, "Memory [MB]", 1024],
+        [False, "Time [Wall]", 86400],
+        [False, "Queue", "default"],
+        [False, "Custom Requests", ""]
+    ]
+
+def load_resource_list(filename: pathlib.Path):
+    default_list = get_default_resource_list()
+
+    with filename.open('rt') as infile:
+        updatelist = yaml.safe_load(infile)
+
+    updatedict = { b[1] : b for b in updatelist}
+    for entry in default_list:
+        if entry[1] in updatedict:
+            for num in [0,2]:
+                entry[num] = updatedict[entry[1]][num]
+    return default_list
 
 def ClientResourceModelToServerResourceModel(client_list: list):
     from SimStackServer.WorkflowModel import Resources
