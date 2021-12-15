@@ -666,12 +666,17 @@ export NANOMATCH=%s
         temphandler.setLevel(logging.DEBUG)
         do_internal = False
         do_aiida = False
+        dont_run = False
         if queueing_system == "Internal":
             queueing_system = "slurm"
             do_internal = True
         elif queueing_system == "AiiDA":
             queueing_system = "slurm"
             do_aiida = True
+        elif queueing_system == "OnlyScript":
+            queueing_system = "slurm"
+            do_internal = True
+            dont_run = True
 
         rootlogger = logging.getLogger('')
         rootlogger.addHandler(temphandler)
@@ -790,8 +795,7 @@ export NANOMATCH=%s
                     jobid = output.uuid
                     self.set_jobid(jobid)
                 else:
-                    from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
-                    batchsys, _ = InternalBatchSystem.get_instance()
+
                     runscript = self.runtime_directory + "/" + "jobscript.sh"
                     with open(runscript, 'wt') as outfile:
                         outfile.write(str(jobscript).replace("$SLURM_SUBMIT_DIR",self.runtime_directory)+ '\n')
@@ -799,7 +803,12 @@ export NANOMATCH=%s
                     with open(hostfile, 'wt') as hoststream:
                         for i in range(0, self.resources.cpus_per_node):
                             hoststream.write("localhost\n")
-                    jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
+                    if not dont_run:
+                        from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+                        batchsys, _ = InternalBatchSystem.get_instance()
+                        jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
+                    else:
+                        jobid = 1
                     self._logger.debug("Submitted as internal job %d"%jobid)
                     self.set_jobid(jobid)
                     ## In this case we need to grab jobid after submission and

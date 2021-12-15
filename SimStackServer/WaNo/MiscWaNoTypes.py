@@ -13,9 +13,6 @@ class WaNoListEntry:
     folder: pathlib.Path
     icon: Any
 
-
-
-
 def get_wano_xml_path(myfolder: pathlib.Path, wano_name_override = None) -> pathlib.Path:
     if isinstance(myfolder, zipfile.Path):
         pp = pathlib.PurePath(str(myfolder))
@@ -39,7 +36,7 @@ def get_wano_xml_path(myfolder: pathlib.Path, wano_name_override = None) -> path
 
     return xmlabs
 
-def WaNoXMLPath_from_folder_or_zip(file_or_dir_name: str) -> pathlib.Path:
+def WaNoListEntry_from_folder_or_zip(file_or_dir_name: str, ignore_icon = True) -> WaNoListEntry:
     file_or_dir_name_path = pathlib.Path(file_or_dir_name)
     if file_or_dir_name_path.is_dir():
         myfolder = file_or_dir_name_path
@@ -49,4 +46,7 @@ def WaNoXMLPath_from_folder_or_zip(file_or_dir_name: str) -> pathlib.Path:
         name = file_or_dir_name_path.name[:-4]
     else:
         raise NotADirectoryError(f"Directory {file_or_dir_name_path} was neither a directory or a file ending with .zip.")
-    return get_wano_xml_path(myfolder, wano_name_override=name)
+    icon = None
+    if not ignore_icon:
+        raise NotImplementedError("Currently WaNoListEntry_from_folder_or_zip does not parse icon. Please implement.")
+    return WaNoListEntry(name = name, folder=myfolder, icon = icon)
