@@ -1261,7 +1261,7 @@ class IfGraph(XMLYMLInstantiationBase):
         ("falsegraph", SubGraph, None, "Graph to instantiate If in case condition is false", "m"),
         ("true_final_ids", StringList, [], "These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
         ("false_final_ids", StringList, [],"These are the final uids of the subgraph. Required for linking copies of the subgraph.", "m"),
-        ("finish_uid", str, "", "UID, which will be completed, once ForEachGraph is completed. Every subgraph will link to this node","a"),
+        ("finish_uid", str, "", "UID, which will be completed, once IfGraph is completed. Every subgraph will link to this node","a"),
         ("condition", str, "", "Condition, which evaluates to true or false", "a"),
         ("uid", str, "", "UID of this Foreach","a")
     ]
@@ -1292,12 +1292,15 @@ class IfGraph(XMLYMLInstantiationBase):
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
 
+        # If we were linked to, our finish uid is rewritten externally, otherwise we have to provide our own
+        # new finish uuid
         finish_uid = self.finish_uid
         if finish_uid in renamedict:
-            raise KeyError("finish_uid %s explicitly rewritten. This should not happen on rename. Dict contained: %s" % (finish_uid, ",".join(renamedict.keys())))
-        newuid = uuid.uuid4()
-        self._field_values["finish_uid"] = newuid
-        renamedict[finish_uid] = newuid
+            self._field_values["finish_uid"] = renamedict[finish_uid]
+        else:
+            newuid = uuid.uuid4()
+            self._field_values["finish_uid"] = newuid
+            renamedict[finish_uid] = newuid
 
     @property
     def false_final_ids(self) -> StringList:
@@ -1350,12 +1353,9 @@ class IfGraph(XMLYMLInstantiationBase):
             if not uid in rename_dict:
                 raise WorkflowAbort(
                     "mygraph did not contain final id %s. Renamed keys were: %s" % (uid,",".join(rename_dict.keys())))
-        print(final_ids._storage)
         for uid in final_ids:
             new_connections.append((rename_dict[uid],self.finish_uid))
 
-
-        print(mygraph.elements, mygraph.graph, new_connections)
         # At this point new_connection should contain all renamed connections to integrate subgraph.elements in the basegraph
         # we return all subgraph.elements and all connections and get this communicated into the base graph
         return new_connections, [mygraph.elements], [mygraph.graph]
@@ -1590,12 +1590,15 @@ class ForEachGraph(XMLYMLInstantiationBase):
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
 
+        # If we were linked to, our finish uid is rewritten externally, otherwise we have to provide our own
+        # new finish uuid
         finish_uid = self.finish_uid
         if finish_uid in renamedict:
-            raise KeyError("finish_uid %s explicitly rewritten. This should not happen on rename. Dict contained: %s" % (finish_uid, ",".join(renamedict.keys())))
-        newuid = uuid.uuid4()
-        self._field_values["finish_uid"] = newuid
-        renamedict[finish_uid] = newuid
+            self._field_values["finish_uid"] = renamedict[finish_uid]
+        else:
+            newuid = uuid.uuid4()
+            self._field_values["finish_uid"] = newuid
+            renamedict[finish_uid] = newuid
         # We should not rename_all_nodes in subgraph here. Subgraph will be resolved again, when resolve_connect is done
         # Variable replacements are in fill_in_variables
 
@@ -1651,12 +1654,15 @@ class WhileGraph(XMLYMLInstantiationBase):
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
 
+        # If we were linked to, our finish uid is rewritten externally, otherwise we have to provide our own
+        # new finish uuid
         finish_uid = self.finish_uid
         if finish_uid in renamedict:
-            raise KeyError("finish_uid %s explicitly rewritten. This should not happen on rename. Dict contained: %s" % (finish_uid, ",".join(renamedict.keys())))
-        newuid = uuid.uuid4()
-        self._field_values["finish_uid"] = newuid
-        renamedict[finish_uid] = newuid
+            self._field_values["finish_uid"] = renamedict[finish_uid]
+        else:
+            newuid = uuid.uuid4()
+            self._field_values["finish_uid"] = newuid
+            renamedict[finish_uid] = newuid
         # We should not rename_all_nodes in subgraph here. Subgraph will be resolved again, when resolve_connect is done
         # Variable replacements are in fill_in_variables
 
