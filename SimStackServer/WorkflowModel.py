@@ -2204,6 +2204,7 @@ class Workflow(WorkflowBase):
             xml = etree.parse(infile)
         wano_dir_root = Path(os.path.dirname(wfem.path))
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+        #MODELROOTDIRECT
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
         wmr.parse_from_xml(xml)
         wmr = wano_without_view_constructor_helper(wmr)

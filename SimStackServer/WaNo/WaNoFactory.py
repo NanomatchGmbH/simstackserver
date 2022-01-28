@@ -97,6 +97,7 @@ def wano_constructor(wano: WaNoListEntry):
 
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
     from WaNo.view.WaNoViews import WanoQtViewRoot
+    # MODELROOTDIRECT
     wmr = WaNoModelRoot(wano_dir_root=wano_dir_root)
     wmr.set_view_class(WanoQtViewRoot)
     wmr.parse_from_xml(xml)

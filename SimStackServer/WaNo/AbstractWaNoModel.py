@@ -69,11 +69,23 @@ class AbstractWanoModel:
     def is_wano(self):
         return self._is_wano
 
+    @abc.abstractmethod
+    def get_delta_to_default(self):
+        raise NotImplementedError("Implement in child class.")
+
+    @abc.abstractmethod
+    def apply_delta(self, delta):
+        raise NotImplementedError("Implement in child class.")
+
+    def changed_from_default(self) -> bool:
+        return False
+
     def set_view_class(self, ViewClass):
         self._vc = ViewClass
 
     def get_view_class(self):
         return self._vc
+
 
     @property
     def path(self):

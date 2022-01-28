@@ -57,6 +57,7 @@ def get_resources(possible_resource_file_path: pathlib.Path):
     return ClientResourceModelToServerResourceModel(client_listmodel)
 
 def instantiate_wano(wano_dir_root, wanoxml):
+    # MODELROOTDIRECT
     wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, model_only=True)
     wmr.parse_from_xml(wanoxml)
     wmr = wano_without_view_constructor_helper(wmr)

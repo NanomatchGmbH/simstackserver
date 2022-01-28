@@ -10,11 +10,12 @@ import sys
 from pathlib import Path
 
 from lxml import etree
+
+from SimStackServer.WaNo import AbstractWaNoModel
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoFactory import wano_constructor_helper, wano_without_view_constructor_helper
 from SimStackServer.WaNo.WaNoModels import WaNoItemFloatModel, WaNoModelRoot
-from SimStackServer.WaNo.WaNoTreeWalker import ViewCollector, PathCollector, subdict_skiplevel
-
+from SimStackServer.WaNo.WaNoTreeWalker import ViewCollector, PathCollector, subdict_skiplevel, WaNoTreeWalker
 
 
 def subdict_view(subdict,
@@ -71,19 +72,38 @@ class TestWaNoModels(unittest.TestCase):
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
+
+        delta_dict = {
+            "Tabs":{
+                "General": {
+                    "General Settings":
+                        {
+                            "Charge Damping": 200020.032
+                        }
+                }
+            }
+        }
+
         rendered_wano = wmr.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
                     input_var_db = None,
                     output_var_db = None,
                     runtime_variables = None
         )
-        print(rendered_wano)
 
+        command_dict = {
+            "Tabs.Shells.Outer Shells" : 4
+        }
+        wmr.apply_delta_dict(command_dict)
+        wmr.apply_delta_dict(delta_dict)
+        print(wmr.get_changed_paths())
+        print(wmr.get_changed_command_paths())
 
     def _construct_wano_nogui(self,wanofile):
         with open(wanofile, 'rt') as infile:
             xml = etree.parse(infile)
         wano_dir_root = Path(os.path.dirname(os.path.realpath(wanofile)))
 
+        #MODELROOTDIRECT
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only=True)
         wmr.parse_from_xml(xml)
         wmr = wano_without_view_constructor_helper(wmr)

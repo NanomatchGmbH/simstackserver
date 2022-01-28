@@ -2,20 +2,24 @@
 # -*- coding: utf-8 -*-
 
 #from pyura.pyura.helpers import trace_to_logger
+import json
 import logging
+import pathlib
 import re
 from functools import partial
 from os.path import join, isabs
 from pathlib import Path
 
+import numpy as np
+
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.XMLUtils import is_regular_element
-from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path
+from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path, WaNoListEntry_from_folder_or_zip
 from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
 
 import collections
 
-from TreeWalker.TreeWalker import TreeWalker
+from TreeWalker.TreeWalker import TreeWalker, EraseEntryError
 from SimStackServer.WaNo.AbstractWaNoModel import AbstractWanoModel, OrderedDictIterHelper
 import SimStackServer.WaNo.WaNoFactory
 from lxml import etree
@@ -37,7 +41,7 @@ class FileNotFoundErrorSimStack(FileNotFoundError):
     pass
 
 from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type, \
-    subdict_skiplevel_to_aiida_type
+    subdict_skiplevel_to_aiida_type, WaNoTreeWalker
 from TreeWalker.flatten_dict import flatten_dict
 from TreeWalker.tree_list_to_dict import tree_list_to_dict, tree_list_to_dict_multiply
 
@@ -96,6 +100,9 @@ class WaNoModelDictLike(AbstractWanoModel):
     def __iter__(self):
         return iter(self.wano_dict)
 
+    def changed_from_default(self) -> bool:
+        return False
+
     def get_data(self):
         return self.wano_dict
 
@@ -136,6 +143,7 @@ class WaNoChoiceModel(AbstractWanoModel):
         super(WaNoChoiceModel,self).__init__(*args,**kwargs)
         self.choices = []
         self.chosen=0
+        self._default = 0
 
 
     def parse_from_xml(self, xml):
@@ -150,6 +158,7 @@ class WaNoChoiceModel(AbstractWanoModel):
             if "chosen" in child.attrib:
                 if child.attrib["chosen"].lower() == "true":
                     self.chosen = myid
+                    self._default = self.chosen
 
     def __getitem__(self, item):
         return None
@@ -163,6 +172,15 @@ class WaNoChoiceModel(AbstractWanoModel):
         except IndexError as e:
             print("Invalid choice in %s. Returning choice 0"%self.name)
             return self.choices[0]
+
+    def changed_from_default(self) -> bool:
+        return self._default != self.chosen
+
+    def get_delta_to_default(self):
+        return self.choices[self.chosen]
+
+    def apply_delta(self, delta):
+        self.chosen = self.choices.index(delta)
 
     def set_chosen(self,choice):
         self.chosen = int(choice)
@@ -285,6 +303,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         self.col_header = None
         self.row_header = None
         self.storage = None
+        self._default = None
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
@@ -307,6 +326,7 @@ class WaNoMatrixModel(AbstractWanoModel):
                     self.storage[i].append("")
         else:
             self.storage = self._fromstring(self.xml.text)
+        self._default = self.storage.copy()
 
     def _tostring(self, ar):
         returnstring = "[ "
@@ -327,6 +347,16 @@ class WaNoMatrixModel(AbstractWanoModel):
             return a
         except ValueError as e:
             return f'"{value}"'
+
+
+    def get_delta_to_default(self):
+        return self.storage
+
+    def apply_delta(self, delta):
+        self.storage = delta
+
+    def changed_from_default(self) -> bool:
+        return (np.asarray(self.storage) != np.asarray(self._default)).any()
 
     def _cast_to_correct_type(self, value):
         try:
@@ -410,6 +440,9 @@ class WaNoModelListLike(AbstractWanoModel):
             for model in self.wano_list:
                 model.set_parent_visible(is_visible)
 
+    def changed_from_default(self) -> bool:
+        return False
+
     def set_visible(self, is_visible):
         super().set_visible(is_visible)
         for model in self.wano_list:
@@ -451,6 +484,9 @@ class WaNoNoneModel(AbstractWanoModel):
 
     def update_xml(self):
         pass
+
+    def changed_from_default(self) -> bool:
+        return False
 
     def __repr__(self):
         return ""
@@ -499,6 +535,19 @@ class WaNoSwitchModel(WaNoModelListLike):
 
     def __reversed__(self):
         return self.wano_list.__reversed__()
+
+    def get_delta_to_default(self):
+        return self._visible_thing
+
+    def apply_delta(self, delta):
+        self._visible_thing = delta
+        self._name = self._names_list[self._visible_thing]
+        if self._view is not None:
+            self._view.init_from_model()
+
+    def changed_from_default(self) -> bool:
+        # We always have to remember which switch condition was active
+        return True
 
     def get_selected_id(self):
         if self._visible_thing >= 0:
@@ -565,6 +614,7 @@ class MultipleOfModel(AbstractWanoModel):
 
         self.first_xml_child = None
         self.list_of_dicts = []
+        self._default_len = -1
 
 
     def parse_from_xml(self, xml):
@@ -577,6 +627,7 @@ class MultipleOfModel(AbstractWanoModel):
             wano_temp_dict = self.parse_one_child(child)
             self.list_of_dicts.append(wano_temp_dict)
         super().parse_from_xml(xml)
+        self._default_len = len(self.list_of_dicts)
 
     def numitems_per_add(self):
         return len(self.first_xml_child)
@@ -668,17 +719,29 @@ class MultipleOfModel(AbstractWanoModel):
             return True
         return False
 
-    def add_item(self):
+    def add_item(self, build_view = True):
         before = self._root.block_signals(True)
         my_xml = copy.copy(self.first_xml_child)
         my_xml.attrib["id"] = str(len(self.list_of_dicts))
         self.xml.append(my_xml)
-        model_dict = self.parse_one_child(my_xml, build_view=True)
+        model_dict = self.parse_one_child(my_xml, build_view=build_view)
         self.list_of_dicts.append(model_dict)
         self._root.block_signals(before)
         self.get_root().datachanged_force()
         if self.view is not None:
             self.view.init_from_model()
+
+    def get_delta_to_default(self):
+        return len(self.list_of_dicts)
+
+    def apply_delta(self, delta):
+        while len(self.list_of_dicts) < delta:
+            self.add_item(build_view = False)
+        while len(self.list_of_dicts) > delta:
+            self.delete_item()
+
+    def changed_from_default(self) -> bool:
+        return len(self.list_of_dicts) != self._default_len
 
     def set_parent_visible(self, is_visible):
         super().set_parent_visible(is_visible)
@@ -765,13 +828,29 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.output_files = []
 
         self.metas = OrderedDictIterHelper()
+        self._parse_defaults()
 
     def block_signals(self,true_or_false):
         before = self._block_signals
         self._block_signals = true_or_false
         return before
 
+    @staticmethod
+    def _parse_xml(xmlpath: pathlib.Path):
+        with xmlpath.open("rt") as infile:
+            xml = etree.parse(infile).getroot()
+            return xml
+
+    def _parse_defaults(self):
+        wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
+        xmlpath = get_wano_xml_path(self._wano_dir_root, wano_name_override=wle.name)
+        xml = self._parse_xml(xmlpath)
+        self._parse_from_xml(xml)
+
     def parse_from_xml(self, xml):
+        print("Fake Call")
+
+    def _parse_from_xml(self, xml):
         self.full_xml = xml
         subxml = self.full_xml.find("WaNoRoot")
         export_dictionaries = {}
@@ -933,6 +1012,78 @@ class WaNoModelRoot(WaNoModelDictLike):
         except Exception as e:
             print(e)
         return success
+
+    def get_changed_command_paths(self):
+        """ These are paths, which require a WaNoElement to be changed, which is dynamic, such as multipleof or switch
+
+        """
+        tw = WaNoTreeWalker(self)
+
+        changed_paths = {}
+        def dict_change_detector(subdict, call_info):
+            twp = call_info["treewalker_paths"].abspath
+            if hasattr(subdict,  "changed_from_default") and subdict.changed_from_default():
+                changed_paths[".".join(str(e) for e in twp)] = subdict.get_delta_to_default()
+            return None
+
+        tw.walker(capture = False, path_visitor_function=None, subdict_visitor_function=dict_change_detector, data_visitor_function=None)
+        return changed_paths
+
+    def get_changed_paths(self):
+
+        tw = WaNoTreeWalker(self)
+        def leafnode_change_detector(leaf_node : AbstractWanoModel, call_info):
+            twp = call_info["treewalker_paths"].abspath
+            if leaf_node.changed_from_default():
+                #changed_paths[".".join(str(e) for e in twp)] = leaf_node.get_delta_to_default()
+                return leaf_node.get_delta_to_default()
+            else:
+                # We only wanto to collect changed paths
+                raise EraseEntryError()
+
+        changed_paths_no_dict = tw.walker(capture = True, path_visitor_function=None, subdict_visitor_function=None, data_visitor_function=leafnode_change_detector)
+
+        def empty_dict_remover(subdict):
+            if len(subdict) == 0:
+                raise EraseEntryError()
+            return None
+        # We clean up this dictionary five times. A smarter way would be to implement a subdict_visitor_function
+        # in WaNoTreeWalker, which runs subdict_visitorafter collecting
+        for i in range(0,5):
+            dict_remove_tw = TreeWalker(changed_paths_no_dict)
+            changed_paths_no_dict = dict_remove_tw.walker(capture = True, path_visitor_function = None,
+                                               subdict_visitor_function = empty_dict_remover,
+                                               data_visitor_function = None)
+        return changed_paths_no_dict
+
+    def save_resources_and_imports(self, outfolder : Path):
+        resources_fn = outfolder / "resources.yml"
+        self.resources.save(resources_fn)
+
+        imports_fn = outfolder / "imports.yml"
+        self.import_model.save(imports_fn)
+
+        exports_fn = outfolder / "exports.yml"
+        self.export_model.save(exports_fn)
+
+    def save(self, outfolder):
+        delta_json = Path(outfolder) / "wano_configuration.json"
+        self.save_delta_json(delta_json)
+        self.save_resources_and_imports(outfolder)
+
+    def get_metadata_dict(self):
+        return {}
+
+    def save_delta_json(self, savepath):
+        outdict = {
+            "commands": self.get_changed_command_paths(),
+            "values": self.get_changed_paths(),
+            "metadata": self.get_metadata_dict()
+        }
+        with savepath.open("wt") as outfile:
+            json.dump(outdict, outfile, indent=4)
+        return True
+
 
     def wano_walker_paths(self,parent = None, path = "" , output = []):
         if (parent == None):
@@ -1362,6 +1513,14 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_dir_root(self):
         return self._wano_dir_root
 
+    def apply_delta_dict(self, delta_dict):
+        flat_delta_dict = flatten_dict(delta_dict)
+        for key, value in flat_delta_dict.items():
+
+            wano_sub : AbstractWanoModel = self.get_value(key)
+            wano_sub.apply_delta(value)
+
+
 class WaNoVectorModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoVectorModel, self).__init__(*args, **kwargs)
@@ -1379,23 +1538,36 @@ class WaNoVectorModel(AbstractWanoModel):
 class WaNoItemFloatModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoItemFloatModel, self).__init__(*args, **kwargs)
-        self.myfloat = -100.0
+        self._default = -100.0
+        self._myfloat = self._default
         self.xml = None
 
     def parse_from_xml(self, xml):
-        self.myfloat = float(xml.text)
+        self._default = float(xml.text)
+        self._myfloat = self._default
         self.xml = xml
         super().parse_from_xml(xml)
 
     def get_data(self):
-        return self.myfloat
+        return self._myfloat
 
     def set_data(self, data):
-        self.myfloat = float(data)
+        self._myfloat = float(data)
         super(WaNoItemFloatModel, self).set_data(data)
+
+    def get_delta_to_default(self):
+        return self.get_data()
+
+    def apply_delta(self, delta):
+        self.set_data(delta)
 
     def __getitem__(self, item):
         return None
+
+    def changed_from_default(self) -> bool:
+        if self._myfloat != self._default:
+            return True
+        return False
 
     def get_type_str(self):
         return "Float"
@@ -1403,24 +1575,27 @@ class WaNoItemFloatModel(AbstractWanoModel):
     def update_xml(self):
         super().update_xml()
         if self.xml is not None:
-            self.xml.text = str(self.myfloat)
+            print(self._myfloat)
+            self.xml.text = str(self._myfloat)
 
     def model_to_dict(self, outdict):
-        outdict["data"] = str(self.myfloat)
+        outdict["data"] = str(self._myfloat)
         super().model_to_dict(outdict)
 
     def __repr__(self):
-        return repr(self.myfloat)
+        return repr(self._myfloat)
 
 
 class WaNoItemIntModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoItemIntModel, self).__init__(*args, **kwargs)
         self.myint = -10000000
+        self._default = self.myint
         self.xml = None
 
     def parse_from_xml(self, xml):
         self.myint = float(xml.text)
+        self._default = self.myint
         self.xml = xml
         super().parse_from_xml(xml)
 
@@ -1433,6 +1608,15 @@ class WaNoItemIntModel(AbstractWanoModel):
 
     def __getitem__(self, item):
         return None
+
+    def get_delta_to_default(self):
+        return self.myint
+
+    def apply_delta(self, delta):
+        self.myint = delta
+
+    def changed_from_default(self) -> bool:
+        return self._default != self.myint
 
     def get_type_str(self):
         return "Int"
@@ -1451,6 +1635,7 @@ class WaNoItemBoolModel(AbstractWanoModel):
         super(WaNoItemBoolModel, self).__init__(*args, **kwargs)
         self.xml = None
         self.mybool = False
+        self._default = False
 
     def parse_from_xml(self, xml):
         self.xml = xml
@@ -1459,6 +1644,7 @@ class WaNoItemBoolModel(AbstractWanoModel):
             self.mybool = True
         else:
             self.mybool = False
+        self._default = self.mybool
         super().parse_from_xml(xml)
 
     def get_data(self):
@@ -1474,6 +1660,15 @@ class WaNoItemBoolModel(AbstractWanoModel):
     def __getitem__(self, item):
         return None
 
+    def get_delta_to_default(self):
+        return self.mybool
+
+    def apply_delta(self, delta):
+        self.mybool = delta
+
+    def changed_from_default(self) -> bool:
+        return self.mybool != self._default
+
     def update_xml(self):
         if self.mybool:
             self.xml.text = "True"
@@ -1487,9 +1682,10 @@ class WaNoItemFileModel(AbstractWanoModel):
         self.xml = None
         self.is_local_file = True
         self.mystring = "FileData"
+        self._default = self.mystring
         self.logical_name = "FileDataLogical"
+        self._local_file_default = True
         self._cached_logical_name = "unset"
-
 
     def parse_from_xml(self, xml):
         self.xml = xml
@@ -1503,6 +1699,8 @@ class WaNoItemFileModel(AbstractWanoModel):
                 self.is_local_file = False
         else:
             self.xml.attrib["local"] = "True"
+        self._local_file_default = self.is_local_file
+        self._default = self.mystring
         super().parse_from_xml(xml)
 
     def get_data(self):
@@ -1514,6 +1712,22 @@ class WaNoItemFileModel(AbstractWanoModel):
 
     def __getitem__(self, item):
         return None
+
+    def _class_to_uri(self):
+        if self.is_local_file:
+            outstring = f"local://{self.mystring}"
+        else:
+            outstring = f"global://{self.mystring}"
+        return outstring
+
+    def _uri_to_class(self, uri):
+        if uri.startswith("local://"):
+            startat = 8
+            self.is_local_file = True
+        else:
+            assert uri.startswith("global://"), "URI needs to either start with local or global"
+            startat = 9
+        self.mystring = uri[startat:]
 
     def set_local(self,is_local):
         self.is_local_file = is_local
@@ -1578,6 +1792,15 @@ class WaNoItemFileModel(AbstractWanoModel):
         outdict["logical_name"] = self._cached_logical_name
         super().model_to_dict(outdict)
 
+    def get_delta_to_default(self):
+        return self._class_to_uri()
+
+    def apply_delta(self, delta):
+        self._uri_to_class(delta)
+
+    def changed_from_default(self) -> bool:
+        return self._local_file_default != self.is_local_file or  self.mystring != self._default
+
 
 
 class WaNoItemScriptFileModel(WaNoItemFileModel):
@@ -1586,7 +1809,6 @@ class WaNoItemScriptFileModel(WaNoItemFileModel):
         self.xml = None
         self.mystring = ""
         self.logical_name = self.mystring
-
 
     def parse_from_xml(self, xml):
         self.xml = xml
@@ -1637,10 +1859,12 @@ class WaNoItemStringModel(AbstractWanoModel):
         self._output_filestring = ""
         self.xml = None
         self.mystring = "unset"
+        self._default = self.mystring
 
     def parse_from_xml(self, xml):
         self.xml = xml
         self.mystring = self.xml.text
+        self._default = self.mystring
         if 'dynamic_output' in self.xml.attrib:
             self._output_filestring = self.xml.attrib["dynamic_output"]
             self._root.register_outputfile_callback(self.get_extra_output_files)
@@ -1661,6 +1885,15 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def __getitem__(self, item):
         return None
+
+    def get_delta_to_default(self):
+        return self.mystring
+
+    def apply_delta(self, delta):
+        self.mystring = delta
+
+    def changed_from_default(self) -> bool:
+        return self.mystring != self._default
 
     def get_type_str(self):
         return "String"
