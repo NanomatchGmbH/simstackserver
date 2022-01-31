@@ -15,6 +15,7 @@ import numpy as np
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.XMLUtils import is_regular_element
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path, WaNoListEntry_from_folder_or_zip
+from SimStackServer.WaNo.WaNoDelta import WaNoDelta
 from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
 
 import collections
@@ -736,7 +737,10 @@ class MultipleOfModel(AbstractWanoModel):
 
     def apply_delta(self, delta):
         while len(self.list_of_dicts) < delta:
-            self.add_item(build_view = False)
+            if self.view is not None:
+                self.add_item(build_view = True)
+            else:
+                self.add_item(build_view = False)
         while len(self.list_of_dicts) > delta:
             self.delete_item()
 
@@ -992,9 +996,10 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.notify_datachanged("force")
 
     def save_xml(self, wano : WaNoListEntry):
+        raise NotImplementedError("Saving the XML is not supported anymore.")
         filename = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
         print("Writing to ",filename)
-        self.wano_dir_root = wano.folder
+        self._wano_dir_root = wano.folder
         success = False
         try:
             with filename.open('wt',newline='\n') as outfile:
@@ -1035,7 +1040,6 @@ class WaNoModelRoot(WaNoModelDictLike):
         def leafnode_change_detector(leaf_node : AbstractWanoModel, call_info):
             twp = call_info["treewalker_paths"].abspath
             if leaf_node.changed_from_default():
-                #changed_paths[".".join(str(e) for e in twp)] = leaf_node.get_delta_to_default()
                 return leaf_node.get_delta_to_default()
             else:
                 # We only wanto to collect changed paths
@@ -1043,17 +1047,32 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         changed_paths_no_dict = tw.walker(capture = True, path_visitor_function=None, subdict_visitor_function=None, data_visitor_function=leafnode_change_detector)
 
-        def empty_dict_remover(subdict):
+        def empty_dict_remover(subdict, call_info):
+            twp = call_info["treewalker_paths"].abspath
+            relpath = call_info["treewalker_paths"].relpath
+
+            # We should not do anything which entries which were lists before to protect multipleof:
+            if isinstance(relpath, int) or relpath.isdigit():
+                return None
+
+            if isinstance(subdict, MultipleOfModel):
+                # We can never remove a path to a multiple of model
+                return None
             if len(subdict) == 0:
                 raise EraseEntryError()
+
             return None
         # We clean up this dictionary five times. A smarter way would be to implement a subdict_visitor_function
         # in WaNoTreeWalker, which runs subdict_visitorafter collecting
-        for i in range(0,5):
-            dict_remove_tw = TreeWalker(changed_paths_no_dict)
-            changed_paths_no_dict = dict_remove_tw.walker(capture = True, path_visitor_function = None,
-                                               subdict_visitor_function = empty_dict_remover,
-                                               data_visitor_function = None)
+        try:
+            for i in range(0,5):
+                dict_remove_tw = TreeWalker(changed_paths_no_dict)
+                changed_paths_no_dict = dict_remove_tw.walker(capture = True, path_visitor_function = None,
+                                                   subdict_visitor_function = empty_dict_remover,
+                                                   data_visitor_function = None)
+        except EraseEntryError:
+            # In case an EraseEntryError was thrown on the highest level (i.e no changes at all)
+            changed_paths_no_dict = {}
         return changed_paths_no_dict
 
     def save_resources_and_imports(self, outfolder : Path):
@@ -1072,7 +1091,9 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.save_resources_and_imports(outfolder)
 
     def get_metadata_dict(self):
-        return {}
+        return {
+            "name": self.name
+        }
 
     def save_delta_json(self, savepath):
         outdict = {
@@ -1286,7 +1307,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             outfile.write(etree.tounicode(self.full_xml, pretty_print=True))
 
         for remote_file,local_file in self.input_files:
-            comp_filename = os.path.join(self.wano_dir_root,local_file)
+            comp_filename = os.path.join(self._wano_dir_root,local_file)
             comp_filename = os.path.abspath(comp_filename)
             comp_dir = os.path.dirname(comp_filename)
             comp_basename = os.path.basename(comp_filename)
@@ -1458,6 +1479,24 @@ class WaNoModelRoot(WaNoModelDictLike):
         )
         return pc.path_to_value
 
+    def update_views_from_models(self):
+        tw = WaNoTreeWalker(self)
+        def init_from_model_visitor(value):
+            if hasattr(value,"view"):
+                if value.view is not None:
+                    value.view.init_from_model()
+            return value
+        def init_from_model_visitor_subdict(subdict):
+            # Subdicts dont require their view rebuilt
+            #init_from_model_visitor(subdict)
+            return None
+
+        tw.walker(capture=False,
+                  path_visitor_function=None,
+                  data_visitor_function=init_from_model_visitor,
+                  subdict_visitor_function=init_from_model_visitor_subdict
+        )
+
     def get_paths_and_data_dict(self):
         return self._get_paths_and_something_helper(subdict_skiplevel, lambda x : x.assemble_paths_and_values)
 
@@ -1513,10 +1552,17 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_dir_root(self):
         return self._wano_dir_root
 
+    def read_delta(self, foldername):
+        wd = WaNoDelta(foldername)
+        comdict = wd.command_dict
+        self.apply_delta_dict(comdict)
+        valdict = wd.value_dict
+        self.apply_delta_dict(valdict)
+        print(valdict)
+
     def apply_delta_dict(self, delta_dict):
         flat_delta_dict = flatten_dict(delta_dict)
         for key, value in flat_delta_dict.items():
-
             wano_sub : AbstractWanoModel = self.get_value(key)
             wano_sub.apply_delta(value)
 
