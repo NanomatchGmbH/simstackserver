@@ -1569,7 +1569,6 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.apply_delta_dict(comdict)
         valdict = wd.value_dict
         self.apply_delta_dict(valdict)
-        print(valdict)
 
     def apply_delta_dict(self, delta_dict):
         flat_delta_dict = flatten_dict(delta_dict)
