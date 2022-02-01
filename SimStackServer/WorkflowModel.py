@@ -2198,15 +2198,15 @@ class Workflow(WorkflowBase):
         mkdir_p(jobdirectory)
 
 
-        wfxml = join(self.storage, "workflow_data",wfem.path,"inputs",wfem.wano_xml)
+        explicit_wfxml = join(self.storage, "workflow_data",wfem.path,"inputs",wfem.wano_xml)
+        wano_dir_root = Path(join(self.storage, "workflow_data",wfem.path,"inputs"))
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
-        with open(wfxml, 'rt') as infile:
-            xml = etree.parse(infile)
-        wano_dir_root = Path(os.path.dirname(wfem.path))
+        #with open(wfxml, 'rt') as infile:
+        #    xml = etree.parse(infile)
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         #MODELROOTDIRECT
-        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True)
-        wmr.parse_from_xml(xml)
+        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True, explicit_xml=explicit_wfxml)
+        wmr.read(wano_dir_root)
         wmr = wano_without_view_constructor_helper(wmr)
         wmr.datachanged_force()
         wmr.datachanged_force()
