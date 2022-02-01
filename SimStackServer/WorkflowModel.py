@@ -498,7 +498,14 @@ class Resources(XMLYMLInstantiationBase):
         ("queue", str, "default", "String representation of queue", "m"),
         ("host", str, "localhost", "String representation of host, might include port with :, might be ipv4 or ipv6","m"),
         ("memory", np.uint64, 4096,  "Memory in Megabytes", "a"),
-        ("custom_requests", str, "", "Comma separated list specifying additional parameters not covered here.","m")
+        ("custom_requests", str, "", "Comma separated list specifying additional parameters not covered here.","m"),
+        ("base_URI", str, "", "Base URI for resource", "m"),
+        ("port", np.uint64, 0, "Port to access resource", "m"),
+        ("username", str, "", "Username on resource", "m"),
+        ("basepath", str, "", "Basepath where to execute workflows relative to home/username", "m"),
+        ("queueing_system", str, "", "Queuing System, e.g. slurm, pbs...", "m"),
+        ("sw_dir_on_resource", str, "", "Software directory on cluster", "m"),
+        ("ssh_private_key", str, "", "File to ssh private key", "m")
     ]
 
     def __init__(self, *args, **kwargs):
@@ -535,6 +542,29 @@ class Resources(XMLYMLInstantiationBase):
     @property
     def memory(self):
         return self._field_values["memory"]
+
+    @property
+    def base_URI(self):
+        return self._field_values["base_URI"]
+
+    @property
+    def port(self):
+        return self._field_values["port"]
+    @property
+    def username(self):
+        return self._field_values["username"]
+    @property
+    def basepath(self):
+        return self._field_values["basepath"]
+    @property
+    def queueing_system(self):
+        return self._field_values["queueing_system"]
+    @property
+    def sw_dir_on_resource(self):
+        return self._field_values["sw_dir_on_resource"]
+    @property
+    def ssh_private_key(self):
+        return self._field_values["ssh_private_key"]
 
 class CurrentTrash(object):
     otherfields = ["template_directory",
