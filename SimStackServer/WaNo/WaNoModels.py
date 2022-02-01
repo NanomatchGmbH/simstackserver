@@ -327,7 +327,7 @@ class WaNoMatrixModel(AbstractWanoModel):
                     self.storage[i].append("")
         else:
             self.storage = self._fromstring(self.xml.text)
-        self._default = self.storage.copy()
+        self._default = np.asarray(self.storage).copy()
 
     def _tostring(self, ar):
         returnstring = "[ "
@@ -351,10 +351,10 @@ class WaNoMatrixModel(AbstractWanoModel):
 
 
     def get_delta_to_default(self):
-        return self.storage
+        return self._tostring(self.storage)
 
     def apply_delta(self, delta):
-        self.storage = delta
+        self.storage = self._fromstring(delta)
 
     def changed_from_default(self) -> bool:
         return (np.asarray(self.storage) != np.asarray(self._default)).any()
@@ -793,6 +793,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def __init__(self, *args, **kwargs):
         super(WaNoModelRoot, self).__init__(*args, **kwargs)
+        self._explicit_xml = kwargs.get("explicit_xml","unset")
         self._logger = logging.getLogger("WaNoModelRoot")
         self._datachanged_callbacks = {}
         self._outputfile_callbacks = []
@@ -846,8 +847,11 @@ class WaNoModelRoot(WaNoModelDictLike):
             return xml
 
     def _parse_defaults(self):
-        wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
-        xmlpath = get_wano_xml_path(self._wano_dir_root, wano_name_override=wle.name)
+        if self._explicit_xml != "unset":
+            xmlpath = Path(self._explicit_xml)
+        else:
+            wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
+            xmlpath = get_wano_xml_path(self._wano_dir_root, wano_name_override=wle.name)
         xml = self._parse_xml(xmlpath)
         self._parse_from_xml(xml)
 
@@ -1090,6 +1094,11 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.save_delta_json(delta_json)
         self.save_resources_and_imports(outfolder)
 
+    def read(self, infolder):
+        wd = WaNoDelta(infolder)
+        self.apply_delta_dict(wd.command_dict)
+        self.apply_delta_dict(wd.value_dict)
+
     def get_metadata_dict(self):
         return {
             "name": self.name
@@ -1305,6 +1314,8 @@ class WaNoModelRoot(WaNoModelDictLike):
         raw_xml = os.path.join(basefolder, self._name + ".xml")
         with open(raw_xml, 'wt') as outfile:
             outfile.write(etree.tounicode(self.full_xml, pretty_print=True))
+
+        self.save(Path(basefolder))
 
         for remote_file,local_file in self.input_files:
             comp_filename = os.path.join(self._wano_dir_root,local_file)
