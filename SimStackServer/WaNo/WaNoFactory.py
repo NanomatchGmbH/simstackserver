@@ -92,18 +92,13 @@ def wano_constructor(wano: WaNoListEntry):
     # and make this the main entry point
     wano_dir_root = wano.folder
     xml = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
-    with xml.open("rt") as infile:
-        xml = etree.parse(infile)
-
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
     from WaNo.view.WaNoViews import WanoQtViewRoot
     # MODELROOTDIRECT
-    wmr = WaNoModelRoot(wano_dir_root=wano_dir_root)
+    wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, explicit_xml=xml)
     wmr.set_view_class(WanoQtViewRoot)
-    wmr.parse_from_xml(xml)
     wmr, rootview = wano_constructor_helper(wmr)
     return wmr, rootview
-
 
 
 class WaNoFactory(object):
