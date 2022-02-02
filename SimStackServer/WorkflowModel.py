@@ -103,6 +103,17 @@ class XMLYMLInstantiationBase(object):
     def contains(self,key):
         return key in self._field_names
 
+    def set_field_value(self, fieldname, value):
+        #this_index = [i for i in range(len(self._fields)) if self._fields if self._fields[i][0] == fieldname]
+        #assert isinstance(value, self._fields[this_index][2]), "value is not of correct type"
+        #self._fields[this_index][2] = value
+        value = self._field_types[fieldname](value)
+        assert isinstance(value, self._field_types[fieldname]), "Value for field %s does not have the correct type"%fieldname
+        self._field_values[fieldname] = value
+
+    def get_field_value(self, fieldname):
+        return(self._field_values[fieldname])
+
     @classmethod
     @abstractmethod
     def fields(cls):
@@ -510,6 +521,7 @@ class Resources(XMLYMLInstantiationBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
 
     @classmethod
     def fields(cls):
