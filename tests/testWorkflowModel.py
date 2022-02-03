@@ -14,6 +14,36 @@ from SimStackServer.WorkflowModel import Resources, WorkflowExecModule, Workflow
     StringList
 
 
+def SampleWFEM():
+    xml = """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord">
+  <inputs>
+    <Ele_2 id="2" type="StringList">
+      <Ele_0 id="0" type="str">test.png</Ele_0>
+      <Ele_1 id="1" type="str">workflow_data/EmployeeRecord/inputs/test.png</Ele_1>
+    </Ele_2>
+  </inputs>
+  <outputs>
+    <Ele_0 id="0" type="StringList">
+      <Ele_0 id="0" type="str">test</Ele_0>
+      <Ele_1 id="1" type="str">test</Ele_1>
+    </Ele_0>
+  </outputs>
+  <exec_command>touch test</exec_command>
+  <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
+    <queue>None</queue>
+    <host>localhost</host>
+    <custom_requests>None</custom_requests>
+  </resources>
+  <runtime_directory>/home/unittest_testuser/simstack_workspace/2022-02-01-15h43m23s-rmo/exec_directories/2022-02-01-15h43m23s-EmployeeRecord</runtime_directory>
+  <jobid>0</jobid>
+  <queueing_system>Internal</queueing_system>
+</WorkflowExecModule>
+"""
+    test_xml = etree.parse(StringIO(xml)).getroot()
+    wfem = WorkflowExecModule()
+    wfem.from_xml(test_xml)
+    return wfem
+
 class TestWorkflowModel(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(level=logging.DEBUG)
@@ -34,6 +64,18 @@ class TestWorkflowModel(unittest.TestCase):
         resources = Resources()
         resources.from_xml(myxml)
         return resources
+
+    def test_sample_wfem_roundtrip(self):
+        wfem = SampleWFEM()
+        wfem_dict = {}
+        wfem.to_dict(wfem_dict)
+        wfem2 = WorkflowExecModule()
+        wfem2.from_dict(wfem_dict)
+        for mi in wfem.inputs:
+            print(mi)
+        assert wfem.inputs.compare_with_other_list(wfem2.inputs)
+        #assert wfem.inputs == wfem2.inputs
+
 
     def testResourceModel(self):
         """
@@ -157,6 +199,8 @@ class TestWorkflowModel(unittest.TestCase):
         mytime = 2*60 + 4
         outstring = WorkflowExecModule._time_from_seconds_to_clusterjob_timestring(mytime)
         self.assertEqual(outstring, "02:04")
+
+
 
     def testWorkflowElement(self):
         a = WorkflowExecModule()

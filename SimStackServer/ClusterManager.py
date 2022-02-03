@@ -12,17 +12,27 @@ import sshtunnel
 import zmq
 from paramiko import SFTPAttributes
 
-from SimStackServer.MessageTypes import Message
+from SimStackServer.MessageTypes import Message, ErrorCodes
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories
-from SimStackServer.WorkflowModel import Resources
+from SimStackServer.WorkflowModel import Resources, WorkflowExecModule
 
 
 class SSHExpectedDirectoryError(Exception):
     pass
 
 class ClusterManager(object):
-    def __init__(self, url, port, calculation_basepath, user, sshprivatekey, extra_config, queueing_system, default_queue):
+    def __init__(self,
+                 url,
+                 port,
+                 calculation_basepath,
+                 user,
+                 sshprivatekey,
+                 extra_config,
+                 queueing_system,
+                 default_queue,
+                 software_directory = None
+                 ):
         """
 
         :param default_queue:
@@ -61,6 +71,7 @@ class ClusterManager(object):
         self._http_base_address = None
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
+        self._software_directory = software_directory
 
 
     def _dummy_callback(self, bytes_written, total_bytes):
@@ -278,6 +289,34 @@ class ClusterManager(object):
         stdin, stdout, stderr = myclient.exec_command(command)
         return stdout, stderr
 
+    def _get_server_command(self):
+        software_dir = self._software_directory
+        VDIR = self.get_newest_version_directory(software_dir)
+        software_dir += '/' + VDIR
+        if VDIR == "V2":
+            raise NotImplementedError("V2 connection capability removed from SimStack client. Please upgrade to V4.")
+        elif VDIR == "V3":
+            raise NotImplementedError("V3 connection capability removed from SimStack client. Please upgrade to V4.")
+        elif VDIR != "V4":
+            print("Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V4."%VDIR)
+        myenv = "simstack_server"
+        if self._queueing_system == "AiiDA":
+            myenv = "aiida"
+            pythonproc = software_dir + '/local_anaconda/envs/%s/bin/python' %myenv
+            execproc = "source %s/local_anaconda/etc/profile.d/conda.sh; conda activate %s; %s" % (
+            software_dir, myenv, pythonproc)
+        else:
+            pythonproc = software_dir + '/local_anaconda/envs/%s/bin/python' % myenv
+            execproc = "source %s/local_anaconda/etc/profile.d/conda.sh; conda activate %s; %s"%(software_dir, myenv, pythonproc)
+        serverproc = software_dir + '/SimStackServer/SimStackServer.py'
+        if not self.exists(pythonproc):
+            raise FileNotFoundError("%s pythonproc was not found. Please check, whether the software directory in Configuration->Servers is correct and postinstall.sh was run"%pythonproc)
+        if not self.exists(serverproc):
+            raise FileNotFoundError("%s serverproc was not found. Please check, whether the software directory in Configuration->Servers is correct and the file exists" % serverproc)
+
+        command = "%s %s"%(execproc, serverproc)
+        return command
+
     def connect_zmq_tunnel(self, command):
         """
         Executes the servercommand command and sets up the ZMQ tunnel
@@ -359,8 +398,15 @@ class ClusterManager(object):
         key_filename = None
         if self._sshprivatekeyfilename != "UseSystemDefault":
             key_filename = self._sshprivatekeyfilename
-        
-        self._zmq_ssh_tunnel = ssh.tunnel_connection(socket, "tcp://127.0.0.1:%d"%port, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
+
+        connect_address = "tcp://127.0.0.1:%d"%port
+        if self._url != "localhost":
+            self._zmq_ssh_tunnel = ssh.tunnel_connection(socket, connect_address, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
+        else:
+            self._zmq_ssh_tunnel = None
+            socket.connect(connect_address)
+            print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
+        # For testing if localhost == jump host, don't do anything. Otherwise, test with different user
         socket.send(Message.connect_message())
         # Windows somehow needs this amount of time before the socket is ready:
         time.sleep(0.25)
@@ -402,6 +448,19 @@ class ClusterManager(object):
     def submit_wf(self, filename, basepath_override = None):
         resolved_filename = self._resolve_file_in_basepath(filename,basepath_override)
         self._socket.send(Message.submit_wf_message(resolved_filename))
+        self._recv_ack_message()
+
+    def submit_single_job(self, wfem):
+        wfem : WorkflowExecModule
+        self._socket.send(Message.submit_single_job_message(wfem))
+        self._recv_ack_message()
+
+    def send_noop_message(self):
+        self._socket.send(Message.noop_message())
+        self._recv_ack_message()
+
+    def send_shutdown_message(self):
+        self._socket.send(Message.shutdown_message())
         self._recv_ack_message()
 
     def abort_wf(self, workflow_submitname):

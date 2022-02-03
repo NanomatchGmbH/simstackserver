@@ -25,7 +25,8 @@ from SimStackServer.Config import Config
 from SimStackServer.Util.FileUtilities import mkdir_p
 
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
-from SimStackServer.WorkflowModel import Workflow
+from SimStackServer.WorkflowModel import Workflow, WorkflowExecModule
+
 
 class AlreadyRunningException(Exception):
     pass
@@ -64,7 +65,10 @@ class WorkflowManager(object):
         self._logger = logging.getLogger("WorkflowManager")
         self._inprogress_models = {}
         self._finished_models = {}
+        self._inprogress_singlejobs = {}
+        self._finished_singlejobs = {}
         self._deletion_queue = Queue()
+        self._deletion_queue_singlejobs = Queue()
         self._processfarm_thread = None # This is only used if the internal batch system is to be used.
         self._processfarm = None
 
@@ -298,6 +302,15 @@ class WorkflowManager(object):
         else:
             self._logger.error("Did not find workflow %s in model lists." %workflow_submitname)
 
+    def start_singlejob(self, tostart : WorkflowExecModule):
+        tostart.run_jobfile(tostart.queueing_system)
+
+
+class OtherServerRegistry:
+    def __init__(self):
+        pass
+
+
 
 class SimStackServer(object):
     def __init__(self, my_executable):
@@ -323,7 +336,9 @@ class SimStackServer(object):
         self._stop_thread = False
         self._stop_main = False
         self._signal_termination = False
-        self._submitted_job_queue = Queue()
+        self._submitted_workflow_queue = Queue()
+        self._submitted_singlejob_queue = Queue()
+
         self._filetime_on_init = self._get_module_mtime()
 
 
@@ -368,6 +383,14 @@ class SimStackServer(object):
         if message_type == MessageTypes.CONNECT:
             #Simply acknowledge connection, no args
             sock.send(Message.connect_message())
+
+        elif message_type == MessageTypes.NOOP:
+            sock.send(Message.ack_message())
+            self._logger.info("Received noop message.")
+
+        elif message_type == MessageTypes.SHUTDOWN:
+            sock.send(Message.ack_message())
+            self._stop_main = True
 
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
@@ -436,12 +459,23 @@ class SimStackServer(object):
 
             sock.send(Message.get_http_server_ack_message(port,user,mypass))
 
+        elif message_type == MessageTypes.SUBMITSINGLEJOB:
+            sock.send(Message.ack_message())
+            try:
+                wfem_dict = message["wfem"]
+                wfem = WorkflowExecModule()
+                wfem.from_dict(wfem_dict)
+                self._logger.info("Received SingleJob message, submitting %s" % wfem)
+                self._submitted_singlejob_queue.put(wfem)
+            except Exception as e:
+                self._logger.exception("Error submitting single job.")
+
         elif message_type == MessageTypes.SUBMITWF:
             sock.send(Message.ack_message())
             try:
                 workflow_filename = message["filename"]
                 self._logger.debug("Received SUBMITWF message, submitting %s" % workflow_filename)
-                self._submitted_job_queue.put(workflow_filename)
+                self._submitted_workflow_queue.put(workflow_filename)
             except Exception as e:
                 self._logger.exception("Error submitting workflow.")
 
@@ -584,7 +618,15 @@ class SimStackServer(object):
             counter+=1
             timeextension = False
             #Submitted job queue
-            if self._submitted_job_queue.empty():
+            while not self._submitted_singlejob_queue.empty():
+                try:
+                    timeextension = True
+                    tostart = self._submitted_singlejob_queue.get(timeout=5)
+                    self._logger.info("Starting singlejob %s" % tostart)
+                    self._workflow_manager.start_singlejob(tostart)
+                except Exception as e:
+                    self._logger.exception("Exception in Workflow starting.")
+            if self._submitted_workflow_queue.empty():
                 try:
                     self._workflow_manager.check_status_submit()
                 except Exception as e:
@@ -594,7 +636,7 @@ class SimStackServer(object):
                 try:
                     try:
                         timeextension = True
-                        tostart = self._submitted_job_queue.get(timeout = 5)
+                        tostart = self._submitted_workflow_queue.get(timeout = 5)
                         tostart_abs = self._remote_relative_to_absolute_filename(tostart)
                         self._logger.info("Starting workflow %s"%tostart_abs)
                         self._workflow_manager.start_wf(tostart_abs)

@@ -42,6 +42,10 @@ class SSS_MESSAGETYPE(IntEnum):
     DISCONNECT = auto()
     SUBMITWF = auto()
     GETHTTPSERVER = auto()
+    NOOP = auto()
+    SHUTDOWN = auto()
+    SUBMITSINGLEJOB = auto()
+
 
 class ResourceStatus(IntEnum):
     """
@@ -149,13 +153,23 @@ class Message(object):
         mydict = {"MessageType": SSS_MESSAGETYPE.ACK}
         return mypacker.dumps(mydict)
 
+    @classmethod
+    def noop_message(cls):
+        mydict = {"MessageType": SSS_MESSAGETYPE.NOOP}
+        return mypacker.dumps(mydict)
+
+    @classmethod
+    def shutdown_message(cls):
+        mydict = {"MessageType": SSS_MESSAGETYPE.SHUTDOWN}
+        return mypacker.dumps(mydict)
+
     """
         The two next functions exist in case we need to fumble with encoding.
         ... which turned out to be true
     """
     @staticmethod
     def _loads(message):
-        return mypacker.loads(message, raw = False)
+        return mypacker.loads(message, raw = False, strict_map_key = False)
 
     @staticmethod
     def _dumps(indict):
@@ -204,6 +218,16 @@ class Message(object):
             "basefolder": basefolder
         }
         return cls.dict_message(SSS_MESSAGETYPE.GETHTTPSERVER, mydict)
+
+    @classmethod
+    def submit_single_job_message(cls, wfem):
+        from SimStackServer.WorkflowModel import WorkflowExecModule
+        wfem:WorkflowExecModule
+        mydict = {
+            "wfem": {}
+        }
+        wfem.to_dict(mydict["wfem"])
+        return cls.dict_message(SSS_MESSAGETYPE.SUBMITSINGLEJOB, mydict)
 
     @classmethod
     def get_http_server_ack_message(cls, port, user, password):

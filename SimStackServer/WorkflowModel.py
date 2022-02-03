@@ -355,6 +355,20 @@ class WorkflowElementList(object):
         self._typelist.append(mytype)
         self._storage.append(actual_object)
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.compare_with_other_list(other)
+        else:
+            return False
+
+    def compare_with_other_list(self, other_list):
+        if len(other_list._storage) != len(self._storage):
+            return False
+        for element1, element2 in zip(self._storage, other_list._storage):
+            if element1 != element2:
+                return False
+        return True
+
     def __getitem__(self, item):
         assert isinstance(item,int)
         return self._storage[item]
@@ -438,7 +452,7 @@ class WorkflowElementList(object):
                 fieldobject = workflow_element_factory(field)
                 if not _is_basetype(fieldobject):
                     myfo = fieldobject()
-                    myfo.from_dict(child)
+                    myfo.from_dict(child["value"])
                 else:
                     myfo = fieldobject(child["value"])
                 self._storage.append(myfo)
@@ -516,7 +530,8 @@ class Resources(XMLYMLInstantiationBase):
         ("basepath", str, "", "Basepath where to execute workflows relative to home/username", "m"),
         ("queueing_system", str, "", "Queuing System, e.g. slurm, pbs...", "m"),
         ("sw_dir_on_resource", str, "", "Software directory on cluster", "m"),
-        ("ssh_private_key", str, "", "File to ssh private key", "m")
+        ("extra_config", str, "None Required (default)", "Filepath on cluster to configuration file required before Serverstart is possible", "m"),
+        ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m")
     ]
 
     def __init__(self, *args, **kwargs):
@@ -562,21 +577,30 @@ class Resources(XMLYMLInstantiationBase):
     @property
     def port(self):
         return self._field_values["port"]
+
     @property
     def username(self):
         return self._field_values["username"]
+
     @property
     def basepath(self):
         return self._field_values["basepath"]
+
     @property
     def queueing_system(self):
         return self._field_values["queueing_system"]
+
     @property
     def sw_dir_on_resource(self):
         return self._field_values["sw_dir_on_resource"]
+
     @property
     def ssh_private_key(self):
         return self._field_values["ssh_private_key"]
+
+    @property
+    def extra_config(self):
+        return self._field_values["extra_config"]
 
 class CurrentTrash(object):
     otherfields = ["template_directory",
@@ -703,12 +727,15 @@ export NANOMATCH=%s
         return timestring
 
 
-    def run_jobfile(self, queueing_system):
+    def run_jobfile(self, queueing_system, external_cluster_manager = None):
         temphandler = StringLoggingHandler()
         temphandler.setLevel(logging.DEBUG)
         do_internal = False
         do_aiida = False
         dont_run = False
+
+        if not external_cluster_manager is None:
+            external_cluster_manager.submit_single_job(folder=self.runtime_directory)
         if queueing_system == "Internal":
             queueing_system = "slurm"
             do_internal = True
