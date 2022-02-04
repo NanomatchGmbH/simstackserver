@@ -314,6 +314,7 @@ class OtherServerRegistry:
 
 class SimStackServer(object):
     def __init__(self, my_executable):
+        self._external_job_uid_to_jobid = {}
         self._setup_root_logger()
         self._config : Config = None
         self._logger = logging.getLogger("SimStackServer")
@@ -467,6 +468,7 @@ class SimStackServer(object):
                 wfem.from_dict(wfem_dict)
                 self._logger.info("Received SingleJob message, submitting %s" % wfem)
                 self._submitted_singlejob_queue.put(wfem)
+                self._external_job_uid_to_jobid[wfem.uid] = -1
             except Exception as e:
                 self._logger.exception("Error submitting single job.")
 
