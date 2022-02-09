@@ -1,7 +1,11 @@
+import errno
 import logging
 import os
 import stat
+import string
 import time
+from datetime import datetime
+import random
 
 import paramiko
 from os import path
@@ -14,7 +18,7 @@ from paramiko import SFTPAttributes
 
 from SimStackServer.MessageTypes import Message, ErrorCodes
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
-from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories
+from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories, filewalker
 from SimStackServer.WorkflowModel import Resources, WorkflowExecModule
 
 
@@ -204,6 +208,46 @@ class ClusterManager(object):
             return
         self.__rmtree_helper(abspath)
 
+    def put_directory(self, from_directory : str, to_directory: str, optional_callback = None, basepath_override = None):
+        for filename in filewalker(from_directory):
+            cp = os.path.commonprefix([from_directory, filename])
+            relpath = os.path.relpath(filename, cp)
+            submitpath = path.join(to_directory, relpath)
+            mydir = path.dirname(submitpath)
+            self.mkdir_p(mydir)
+            self.put_file(filename,submitpath, optional_callback, basepath_override)
+
+    def exists_remote(self, path):
+        try:
+            self._sftp_client.stat(path)
+        except IOError as e:
+            if e.errno == errno.ENOENT:
+                return False
+            raise
+        else:
+            return True
+
+    def get_directory(self, from_directory_on_server: str, to_directory: str, optional_callback = None, basepath_override =None):
+        from_directory_on_server_resolved = self._resolve_file_in_basepath(from_directory_on_server, basepath_override=basepath_override)
+        self._get_directory_recurse_helper(from_directory_on_server_resolved, to_directory, optional_callback, basepath_override)
+
+    def _get_directory_recurse_helper(self, from_directory_on_server_resolved: str, to_directory: str, optional_callback = None, basepath_override =None):
+
+        if not self.exists_remote(from_directory_on_server_resolved):
+            raise FileNotFoundError(f"Directory {from_directory_on_server_resolved} not found on server.")
+
+        if not os.path.exists(to_directory):
+            os.mkdir(to_directory)
+
+        for filename in self._sftp_client.listdir(from_directory_on_server_resolved):
+            tocheck = f"{from_directory_on_server_resolved}/{filename}"
+            if stat.S_ISDIR(self._sftp_client.stat(tocheck).st_mode):
+                # uses '/' path delimiter for remote server
+                self._get_directory_recurse_helper(tocheck + '/', os.path.join(to_directory, filename))
+            else:
+                if not os.path.isfile(os.path.join(to_directory, filename)):
+                    self._sftp_client.get(tocheck, os.path.join(to_directory, filename))
+
     def put_file(self, from_file, to_file, optional_callback = None, basepath_override = None):
         """
         Transfer a file from_file (local) to to_file(remote)
@@ -258,6 +302,24 @@ class ClusterManager(object):
         :return (str): Name of default queue
         """
         return self._default_queue
+
+    def _get_job_directory_path(self, given_name):
+        now = datetime.now()
+        random_string = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        nowstr = now.strftime("%Y-%m-%d-%Hh%Mm%Ss")
+        submitname = "%s-%s-%s" %(nowstr, given_name, random_string)
+        return submitname
+
+    def mkdir_random_singlejob_exec_directory(self, given_name, num_retries = 10):
+        for i in range(0, num_retries):
+            trialdirectory = Path("singlejob_exec_directories") / self._get_job_directory_path(given_name)
+            if self.exists(Path(self._calculation_basepath) / trialdirectory):
+                time.sleep(1.05)
+            else:
+                self.mkdir_p(trialdirectory)
+                return trialdirectory
+
+        raise FileExistsError("Could not generate new directory in time.")
 
     def get_file(self, from_file, to_file, basepath_override = None, optional_callback = None):
         """
@@ -586,7 +648,7 @@ class ClusterManager(object):
             return True
         raise SSHExpectedDirectoryError("Path <%s> to expected directory exists, but was not directory"%path )
 
-    def mkdir_p(self,directory,basepath_override = None, mode_override = None):
+    def mkdir_p(self,directory, basepath_override = None, mode_override = None):
         """
         Creates a directory, if not existing. Does nothing if it exists. Throws if the path cannot be generated or is a file
         The function will make sure every directory in "directory" is generated but not in basepath or basepath_override.

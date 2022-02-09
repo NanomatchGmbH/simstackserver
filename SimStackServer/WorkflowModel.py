@@ -1,6 +1,7 @@
 import abc
 import copy
 import datetime
+import pathlib
 import re
 import time
 import logging
@@ -22,6 +23,7 @@ from os import path
 import yaml
 from lxml import etree
 import lxml.html
+
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoTreeWalker import subdict_skiplevel_path_version
 
@@ -736,6 +738,11 @@ export NANOMATCH=%s
 
         if not external_cluster_manager is None:
             external_cluster_manager.submit_single_job(folder=self.runtime_directory)
+            from SimStackServer.ClusterManager import ClusterManager
+            external_cluster_manager : ClusterManager
+            ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
+            external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name)
+            # Copy here, uid is jobid, indirection done by other server. That's it.
         if queueing_system == "Internal":
             queueing_system = "slurm"
             do_internal = True
@@ -2135,6 +2142,9 @@ class Workflow(WorkflowBase):
             myjob.abort_job()
             self.graph.fail(job)
             myjob.set_failed()
+
+    def set_storage(self, path: pathlib.Path):
+        self._field_values["storage"] = path.as_posix()
 
     def delete_storage(self):
         """
