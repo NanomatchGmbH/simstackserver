@@ -18,6 +18,10 @@ class WaNoDelta:
         return self._metadata["name"]
 
     @property
+    def folder(self):
+        return self._metadata["folder"]
+
+    @property
     def metadata(self):
         return self._metadata
 

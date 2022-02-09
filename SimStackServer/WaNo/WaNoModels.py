@@ -1101,7 +1101,8 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def get_metadata_dict(self):
         return {
-            "name": self.name
+            "name": self.name,
+            "folder": self._wano_dir_root.name,
         }
 
     def save_delta_json(self, savepath):
