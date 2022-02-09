@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+import re
 from collections import OrderedDict
 
 from jinja2 import Template
@@ -22,6 +23,10 @@ class OrderedDictIterHelper(OrderedDict):
 
 def bool_from_string(mystring : str):
     return ast.literal_eval(mystring.title())
+
+
+class InvalidNameError(Exception):
+    pass
 
 
 class AbstractWanoModel:
@@ -108,8 +113,14 @@ class AbstractWanoModel:
             self._visibility_var_path = Template(self._visibility_var_path).render(path = self._path.split("."))
             self._root.register_callback(self._visibility_var_path, self.evaluate_visibility_condition, self.path_depth())
 
+    def _check_name(self, name: str):
+        regex = "[.#´]"
+        if re.search(regex, name):
+            raise InvalidNameError(
+                f"WaNo Element names are not allowed to contain anything not in [a-z][A-Z]. Name was {name}")
+
     def parse_from_xml(self, xml):
-        self._name = xml.attrib["name"]
+        self.set_name(xml.attrib["name"])
         if "visibility_condition" in xml.attrib:
             self._visibility_condition = xml.attrib["visibility_condition"]
             self._visibility_var_path  = xml.attrib["visibility_var_path"]
@@ -145,6 +156,7 @@ class AbstractWanoModel:
         return self._isvisible and self._parent_visible
 
     def set_name(self, new_name):
+        self._check_name(new_name)
         self._name = new_name
 
     def evaluate_visibility_condition(self,changed_path):
