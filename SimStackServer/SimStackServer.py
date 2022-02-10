@@ -22,6 +22,7 @@ import threading
 from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
+from SimStackServer.RemoteServerManager import RemoteServerManager
 from SimStackServer.Util.FileUtilities import mkdir_p
 
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
@@ -71,6 +72,7 @@ class WorkflowManager(object):
         self._deletion_queue_singlejobs = Queue()
         self._processfarm_thread = None # This is only used if the internal batch system is to be used.
         self._processfarm = None
+        self._remote_servers = RemoteServerManager()
 
     def from_json(self, filename):
         with open(filename, 'rt') as infile:
@@ -164,7 +166,7 @@ class WorkflowManager(object):
         :return:
         """
         try:
-            newwf = Workflow.new_instance_from_xml(workflow_filename)
+            newwf = Workflow.new_instance_from_xml_clustermanager(workflow_filename)
 
         except FileNotFoundError as e:
             raise WorkflowError("Workflow was not found at file <%s>. Discarding Workflow.") from e

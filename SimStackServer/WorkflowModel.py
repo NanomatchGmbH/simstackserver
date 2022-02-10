@@ -737,11 +737,15 @@ export NANOMATCH=%s
         dont_run = False
 
         if not external_cluster_manager is None:
-            external_cluster_manager.submit_single_job(folder=self.runtime_directory)
+
             from SimStackServer.ClusterManager import ClusterManager
             external_cluster_manager : ClusterManager
+            external_cluster_manager.connect_ssh_and_zmq_if_disconnected()
             ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
-            external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name)
+            external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
+            #external_cluster_manager.submit_single_job(wfem=self)
+            print(ext_dir_name)
+            return
             # Copy here, uid is jobid, indirection done by other server. That's it.
         if queueing_system == "Internal":
             queueing_system = "slurm"
@@ -2128,12 +2132,13 @@ class Workflow(WorkflowBase):
         self._input_variables = {}
         self._output_variables = {}
         self._prepared_aiida_variables = None
-
         self._report_collector = None
         # self._report_collector  should record uids, when they happen and there place during execution
         # Assembly then knows their uid.
         self._path_to_aiida_uuid = {}
         self._filepath_to_aiida_uuid = {}
+        from SimStackServer.RemoteServerManager import RemoteServerManager
+        self._remote_server_manager = kwargs.get("remote_server_manager", RemoteServerManager())
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -2144,7 +2149,21 @@ class Workflow(WorkflowBase):
             myjob.set_failed()
 
     def set_storage(self, path: pathlib.Path):
-        self._field_values["storage"] = path.as_posix()
+        self._field_values["storage"] = str(path.as_posix())
+
+    def _check_if_job_is_local(self, job: WorkflowExecModule):
+        return job.resources.base_URI in ["", "localhost", "127.0.0.1"]
+
+    def _get_clustermanager_from_job(self, job: WorkflowExecModule):
+        return self._remote_server_manager.server_from_resource(job.resources)
+
+    @classmethod
+    def new_instance_from_xml_clustermanager(cls, filename, remote_server_manager = None):
+        with open(filename, 'rt') as infile:
+            myxml = etree.parse(infile).getroot()
+        a = cls(remote_server_manager=remote_server_manager)
+        a.from_xml(myxml)
+        return a
 
     def delete_storage(self):
         """
@@ -2216,9 +2235,15 @@ class Workflow(WorkflowBase):
                     else:
                         self._field_values["status"] = JobStatus.RUNNING
                         self.graph.start(rdjob)
-                        tostart.run_jobfile(self.queueing_system)
+                        if not self._check_if_job_is_local(tostart):
+                            external_cluster_manager = self._get_clustermanager_from_job(tostart)
+                        else:
+                            external_cluster_manager = None
+                        tostart.run_jobfile(self.queueing_system, external_cluster_manager=external_cluster_manager)
                         self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
                 except Exception as e:
+                    print(e)
+                    traceback.print_exc()
                     self.graph.fail(rdjob)
                     tostart.set_failed()
                     self._logger.exception("Uncaught exception during job preparation. Aborting workflow %s"%self.submit_name)

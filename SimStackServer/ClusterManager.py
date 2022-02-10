@@ -1,6 +1,7 @@
 import errno
 import logging
 import os
+import pathlib
 import stat
 import string
 import time
@@ -147,6 +148,12 @@ class ClusterManager(object):
         self._sftp_client.get_channel().settimeout(1.0)
         self.mkdir_p(self._calculation_basepath,basepath_override="")
 
+    def connect_ssh_and_zmq_if_disconnected(self):
+        if not self.is_connected():
+            self.connect()
+            com = self._get_server_command()
+            self.connect_zmq_tunnel(com)
+
     def disconnect(self):
         """
         disconnect the ssh client
@@ -268,6 +275,7 @@ class ClusterManager(object):
         # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
         if self.exists_as_directory(abstofile):
             abstofile += "/" + posixpath.basename(from_file)
+        print(from_file, "to", abstofile)
         self._sftp_client.put(from_file,abstofile,optional_callback)
 
     def remote_open(self,filename, mode, basepath_override= None):
@@ -641,7 +649,7 @@ class ClusterManager(object):
         :return bool: Exists, does not exist
         """
         try:
-            sftpa : SFTPAttributes = self._sftp_client.stat(path)
+            sftpa : SFTPAttributes = self._sftp_client.stat(str(path))
         except FileNotFoundError as e:
             return False
         if stat.S_ISDIR(sftpa.st_mode):
@@ -658,6 +666,8 @@ class ClusterManager(object):
         :param mode_override (int): Mode such as 1777
         :return (str): The absolute path of the generated directory.
         """
+        if isinstance(directory, pathlib.Path):
+            directory = str(directory)
 
         if mode_override is None:
             mode_override = self._default_mode
