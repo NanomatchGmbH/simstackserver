@@ -2236,7 +2236,10 @@ class Workflow(WorkflowBase):
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         #MODELROOTDIRECT
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True, explicit_xml=explicit_wfxml)
-        wmr.read(wano_dir_root)
+        try:
+            wmr.read(wano_dir_root)
+        except FileNotFoundError as e:
+            self._logger.info("Did not find wano_configuration.json. This is ok, if this was an old client using the V1 workflow format.")
         wmr = wano_without_view_constructor_helper(wmr)
         wmr.datachanged_force()
         wmr.datachanged_force()
