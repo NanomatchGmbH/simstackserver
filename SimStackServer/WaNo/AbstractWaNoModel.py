@@ -13,6 +13,9 @@ import ast
 class WaNoNotImplementedError(Exception):
     pass
 
+class WaNoInstantiationError(Exception):
+    pass
+
 class OrderedDictIterHelper(OrderedDict):
     def model_to_dict(self, outdict):
         for name, other_wano_model in self.items():
