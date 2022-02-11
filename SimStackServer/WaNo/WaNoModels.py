@@ -224,7 +224,8 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         super().set_root(root)
         self._connected = True
         if not self._registered:
-            root.register_callback(self._collection_path, self._update_choices, self.path_depth())
+            print(f"I am registering with {root} {self.path}")
+            root.register_callback(self._collection_path, self._update_choices, self._collection_path.count("."))
             self._registered = True
 
     def _update_choices(self, changed_path):
@@ -285,7 +286,7 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
 
     def decommission(self):
         if self._registered:
-            self.get_root().unregister_callback(self._collection_path, self._update_choices, self.path_depth())
+            self.get_root().unregister_callback(self._collection_path, self._update_choices, self._collection_path.count("."))
             self._registered = False
         for path in self._registered_paths:
             self._root.unregister_callback(path, self._update_choices, self.path_depth())
@@ -949,11 +950,13 @@ class WaNoModelRoot(WaNoModelDictLike):
                 self._datachanged_callbacks[path][depth] = []
 
             if callback_function not in self._datachanged_callbacks[path][depth]:
+                #print(f"Registering callback for {path} with {depth}, function was: {callback_function.__self__.path}.")
                 self._datachanged_callbacks[path][depth].append(callback_function)
 
     def unregister_callback(self, path, callback_function, depth):
         assert path in self._datachanged_callbacks, "When unregistering a function, it has to exist in datachanged_callbacks."
-        assert callback_function in self._datachanged_callbacks[path][depth], "Function not found in callbacks. Has to exist."
+        #print(f"Unregistering callback for {path} with {depth}. function was: {callback_function.__self__.path}.")
+        assert callback_function in self._datachanged_callbacks[path][depth], f"Unregistering callback for {path} with {depth} failed, function was: {callback_function.__self__.path}. Function not found in callbacks."
         #print("Removing %s for %s"%(path, callback_function))
         if self._notifying:
             self._unregister_list.append((path, callback_function, depth))

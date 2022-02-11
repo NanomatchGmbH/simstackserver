@@ -45,10 +45,9 @@ class TestWorkflowModel(unittest.TestCase):
         """
 
         example_resource_xml_fn = join(self._input_dir,"resources.xml")
+        print(example_resource_xml_fn)
         myxml = file_to_xml(example_resource_xml_fn)
 
-
-        fn = join(self._exec_dir,"resource_model")
 
         resources = Resources()
         resources.from_xml(myxml)
@@ -59,12 +58,25 @@ class TestWorkflowModel(unittest.TestCase):
         self.assertEqual(resources.memory, 65536)
         self.assertEqual(resources.host, "superhost")
         self.assertEqual(resources.queue, "not-default")
+        self.assertEqual(resources.custom_requests, "GPU=3")
+        self.assertEqual(resources.username, "MaxPower")
 
         res = etree.Element("Resources")
         resources.to_xml(res)
 
 
-        outstring = '<Resources walltime="3600" cpus_per_node="32" nodes="4" memory="65536"><queue>not-default</queue><host>superhost</host></Resources>'
+        outstring = '<Resources walltime="3600" cpus_per_node="32" nodes="4" memory="65536">\
+<queue>not-default</queue>\
+<host>superhost</host>\
+<custom_requests>GPU=3</custom_requests>\
+<base_URI></base_URI>\
+<port>0</port>\
+<username>MaxPower</username>\
+<basepath></basepath>\
+<queueing_system>pbs</queueing_system>\
+<sw_dir_on_resource></sw_dir_on_resource>\
+<ssh_private_key></ssh_private_key>\
+</Resources>'
         self.assertEqual(outstring, etree.tostring(res).decode())
 
         resdict = {}
