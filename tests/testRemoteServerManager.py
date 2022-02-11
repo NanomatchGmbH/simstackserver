@@ -11,7 +11,7 @@ from pathlib import Path
 from SimStackServer.ClusterManager import ClusterManager
 from SimStackServer.RemoteServerManager import RemoteServerManager
 from SimStackServer.Util.FileUtilities import file_to_xml
-from SimStackServer.WorkflowModel import Resources, Workflow
+from SimStackServer.WorkflowModel import Resources, Workflow, WorkflowExecModule
 from tests.testWorkflowModel import SampleWFEM
 
 
@@ -59,7 +59,6 @@ class TestRemoteServerManager(unittest.TestCase):
         cm.connect_zmq_tunnel(com)
         cm.send_noop_message()
         cm.submit_single_job(wfem)
-        time.sleep(20)
         cm.send_shutdown_message()
 
     def test_wf_submit(self) -> None:
@@ -71,6 +70,13 @@ class TestRemoteServerManager(unittest.TestCase):
         wf = Workflow.new_instance_from_xml(self._comp_wf_loc_remote)
         wf.set_storage(Path(self._comp_wf_dir_remote))
         wf.jobloop()
+
+        time.sleep(3)
+        myjob : WorkflowExecModule = wf.get_jobs()[0]
+        print(myjob.completed_or_aborted())
+        time.sleep(15)
+        print(myjob.completed_or_aborted())
+        myjob._my_external_cluster_manager.send_shutdown_message()
 
     def test_transfer_directory(self) -> None:
         rsm = RemoteServerManager()
@@ -89,6 +95,8 @@ class TestRemoteServerManager(unittest.TestCase):
         com = cm._get_server_command()
         cm.connect_zmq_tunnel(com)
         cm.send_noop_message()
+        cm.send_jobstatus_message("abcd")
+        cm.send_abortsinglejob_message("abcd")
         time.sleep(2)
         cm.send_shutdown_message()
 

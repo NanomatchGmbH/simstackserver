@@ -35,7 +35,7 @@ from SimStackServer.EvalHandler import eval_numpyexpression
 from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting import Templates
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
-from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler
+from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler, abs_resolve_file
 from external.clusterjob.clusterjob import FAILED
 from TreeWalker.flatten_dict import flatten_dict
 from jinja2 import Template
@@ -622,6 +622,9 @@ class ReportError(Exception):
     pass
 
 
+
+
+
 class WorkflowExecModule(XMLYMLInstantiationBase):
     _fields = [
         ("uid", str, None, "uid of this WorkflowExecModule.", "a"),
@@ -649,6 +652,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._xmlbasename = os.path.basename(self.wano_xml)
         self._rendered_body_html = None
         self._failed = False
+        self._my_external_cluster_manager = None
 
     @classmethod
     def fields(cls):
@@ -735,6 +739,7 @@ export NANOMATCH=%s
         do_internal = False
         do_aiida = False
         dont_run = False
+        self.set_runtime_directory(abs_resolve_file(self.runtime_directory))
 
         if not external_cluster_manager is None:
 
@@ -742,11 +747,16 @@ export NANOMATCH=%s
             external_cluster_manager : ClusterManager
             external_cluster_manager.connect_ssh_and_zmq_if_disconnected()
             ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
-            external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
-            #external_cluster_manager.submit_single_job(wfem=self)
-            print(ext_dir_name)
+
+            ext_dir_abs = external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
+            external_wfem = copy.copy(self)
+
+
+            external_wfem.set_runtime_directory(ext_dir_abs)
+            external_cluster_manager.submit_single_job(external_wfem)
+            self._my_external_cluster_manager = external_cluster_manager
+            self.set_jobid(f"ext:{self.uid}")
             return
-            # Copy here, uid is jobid, indirection done by other server. That's it.
         if queueing_system == "Internal":
             queueing_system = "slurm"
             do_internal = True
@@ -977,6 +987,15 @@ export NANOMATCH=%s
         return self._field_values["queueing_system"]
 
     def completed_or_aborted(self):
+        if self._my_external_cluster_manager != None:
+            from SimStackServer.ClusterManager import ClusterManager
+            self._my_external_cluster_manager:ClusterManager
+            result = self._my_external_cluster_manager.send_jobstatus_message(wfem_uid = self.uid)
+            status = result["status"]
+            if status in ["finished", "aborted"]:
+                return True
+            return False
+
         if not self.queueing_system in ["Internal", "AiiDA"] :
             try:
                 asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
@@ -2592,6 +2611,13 @@ class Workflow(WorkflowBase):
 
         return myvars
 
+    def get_jobs(self):
+        success, failed, running = self.graph.get_success_failed_running_jobs()
+        alljobs =  success + failed + running
+
+        alljobobjs = [ self.elements.get_element_by_uid(job) for job in alljobs if job != "0"]
+        return alljobobjs
+
     def get_running_finished_job_list_formatted(self):
         files = []
         success, failed, running = self.graph.get_success_failed_running_jobs()
@@ -2607,8 +2633,12 @@ class Workflow(WorkflowBase):
                 self._logger.debug("Looking for commonpath between %s and %s"%(jobobj.runtime_directory,self.storage))
                 if jobobj.runtime_directory == "unstarted":
                     continue
-                commonpath = path.commonpath([jobobj.runtime_directory, self.storage])
-                jobdir = jobobj.runtime_directory[len(commonpath):]
+                print(jobobj.runtime_directory, self.storage)
+                if jobobj.runtime_directory.startswith("/"):
+                    commonpathlen = len(path.commonpath([jobobj.runtime_directory, self.storage]))
+                else:
+                    commonpathlen = 0
+                jobdir = jobobj.runtime_directory[commonpathlen:]
                 if jobdir.startswith('/'):
                     jobdir = jobdir[1:]
                 jobdir = self.submit_name + '/' + jobdir

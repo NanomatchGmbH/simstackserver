@@ -219,6 +219,20 @@ class WorkflowManager(object):
                 wfmodel.abort()
                 move_to_finished.append(wfsubmit_name)
 
+        for singlejob_uuid, wfem in [*self._inprogress_singlejobs.items()]:
+            wfem: WorkflowExecModule
+            move_this_job_to_finished = False
+            try:
+                if wfem.completed_or_aborted():
+                    self._logger.info(f"Moving {singlejob_uuid} to finished singlejobs.")
+                    move_this_job_to_finished = True
+            except Exception as e:
+                self._logger.exception("Uncaught exception during jobloop of workflow %s. Aborting." % wfsubmit_name)
+                move_this_job_to_finished = True
+                wfem.abort_job()
+            if move_this_job_to_finished:
+                self._finished_singlejobs[singlejob_uuid] = wfem
+                del self._inprogress_singlejobs[singlejob_uuid]
 
         for key in move_to_finished:
             wf = self._inprogress_models[key]
@@ -305,8 +319,23 @@ class WorkflowManager(object):
             self._logger.error("Did not find workflow %s in model lists." %workflow_submitname)
 
     def start_singlejob(self, tostart : WorkflowExecModule):
+        self._inprogress_singlejobs[tostart.uid] = tostart
         tostart.run_jobfile(tostart.queueing_system)
 
+
+    def get_singlejob_status(self, wfem_uid: str):
+        resultdict = { "status": "inprogress" }
+        if wfem_uid in self._inprogress_singlejobs:
+            resultdict = {
+                "status" : "inprogress"
+            }
+        if wfem_uid in self._finished_singlejobs:
+            resultdict = {
+                "status": "finished"
+            }
+        self._logger.info(" ".join(self._finished_singlejobs.keys()))
+        self._logger.info(" ".join(self._inprogress_singlejobs.keys()))
+        return resultdict
 
 class OtherServerRegistry:
     def __init__(self):
@@ -473,6 +502,23 @@ class SimStackServer(object):
                 self._external_job_uid_to_jobid[wfem.uid] = -1
             except Exception as e:
                 self._logger.exception("Error submitting single job.")
+
+        elif message_type == MessageTypes.ABORTSINGLEJOB:
+            print("I got an abot single job message")
+            sock.send(Message.ack_message())
+
+        elif message_type == MessageTypes.GETSINGLEJOBSTATUS:
+            self._logger.info("I got a get single single job messagesttatus")
+            try:
+                wfem_uid = message["WFEM_UID"]
+                mystatus = self._workflow_manager.get_singlejob_status(wfem_uid)
+                self._logger.info(f"Status of {wfem_uid} requested. Status was: {mystatus}")
+                reply = Message.getsinglejobstatus_message_reply(reply=mystatus["status"])
+                sock.send(reply)
+            except Exception as e:
+                # Empty the socket again.
+                self._logger.exception("EXCEPTION RECEIVED")
+                sock.send(Message.ack_message())
 
         elif message_type == MessageTypes.SUBMITWF:
             sock.send(Message.ack_message())

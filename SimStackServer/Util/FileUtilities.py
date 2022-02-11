@@ -4,6 +4,7 @@ import os
 import shutil
 import zipfile
 from functools import wraps
+from os.path import join
 from pathlib import Path
 
 from lxml import etree
@@ -38,6 +39,11 @@ def split_directory_in_subdirectories(mypath: str):
     togenerate.reverse()
     return togenerate
 
+def abs_resolve_file(directory : str):
+    if not directory.startswith('/'):
+        home = str(Path.home())
+        return join(home,directory)
+    return directory
 
 
 def mkdir_p(path):

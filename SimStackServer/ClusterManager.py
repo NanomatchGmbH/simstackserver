@@ -183,14 +183,14 @@ class ClusterManager(object):
                 self._zmq_ssh_tunnel.kill()
                 #print("Killed zmq tunnel")
 
-    def _resolve_file_in_basepath(self,filename, basepath_override):
+    def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
             basepath_override = self._calculation_basepath
 
         return basepath_override + '/' + filename
 
     def delete_file(self, filename, basepath_override = None):
-        resolved_filename = self._resolve_file_in_basepath(filename, basepath_override)
+        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
         self._sftp_client.remove(resolved_filename)
 
     def __rmtree_helper(self,abspath):
@@ -210,7 +210,7 @@ class ClusterManager(object):
         #print("Im deleting %s"%abspath)
 
     def rmtree(self, dirname, basepath_override = None):
-        abspath = self._resolve_file_in_basepath(dirname,basepath_override)
+        abspath = self.resolve_file_in_basepath(dirname, basepath_override)
         if not self.exists_as_directory(abspath):
             return
         self.__rmtree_helper(abspath)
@@ -223,6 +223,7 @@ class ClusterManager(object):
             mydir = path.dirname(submitpath)
             self.mkdir_p(mydir)
             self.put_file(filename,submitpath, optional_callback, basepath_override)
+        return self.resolve_file_in_basepath(str(to_directory), basepath_override=basepath_override)
 
     def exists_remote(self, path):
         try:
@@ -235,7 +236,7 @@ class ClusterManager(object):
             return True
 
     def get_directory(self, from_directory_on_server: str, to_directory: str, optional_callback = None, basepath_override =None):
-        from_directory_on_server_resolved = self._resolve_file_in_basepath(from_directory_on_server, basepath_override=basepath_override)
+        from_directory_on_server_resolved = self.resolve_file_in_basepath(from_directory_on_server, basepath_override=basepath_override)
         self._get_directory_recurse_helper(from_directory_on_server_resolved, to_directory, optional_callback, basepath_override)
 
     def _get_directory_recurse_helper(self, from_directory_on_server_resolved: str, to_directory: str, optional_callback = None, basepath_override =None):
@@ -275,11 +276,10 @@ class ClusterManager(object):
         # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
         if self.exists_as_directory(abstofile):
             abstofile += "/" + posixpath.basename(from_file)
-        print(from_file, "to", abstofile)
         self._sftp_client.put(from_file,abstofile,optional_callback)
 
     def remote_open(self,filename, mode, basepath_override= None):
-        abspath = self._resolve_file_in_basepath(filename,basepath_override)
+        abspath = self.resolve_file_in_basepath(filename, basepath_override)
         return self._sftp_client.open(abspath, mode)
 
     def list_dir(self, path, basepath_override = None):
@@ -516,7 +516,7 @@ class ClusterManager(object):
         return messagetype, message
 
     def submit_wf(self, filename, basepath_override = None):
-        resolved_filename = self._resolve_file_in_basepath(filename,basepath_override)
+        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
         self._socket.send(Message.submit_wf_message(resolved_filename))
         self._recv_ack_message()
 
@@ -524,6 +524,19 @@ class ClusterManager(object):
         wfem : WorkflowExecModule
         self._socket.send(Message.submit_single_job_message(wfem))
         self._recv_ack_message()
+
+    def send_jobstatus_message(self, wfem_uid: str):
+        message = Message.getsinglejobstatus_message(wfem_uid = wfem_uid)
+        self._socket.send(message)
+        # This has to be the actual answer message:
+        messagetype, message = self._recv_message()
+        return message
+
+    def send_abortsinglejob_message(self, wfem_uid: str):
+        message = Message.abortsinglejob_message(wfem_uid = wfem_uid)
+        self._socket.send(message)
+        # This has to be the actual answer message:
+        self._recv_message()
 
     def send_noop_message(self):
         self._socket.send(Message.noop_message())
@@ -597,7 +610,7 @@ class ClusterManager(object):
         return "V%d"%largest_version
 
     def is_directory(self, path, basepath_override = None):
-        resolved = self._resolve_file_in_basepath(path, basepath_override)
+        resolved = self.resolve_file_in_basepath(path, basepath_override)
         sftpa : SFTPAttributes = self._sftp_client.stat(resolved)
         if stat.S_ISDIR(sftpa.st_mode):
             return True

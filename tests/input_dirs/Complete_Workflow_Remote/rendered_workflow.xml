@@ -21,7 +21,7 @@
           <Ele_1 id="1" type="str">Rocko</Ele_1>
         </Ele_0>
       </outputs>
-      <exec_command>echo "hello"; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </exec_command>
+      <exec_command>echo "hello"; sleep 5; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </exec_command>
       <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
         <queue></queue>
         <host>int-strunk</host>

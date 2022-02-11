@@ -33,6 +33,9 @@ class SSS_MESSAGETYPE(IntEnum):
     LISTWFSREPLY = auto()
     LISTWFJOBS = auto()
     LISTWFJOBSREPLY = auto()
+    GETSINGLEJOBSTATUS = auto()
+    GETSINGLEJOBSTATUSREPLY = auto()
+    ABORTSINGLEJOB = auto()
     #LISTJOBS = auto()
     #LISTJOBSREPLY = auto()
     DELWF = auto()
@@ -161,6 +164,24 @@ class Message(object):
     @classmethod
     def shutdown_message(cls):
         mydict = {"MessageType": SSS_MESSAGETYPE.SHUTDOWN}
+        return mypacker.dumps(mydict)
+
+    @classmethod
+    def getsinglejobstatus_message(cls, wfem_uid: str):
+        mydict = {"MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUS,
+                  "WFEM_UID": wfem_uid}
+        return mypacker.dumps(mydict)
+
+    @classmethod
+    def getsinglejobstatus_message_reply(cls, reply: str):
+        mydict = {"MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUSREPLY,
+                  "status": reply}
+        return mypacker.dumps(mydict)
+
+    @classmethod
+    def abortsinglejob_message(cls, wfem_uid: str):
+        mydict = {"MessageType": SSS_MESSAGETYPE.ABORTSINGLEJOB,
+                  "WFEM_UID": wfem_uid}
         return mypacker.dumps(mydict)
 
     """

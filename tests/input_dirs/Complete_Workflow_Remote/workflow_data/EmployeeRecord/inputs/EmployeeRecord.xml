@@ -20,7 +20,7 @@
   <WaNoMatrixString rows="1" cols="3" col_header="X;Y;Z" row_header="" name="Simple Vector">[ [  "" , "" , "" ] ] </WaNoMatrixString>
   <WaNoMatrixFloat rows="1" cols="3" col_header="X;Y;Z" row_header="" name="Simple Vector Float">[ [  "" , "" , "" ] ] </WaNoMatrixFloat>
  </WaNoRoot>
- <WaNoExecCommand>echo "hello"; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </WaNoExecCommand>
+ <WaNoExecCommand>echo "hello"; cp rendered_wano.yml output_dict.yml; sleep 5; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </WaNoExecCommand>
  <WaNoInputFiles>
    <WaNoInputFile logical_filename="report_template.body">report_template.body</WaNoInputFile>
    <WaNoInputFile logical_filename="output_config.ini">sample_config.ini</WaNoInputFile>
