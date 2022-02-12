@@ -1787,6 +1787,9 @@ class WaNoItemFileModel(AbstractWanoModel):
         else:
             assert uri.startswith("global://"), "URI needs to either start with local or global"
             startat = 9
+            self.is_local_file = False
+            if not self.view is None:
+                self.view.set_disable(True)
         self.mystring = uri[startat:]
 
     def set_local(self,is_local):
