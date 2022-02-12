@@ -81,6 +81,18 @@ class AbstractWanoModel:
     def get_delta_to_default(self):
         raise NotImplementedError("Implement in child class.")
 
+    def _apply_import_delta(self, delta: str):
+        if delta.startswith("import_from:"):
+            self._do_import = True
+            self._import_from = delta[12:]
+            return True
+        return False
+
+    def _get_import_delta(self):
+        if self._do_import:
+            return f"import_from:{self._import_from}"
+        return None
+
     @abc.abstractmethod
     def apply_delta(self, delta):
         raise NotImplementedError("Implement in child class.")

@@ -1616,15 +1616,21 @@ class WaNoItemFloatModel(AbstractWanoModel):
         super(WaNoItemFloatModel, self).set_data(data)
 
     def get_delta_to_default(self):
+        import_delta = self._get_import_delta()
+        if import_delta:
+            return import_delta
         return self.get_data()
 
     def apply_delta(self, delta):
-        self.set_data(delta)
+        if not self._apply_import_delta(delta):
+            self.set_data(delta)
 
     def __getitem__(self, item):
         return None
 
     def changed_from_default(self) -> bool:
+        if self.do_import:
+            return True
         if self._myfloat != self._default:
             return True
         return False
@@ -1670,12 +1676,18 @@ class WaNoItemIntModel(AbstractWanoModel):
         return None
 
     def get_delta_to_default(self):
+        import_delta = self._get_import_delta()
+        if import_delta:
+            return import_delta
         return self.myint
 
     def apply_delta(self, delta):
-        self.myint = delta
+        if not self._apply_import_delta(delta):
+            self.myint = delta
 
     def changed_from_default(self) -> bool:
+        if self.do_import:
+            return True
         return self._default != self.myint
 
     def get_type_str(self):
@@ -1950,12 +1962,18 @@ class WaNoItemStringModel(AbstractWanoModel):
         return None
 
     def get_delta_to_default(self):
+        import_delta = self._get_import_delta()
+        if import_delta:
+            return import_delta
         return self.mystring
 
     def apply_delta(self, delta):
-        self.mystring = delta
+        if not self._apply_import_delta(delta):
+            self.mystring = delta
 
     def changed_from_default(self) -> bool:
+        if self.do_import:
+            return True
         return self.mystring != self._default
 
     def get_type_str(self):
