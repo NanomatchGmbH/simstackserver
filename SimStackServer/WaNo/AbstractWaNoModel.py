@@ -82,7 +82,7 @@ class AbstractWanoModel:
         raise NotImplementedError("Implement in child class.")
 
     def _apply_import_delta(self, delta: str):
-        if delta.startswith("import_from:"):
+        if str(delta).startswith("import_from:"):
             self._do_import = True
             self._import_from = delta[12:]
             return True
