@@ -807,25 +807,19 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._render_substitutions = {}
 
         if "model_only" in kwargs and kwargs["model_only"] is True:
-            pass
+            self.resources = None
+            self.import_model = None
+            self.export_model = None
         else:
-            # We want to allow construction without QT view imports, which are happening here
             from WaNo.view.PropertyListView import ResourceTableModel, ImportTableModel, ExportTableModel
-            self.resources = ResourceTableModel(parent=None,wano_parent=self)
+            self.resources = ResourceTableModel(parent=None, wano_parent=self)
 
-            self.import_model = ImportTableModel(parent=None,wano_parent=self)
+            self.import_model = ImportTableModel(parent=None, wano_parent=self)
             self.import_model.make_default_list()
 
-            self.export_model = ExportTableModel(parent=None,wano_parent=self)
+            self.export_model = ExportTableModel(parent=None, wano_parent=self)
             self.export_model.make_default_list()
-            imports_fn = self._wano_dir_root / "imports.yml"
-            self._exists_read_load(self.import_model, imports_fn)
-
-            exports_fn = self._wano_dir_root / "exports.yml"
-            self._exists_read_load(self.export_model, exports_fn)
-
-            resources_fn = self._wano_dir_root / "resources.yml"
-            self._exists_read_load(self.resources, resources_fn)
+            self._read_export(self._wano_dir_root)
         self._root = self
 
         self.rendered_exec_command = ""
@@ -840,6 +834,20 @@ class WaNoModelRoot(WaNoModelDictLike):
         before = self._block_signals
         self._block_signals = true_or_false
         return before
+
+    def _read_export(self, directory: pathlib.Path):
+        # We want to allow construction without QT view imports, which are happening here
+        if self.import_model:
+            imports_fn = directory / "imports.yml"
+            self._exists_read_load(self.import_model, imports_fn)
+
+        if self.export_model:
+            exports_fn = directory / "exports.yml"
+            self._exists_read_load(self.export_model, exports_fn)
+
+        if self.resources:
+            resources_fn = directory / "resources.yml"
+            self._exists_read_load(self.resources, resources_fn)
 
     @staticmethod
     def _parse_xml(xmlpath: pathlib.Path):
@@ -1097,10 +1105,14 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.save_delta_json(delta_json)
         self.save_resources_and_imports(outfolder)
 
-    def read(self, infolder):
-        wd = WaNoDelta(infolder)
+    def read_from_wano_delta(self, wd: WaNoDelta, infolder: pathlib.Path):
         self.apply_delta_dict(wd.command_dict)
         self.apply_delta_dict(wd.value_dict)
+        self._read_export(infolder)
+
+    def read(self, infolder: pathlib.Path):
+        wd = WaNoDelta(infolder)
+        self.read_from_wano_delta(wd, infolder)
 
     def get_metadata_dict(self):
         return {
@@ -1566,13 +1578,6 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def get_dir_root(self):
         return self._wano_dir_root
-
-    def read_delta(self, foldername):
-        wd = WaNoDelta(foldername)
-        comdict = wd.command_dict
-        self.apply_delta_dict(comdict)
-        valdict = wd.value_dict
-        self.apply_delta_dict(valdict)
 
     def apply_delta_dict(self, delta_dict):
         flat_delta_dict = flatten_dict(delta_dict)
