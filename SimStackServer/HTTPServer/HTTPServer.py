@@ -358,7 +358,7 @@ class CustomHTTPServer(http.server.HTTPServer):
 
 class CustomHTTPServerThread(Thread, CustomHTTPServer):
     def __init__(self, address, directory, *args, **kwargs):
-        Thread.__init__(self, target=self.serve_for_duration, *args, **kwargs)
+        Thread.__init__(self, target=self.serve_for_duration, name="HTTPServer", *args, **kwargs)
         handlerClass = kwargs["handlerClass"] if "handlerClass" in kwargs else CustomServerHandler
         CustomHTTPServer.__init__(self, address, directory, handlerClass)
 
