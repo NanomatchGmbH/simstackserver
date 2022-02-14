@@ -70,12 +70,14 @@ class TestRemoteServerManager(unittest.TestCase):
         wf = Workflow.new_instance_from_xml(self._comp_wf_loc_remote)
         wf.set_storage(Path(self._comp_wf_dir_remote))
         wf.jobloop()
-
-        time.sleep(3)
+        time.sleep(1.2)
         myjob : WorkflowExecModule = wf.get_jobs()[0]
-        print(myjob.completed_or_aborted())
-        time.sleep(15)
-        print(myjob.completed_or_aborted())
+        should_be_running = not myjob.completed_or_aborted()
+        self.assert_(should_be_running, "This workflow should have been running already.")
+        time.sleep(10)
+        wf.jobloop()
+        should_be_over = myjob.completed_or_aborted()
+        self.assert_(should_be_over, "This workflow should have been done already.")
         myjob._my_external_cluster_manager.send_shutdown_message()
 
     def test_transfer_directory(self) -> None:

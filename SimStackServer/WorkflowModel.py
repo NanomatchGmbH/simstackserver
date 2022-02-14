@@ -811,8 +811,8 @@ export NANOMATCH=%s
 """%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
             try:
                 jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
-                                                 time = mytimestring, nodes = self.resources.nodes,
-                                                 ppn = self.resources.cpus_per_node, mem = self.resources.memory,
+                                                 time = mytimestring, nodes = int(self.resources.nodes),
+                                                 ppn = int(self.resources.cpus_per_node), mem = self.resources.memory,
                                                  stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                                  workdir = self.runtime_directory, **kwargs
                 )
@@ -896,7 +896,7 @@ export NANOMATCH=%s
                     if not dont_run:
                         from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
                         batchsys, _ = InternalBatchSystem.get_instance()
-                        jobid = batchsys.add_work_to_current_bracket(self.resources.cpus_per_node,"smp",runscript)
+                        jobid = batchsys.add_work_to_current_bracket(int(self.resources.cpus_per_node),"smp",runscript)
                     else:
                         jobid = 1
                     self._logger.debug("Submitted as internal job %d"%jobid)

@@ -105,6 +105,12 @@ class WorkflowManager(object):
         else:
             self._logger.warning("Tried to abort workflow, which was not found in inprogress workflows.")
 
+    def abort_singlejob(self, wfem_uid: str):
+        inprogress_job : WorkflowExecModule = self._inprogress_singlejobs.get(wfem_uid, None)
+        if inprogress_job:
+            self._logger.info(f"Aborting job with uid {wfem_uid}")
+            inprogress_job.abort_job()
+
     def _get_workflows(self, which_ones):
         """
         Helper function, which prepares the workflows in the format to be communicated.
@@ -508,7 +514,12 @@ class SimStackServer(object):
                 self._logger.exception("Error submitting single job.")
 
         elif message_type == MessageTypes.ABORTSINGLEJOB:
-            print("I got an abot single job message")
+            try:
+                wfem_uid = message["WFEM_UID"]
+                self._workflow_manager.abort_singlejob(wfem_uid)
+            except Exception as e:
+                self._logger.exception("Exception during single job abort message handler.")
+                pass
             sock.send(Message.ack_message())
 
         elif message_type == MessageTypes.GETSINGLEJOBSTATUS:
