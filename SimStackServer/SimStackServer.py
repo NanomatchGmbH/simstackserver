@@ -154,6 +154,7 @@ class WorkflowManager(object):
 
     def shutdown(self):
         if self._processfarm_thread is not None:
+            self._logger.info("Shutting down processfarm.")
             self._processfarm.abort()
             time.sleep(0.3)
             if self._processfarm_thread.is_alive():
@@ -319,6 +320,8 @@ class WorkflowManager(object):
             self._logger.error("Did not find workflow %s in model lists." %workflow_submitname)
 
     def start_singlejob(self, tostart : WorkflowExecModule):
+        if tostart.queueing_system == "Internal" and self._processfarm_thread is None:
+            self._start_internal_queue()
         self._inprogress_singlejobs[tostart.uid] = tostart
         tostart.run_jobfile(tostart.queueing_system)
 
@@ -423,6 +426,7 @@ class SimStackServer(object):
         elif message_type == MessageTypes.SHUTDOWN:
             sock.send(Message.ack_message())
             self._stop_main = True
+            self._stop_thread = True
 
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
@@ -590,7 +594,7 @@ class SimStackServer(object):
             self._logger.debug("Configured Authentication with pass %s"%password)
 
         if self._commthread is None:
-            self._commthread = threading.Thread(target = self._zmq_worker_loop, args=(port,))
+            self._commthread = threading.Thread(target = self._zmq_worker_loop, name="ZMQ Commthread", args=(port,))
             self._commthread.start()
 
     def _signal_handler(self, signum, frame):
@@ -613,6 +617,7 @@ class SimStackServer(object):
 
     def terminate(self):
         self._stop_thread = True
+        self._stop_main = True
         count = 0
         if self._http_server is not None:
             while self._http_server.is_alive() and count < 10:
@@ -639,10 +644,18 @@ class SimStackServer(object):
             # Note, maybe with the current setup, where we set linger on all ports this would be a non-issue.
             self._zmq_context.destroy()
             self._logger.debug("ZMQ context terminated.")
-        
+
         #Now that nothing is running anymore, we save WorkflowManagers runtime information and all workflows (inside WFM)
         self._workflow_manager.backup_and_save()
         self._workflow_manager.shutdown()
+        import threading
+        numthreads = len([*threading.enumerate()])
+        if numthreads > 1:
+            self._logger.info("Found more than one thread still running. Listing Threads:")
+            for thread in threading.enumerate():
+                self._logger.info(f"Thread still running: {thread.name}")
+
+
 
     def _shutdown(self, remove_crontab = True):
         if self._config is None:
