@@ -182,6 +182,7 @@ class WaNoChoiceModel(AbstractWanoModel):
 
     def apply_delta(self, delta):
         self.chosen = self.choices.index(delta)
+        self.set_data(self.choices[self.chosen])
 
     def set_chosen(self,choice):
         self.chosen = int(choice)
