@@ -758,16 +758,16 @@ export NANOMATCH=%s
 
             from SimStackServer.ClusterManager import ClusterManager
             external_cluster_manager : ClusterManager
-            external_cluster_manager.connect_ssh_and_zmq_if_disconnected()
-            ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
+            with external_cluster_manager.connection_context():
+                ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
 
-            ext_dir_abs = external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
-            external_wfem = copy.deepcopy(self)
+                ext_dir_abs = external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
+                external_wfem = copy.deepcopy(self)
 
 
-            external_wfem.set_runtime_directory(ext_dir_abs)
-            external_wfem.reset_resources_to_localhost()
-            external_cluster_manager.submit_single_job(external_wfem)
+                external_wfem.set_runtime_directory(ext_dir_abs)
+                external_wfem.reset_resources_to_localhost()
+                external_cluster_manager.submit_single_job(external_wfem)
             self._my_external_cluster_manager = external_cluster_manager
             self.set_external_runtime_directory(ext_dir_abs)
             self.set_jobid(f"ext:{self.uid}")
@@ -937,8 +937,8 @@ export NANOMATCH=%s
             self._logger.info("Aborting job in non-local server.")
             from SimStackServer.ClusterManager import ClusterManager
             cm : ClusterManager = self._get_clustermanager_from_job()
-            cm.send_abortsinglejob_message(self.uid)
-            print("This should be a non-local job")
+            with cm.connection_context():
+                cm.send_abortsinglejob_message(self.uid)
 
         elif self.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
@@ -1012,7 +1012,8 @@ export NANOMATCH=%s
         if self._my_external_cluster_manager != None:
             from SimStackServer.ClusterManager import ClusterManager
             self._my_external_cluster_manager:ClusterManager
-            result = self._my_external_cluster_manager.send_jobstatus_message(wfem_uid = self.uid)
+            with self._my_external_cluster_manager.connection_context():
+                result = self._my_external_cluster_manager.send_jobstatus_message(wfem_uid = self.uid)
             status = result["status"]
             self._logger.debug(f"Job status reported as: {status}")
             if status in ["finished", "aborted"]:
@@ -1043,7 +1044,7 @@ export NANOMATCH=%s
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
             status = batchsys.jobstatus(self.jobid)
-            self._logger.info(f"BATCHSYSTEM STATUS WAS {status}")
+            #self._logger.info(f"BATCHSYSTEM STATUS WAS {status}")
             if status in ["completed","cancelled","done","notfound","crashed","failed"]:
                 return True
             return False
@@ -2533,7 +2534,8 @@ class Workflow(WorkflowBase):
             runtime_dir = wfem.runtime_directory
             ext_runtime_dir = wfem.external_runtime_directory
             self._logger.info(f"Retrieving runtime directory of non-local job from {ext_runtime_dir} to {runtime_dir}.")
-            mycm.get_directory(ext_runtime_dir, runtime_dir)
+            with mycm.connection_context():
+                mycm.get_directory(ext_runtime_dir, runtime_dir)
 
 
         staging_filename_to_aiida_obj = {}

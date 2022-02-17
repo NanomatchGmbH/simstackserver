@@ -56,8 +56,7 @@ class TestRemoteServerManager(unittest.TestCase):
         exec_dirs.append(path.join(self._comp_wf_dir_remote, "workflow_data", "EmployeeRecord", "./outputs"))
         for exec_dir in exec_dirs:
             if os.path.isdir(exec_dir):
-                pass
-                #shutil.rmtree(exec_dir)
+                shutil.rmtree(exec_dir)
 
         from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
         pfarm, pfarm_thread = InternalBatchSystem.get_instance()

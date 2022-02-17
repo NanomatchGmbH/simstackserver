@@ -5,6 +5,7 @@ import pathlib
 import stat
 import string
 import time
+from contextlib import contextmanager
 from datetime import datetime
 import random
 
@@ -148,11 +149,22 @@ class ClusterManager(object):
         self._sftp_client.get_channel().settimeout(1.0)
         self.mkdir_p(self._calculation_basepath,basepath_override="")
 
-    def connect_ssh_and_zmq_if_disconnected(self):
+    @contextmanager
+    def connection_context(self):
+        # Code to acquire resource, e.g.:
+        try:
+            if self.is_connected():
+                yield None
+            else:
+                yield self.connect_ssh_and_zmq_if_disconnected(connect_http = False, verbose = False)
+        finally:
+            self.disconnect()
+
+    def connect_ssh_and_zmq_if_disconnected(self, connect_http = True, verbose = True):
         if not self.is_connected():
             self.connect()
             com = self._get_server_command()
-            self.connect_zmq_tunnel(com)
+            self.connect_zmq_tunnel(com, connect_http = connect_http, verbose = verbose)
 
     def disconnect(self):
         """
@@ -387,7 +399,7 @@ class ClusterManager(object):
         command = "%s %s"%(execproc, serverproc)
         return command
 
-    def connect_zmq_tunnel(self, command):
+    def connect_zmq_tunnel(self, command, connect_http = True, verbose = True):
         """
         Executes the servercommand command and sets up the ZMQ tunnel
 
@@ -444,8 +456,8 @@ class ClusterManager(object):
             zmq_version_string = myline[4].strip()
             if zmq_version_string != zmq.zmq_version():
                 errstring = "ZMQ version mismatch: Client: %s != Server: %s"%(zmq.zmq_version(), zmq_version_string)
-                print(errstring)
-                #raise ConnectionError(errstring)
+                # We should simply check if both version are above 4.3.2, then the version mismatch does not matter.
+                #print(errstring)
 
             break
         stderrmessage = " - ".join(stderr)
@@ -453,7 +465,9 @@ class ClusterManager(object):
             raise ConnectionError("Stderr was not empty during connect. Message was: %s"%stderrmessage)
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
-        print("Connecting to ZMQ serve at %d with password %s"%(port, password))
+
+        if verbose:
+            print("Connecting to ZMQ serve at %d with password %s"%(port, password))
 
         self._socket = self._context.socket(zmq.REQ)
 
@@ -494,9 +508,13 @@ class ClusterManager(object):
         else:
             raise ConnectionError("Received message different from connect: %s"%message)
 
+        if not connect_http:
+            return
+
         try:
             self._http_base_address = self.get_http_server_address()
-            print("Connected HTTP",self._http_base_address)
+            if verbose:
+                print("Connected HTTP",self._http_base_address)
         except Exception as e:
             print(e)
             raise ConnectionError("Could not connect http tunnel. Error was: %s"%e) from e
