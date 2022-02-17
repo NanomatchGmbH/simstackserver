@@ -236,8 +236,8 @@ class ClusterManager(object):
             return True
 
     def get_directory(self, from_directory_on_server: str, to_directory: str, optional_callback = None, basepath_override =None):
-        from_directory_on_server_resolved = self.resolve_file_in_basepath(from_directory_on_server, basepath_override=basepath_override)
-        self._get_directory_recurse_helper(from_directory_on_server_resolved, to_directory, optional_callback, basepath_override)
+        #from_directory_on_server_resolved = self.resolve_file_in_basepath(from_directory_on_server, basepath_override=basepath_override)
+        self._get_directory_recurse_helper(from_directory_on_server, to_directory, optional_callback, basepath_override)
 
     def _get_directory_recurse_helper(self, from_directory_on_server_resolved: str, to_directory: str, optional_callback = None, basepath_override =None):
 
@@ -549,6 +549,10 @@ class ClusterManager(object):
     def abort_wf(self, workflow_submitname):
         self._logger.debug("Sent Abort WF message for submitname %s"%(workflow_submitname))
         self._socket.send(Message.abort_wf_message(workflow_submitname))
+        self._recv_ack_message()
+
+    def send_clearserverstate_message(self):
+        self._socket.send(Message.clearserverstate_message())
         self._recv_ack_message()
 
     def delete_wf(self, workflow_submitname):

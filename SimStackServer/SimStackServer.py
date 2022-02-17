@@ -72,7 +72,7 @@ class WorkflowManager(object):
         self._deletion_queue_singlejobs = Queue()
         self._processfarm_thread = None # This is only used if the internal batch system is to be used.
         self._processfarm = None
-        self._remote_servers = RemoteServerManager()
+        self._remote_servers = RemoteServerManager.get_instance()
 
     def from_json(self, filename):
         with open(filename, 'rt') as infile:
@@ -110,6 +110,11 @@ class WorkflowManager(object):
         if inprogress_job:
             self._logger.info(f"Aborting job with uid {wfem_uid}")
             inprogress_job.abort_job()
+        else:
+            jobs = ",".join(str(job) for job in self._inprogress_singlejobs.keys())
+            self._logger.info(f"Did not find {wfem_uid} in inprogress jobs anymore. Running jobs were: {jobs}")
+            finished_jobs = ",".join(str(job) for job in self._finished_singlejobs.keys())
+            self._logger.info(f"Finished jobs were: {finished_jobs}.")
 
     def _get_workflows(self, which_ones):
         """
@@ -173,7 +178,7 @@ class WorkflowManager(object):
         :return:
         """
         try:
-            newwf = Workflow.new_instance_from_xml_clustermanager(workflow_filename)
+            newwf = Workflow.new_instance_from_xml(workflow_filename)
 
         except FileNotFoundError as e:
             raise WorkflowError("Workflow was not found at file <%s>. Discarding Workflow.") from e
@@ -240,6 +245,9 @@ class WorkflowManager(object):
             if move_this_job_to_finished:
                 self._finished_singlejobs[singlejob_uuid] = wfem
                 del self._inprogress_singlejobs[singlejob_uuid]
+                jobs = ",".join(str(job) for job in self._inprogress_singlejobs.keys())
+                finished_jobs = ",".join(str(job) for job in self._finished_singlejobs.keys())
+                self._logger.info(f"Moving complete, after moving the singlejobs were, inprogress: {jobs}.  Finished: {finished_jobs}")
 
         for key in move_to_finished:
             wf = self._inprogress_models[key]
@@ -334,17 +342,28 @@ class WorkflowManager(object):
 
     def get_singlejob_status(self, wfem_uid: str):
         resultdict = { "status": "inprogress" }
+        wfem = None
         if wfem_uid in self._inprogress_singlejobs:
-            resultdict = {
-                "status" : "inprogress"
-            }
-        if wfem_uid in self._finished_singlejobs:
-            resultdict = {
-                "status": "finished"
-            }
-        self._logger.info(" ".join(self._finished_singlejobs.keys()))
-        self._logger.info(" ".join(self._inprogress_singlejobs.keys()))
+            wfem = self._inprogress_singlejobs[wfem_uid]
+        elif wfem_uid in self._finished_singlejobs:
+            wfem = self._finished_singlejobs[wfem_uid]
+        if wfem:
+            if wfem.completed_or_aborted():
+                resultdict = { "status" : "finished" }
+            else:
+                resultdict = { "status" : "inprogress" }
+        self._logger.info("Finished_jobs:" + " ".join(self._finished_singlejobs.keys()))
+        self._logger.info("Inprogress Jobs:" + " ".join(self._inprogress_singlejobs.keys()))
+        self._logger.info(f"My results: {resultdict}")
         return resultdict
+
+    def add_aborted_singlejob(self, wfem: WorkflowExecModule):
+        """
+        This function is used in case a job is aborted, which did not even enter the WorkflowManager yet.
+        :param wfem:
+        :return:
+        """
+        self._finished_singlejobs[wfem.uid] = wfem
 
 class OtherServerRegistry:
     def __init__(self):
@@ -354,7 +373,7 @@ class OtherServerRegistry:
 
 class SimStackServer(object):
     def __init__(self, my_executable):
-        self._external_job_uid_to_jobid = {}
+        self._clear_server_state()
         self._setup_root_logger()
         self._config : Config = None
         self._logger = logging.getLogger("SimStackServer")
@@ -377,11 +396,19 @@ class SimStackServer(object):
         self._stop_thread = False
         self._stop_main = False
         self._signal_termination = False
-        self._submitted_workflow_queue = Queue()
-        self._submitted_singlejob_queue = Queue()
-
         self._filetime_on_init = self._get_module_mtime()
 
+
+    def _clear_server_state(self):
+        """
+        This function should overwrite the server state completely and start fresh no matter the previous state.
+        It should only be used for testing (except for the initial init of course.
+        :return:
+        """
+        self._external_job_uid_to_jobid = {}
+        self._submitted_workflow_queue = Queue()
+        self._submitted_singlejob_queue = Queue()
+        self._workflow_manager = WorkflowManager()
 
     @classmethod
     def _setup_root_logger(cls):
@@ -433,6 +460,11 @@ class SimStackServer(object):
             sock.send(Message.ack_message())
             self._stop_main = True
             self._stop_thread = True
+
+        elif message_type == MessageTypes.CLEARSERVERSTATE:
+            sock.send(Message.ack_message())
+            self._logger.info("Hard clearing server state.")
+            self._clear_server_state()
 
         elif message_type == MessageTypes.ABORTWF:
             # Arg is associated workflow
@@ -516,14 +548,27 @@ class SimStackServer(object):
         elif message_type == MessageTypes.ABORTSINGLEJOB:
             try:
                 wfem_uid = message["WFEM_UID"]
+                self._logger.info(f"Received abort message for singlejob {wfem_uid}")
+                tocheck = []
+                while not self._submitted_singlejob_queue.empty():
+                    tocheck.append(self._submitted_singlejob_queue.get())
+
+                unsubmitted = {wfem.uid for wfem in tocheck}
+                unsubmitted_str = " ".join(uid for uid in unsubmitted)
+                while tocheck:
+                    wfem = tocheck.pop()
+                    if wfem.uid == wfem_uid:
+                        self._logger.info(f"Aborted single job {wfem_uid}, which was not yet known to workflow manager.")
+                        self._workflow_manager.add_aborted_singlejob(wfem)
+                    else:
+                        self._submitted_singlejob_queue.put(tocheck.pop())
+                self._logger.info(f"Unsubmitted jobs: {unsubmitted_str}")
                 self._workflow_manager.abort_singlejob(wfem_uid)
             except Exception as e:
                 self._logger.exception("Exception during single job abort message handler.")
-                pass
             sock.send(Message.ack_message())
 
         elif message_type == MessageTypes.GETSINGLEJOBSTATUS:
-            self._logger.info("I got a get single single job messagesttatus")
             try:
                 wfem_uid = message["WFEM_UID"]
                 mystatus = self._workflow_manager.get_singlejob_status(wfem_uid)

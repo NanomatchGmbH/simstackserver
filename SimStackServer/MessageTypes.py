@@ -48,6 +48,7 @@ class SSS_MESSAGETYPE(IntEnum):
     NOOP = auto()
     SHUTDOWN = auto()
     SUBMITSINGLEJOB = auto()
+    CLEARSERVERSTATE = auto() # This message type should just be used for testing. It will completely clear the server state.
 
 
 class ResourceStatus(IntEnum):
@@ -176,6 +177,11 @@ class Message(object):
     def getsinglejobstatus_message_reply(cls, reply: str):
         mydict = {"MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUSREPLY,
                   "status": reply}
+        return mypacker.dumps(mydict)
+
+    @classmethod
+    def clearserverstate_message(cls):
+        mydict = {"MessageType": SSS_MESSAGETYPE.CLEARSERVERSTATE}
         return mypacker.dumps(mydict)
 
     @classmethod

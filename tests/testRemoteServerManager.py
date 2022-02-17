@@ -42,13 +42,26 @@ class TestRemoteServerManager(unittest.TestCase):
 
         os.makedirs(self._transferdir_to, exist_ok=True)
 
+    def _clear_server_state(self):
+        rsm = RemoteServerManager.get_instance()
+        cm : ClusterManager = rsm.server_from_resource(self.resource1)
+        cm.connect_ssh_and_zmq_if_disconnected()
+        cm.send_clearserverstate_message()
+
     def tearDown(self) -> None:
-        exec_dir1 = path.join(self._comp_wf_dir, "./exec_directories")
-        exec_dir2 = path.join(self._comp_wf_dir_remote, "./exec_directories")
-        possible_exec_dirs = [exec_dir1, exec_dir2]
-        for exec_dir in possible_exec_dirs:
+        exec_dirs = []
+        exec_dirs.append(path.join(self._comp_wf_dir, "./exec_directories"))
+        exec_dirs.append(path.join(self._comp_wf_dir, "workflow_data", "EmployeeRecord", "outputs"))
+        exec_dirs.append(path.join(self._comp_wf_dir_remote, "./exec_directories"))
+        exec_dirs.append(path.join(self._comp_wf_dir_remote, "workflow_data", "EmployeeRecord", "./outputs"))
+        for exec_dir in exec_dirs:
             if os.path.isdir(exec_dir):
-                shutil.rmtree(exec_dir)
+                pass
+                #shutil.rmtree(exec_dir)
+
+        from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+        pfarm, pfarm_thread = InternalBatchSystem.get_instance()
+        pfarm.abort()
 
     def test_single_submit(self)-> None:
         wfem = SampleWFEM()
@@ -61,12 +74,29 @@ class TestRemoteServerManager(unittest.TestCase):
         cm.submit_single_job(wfem)
         cm.send_shutdown_message()
 
+    def _wf_submit(self, folder, wf_xml_loc):
+        wf = Workflow.new_instance_from_xml(wf_xml_loc)
+        wf.set_storage(Path(folder))
+        maxcounter = 20
+        for counter in range(0, maxcounter + 1):
+            finished = wf.jobloop()
+            if finished:
+                break
+            time.sleep(2.0)
+            print(f"jobloop number {counter}")
+            if counter == maxcounter:
+                raise TimeoutError("Workflow should have been finished long ago.")
+        outputfile = path.join(folder, "workflow_data", "EmployeeRecord", "outputs", "Rocko")
+        self.assert_(os.path.isfile(outputfile), f"File {outputfile} has to exist.")
+
     def test_wf_submit(self) -> None:
-        wf = Workflow.new_instance_from_xml(self._comp_wf_loc)
-        wf.set_storage(Path(self._comp_wf_dir))
-        wf.jobloop()
+        return self._wf_submit(self._comp_wf_dir, self._comp_wf_loc)
+
+    def test_wf_submit_remote_runthrough(self) -> None:
+        return self._wf_submit(self._comp_wf_dir_remote, self._comp_wf_loc_remote)
 
     def test_wf_submit_remote(self) -> None:
+        self._clear_server_state()
         wf = Workflow.new_instance_from_xml(self._comp_wf_loc_remote)
         wf.set_storage(Path(self._comp_wf_dir_remote))
         wf.jobloop()
@@ -75,6 +105,21 @@ class TestRemoteServerManager(unittest.TestCase):
         should_be_running = not myjob.completed_or_aborted()
         self.assert_(should_be_running, "This workflow should have been running already.")
         time.sleep(10)
+        wf.jobloop()
+        should_be_over = myjob.completed_or_aborted()
+        self.assert_(should_be_over, "This workflow should have been done already.")
+        myjob._my_external_cluster_manager.send_shutdown_message()
+
+    def test_wf_submit_remote_and_delete(self) -> None:
+        self._clear_server_state()
+        wf = Workflow.new_instance_from_xml(self._comp_wf_loc_remote)
+        wf.set_storage(Path(self._comp_wf_dir_remote))
+        wf.jobloop()
+        myjob : WorkflowExecModule = wf.get_jobs()[0]
+        time.sleep(2.2)
+        should_be_running = not myjob.completed_or_aborted()
+        self.assert_(should_be_running, "This workflow should have been running already.")
+        myjob.abort_job()
         wf.jobloop()
         should_be_over = myjob.completed_or_aborted()
         self.assert_(should_be_over, "This workflow should have been done already.")

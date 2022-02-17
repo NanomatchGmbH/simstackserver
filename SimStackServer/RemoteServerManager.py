@@ -2,8 +2,16 @@ from SimStackServer import ClusterManager
 
 
 class RemoteServerManager:
+    instance = None
     def __init__(self):
         self._other_servers = {}
+
+    @classmethod
+    def get_instance(cls):
+        if cls.instance is None:
+            cls.instance = RemoteServerManager()
+        return cls.instance
+
 
     def _get_key_from_resource(self, resource) -> str:
         from SimStackServer.WorkflowModel import Resources

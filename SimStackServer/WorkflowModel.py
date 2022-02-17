@@ -24,6 +24,7 @@ import yaml
 from lxml import etree
 import lxml.html
 
+
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoTreeWalker import subdict_skiplevel_path_version
 
@@ -638,7 +639,8 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("resources", Resources, None, "Computational resources", "m"),
         ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
         ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
-        ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m")
+        ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m"),
+        ("external_runtime_directory", str, "", "If this is a non-local job, the directory on the external directory is stored here.","m")
     ]
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -657,6 +659,9 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     @classmethod
     def fields(cls):
         return cls._fields
+
+    def reset_resources_to_localhost(self):
+        self.resources.set_field_value("base_URI", "localhost")
 
     def fill_in_variables(self, vardict):
         self._logger.info("Doing inputs of wanoid %s"%self.uid)
@@ -678,12 +683,20 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def get_runtime_variables(self):
         return self._runtime_variables
 
+    def check_if_job_is_local(self):
+        return self.resources.base_URI in ["", "localhost", "127.0.0.1", None, "None"]
+
     def rename(self, renamedict):
         myuid = self.uid
         if not myuid in renamedict:
             raise KeyError("%s not found in renamedict. Dict contained: %s"%(myuid, ",".join(renamedict.keys())))
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
+
+    def _get_clustermanager_from_job(self):
+        from SimStackServer.RemoteServerManager import RemoteServerManager
+        remote_server_manager = RemoteServerManager.get_instance()
+        return remote_server_manager.server_from_resource(self.resources)
 
     def _init_nanomatch_directory(self):
         # The file we are in might be compiled. We need a definitely uncompiled module.
@@ -749,12 +762,14 @@ export NANOMATCH=%s
             ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
 
             ext_dir_abs = external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
-            external_wfem = copy.copy(self)
+            external_wfem = copy.deepcopy(self)
 
 
             external_wfem.set_runtime_directory(ext_dir_abs)
+            external_wfem.reset_resources_to_localhost()
             external_cluster_manager.submit_single_job(external_wfem)
             self._my_external_cluster_manager = external_cluster_manager
+            self.set_external_runtime_directory(ext_dir_abs)
             self.set_jobid(f"ext:{self.uid}")
             return
         if queueing_system == "Internal":
@@ -918,7 +933,14 @@ export NANOMATCH=%s
 
 
     def abort_job(self):
-        if self.queueing_system == "AiiDA":
+        if not self.check_if_job_is_local():
+            self._logger.info("Aborting job in non-local server.")
+            from SimStackServer.ClusterManager import ClusterManager
+            cm : ClusterManager = self._get_clustermanager_from_job()
+            cm.send_abortsinglejob_message(self.uid)
+            print("This should be a non-local job")
+
+        elif self.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(self.jobid)
             myjob.kill()
@@ -992,6 +1014,7 @@ export NANOMATCH=%s
             self._my_external_cluster_manager:ClusterManager
             result = self._my_external_cluster_manager.send_jobstatus_message(wfem_uid = self.uid)
             status = result["status"]
+            self._logger.debug(f"Job status reported as: {status}")
             if status in ["finished", "aborted"]:
                 return True
             return False
@@ -1020,6 +1043,7 @@ export NANOMATCH=%s
             from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
             batchsys, _ = InternalBatchSystem.get_instance()
             status = batchsys.jobstatus(self.jobid)
+            self._logger.info(f"BATCHSYSTEM STATUS WAS {status}")
             if status in ["completed","cancelled","done","notfound","crashed","failed"]:
                 return True
             return False
@@ -1097,6 +1121,9 @@ export NANOMATCH=%s
     def set_runtime_directory(self, runtime_directory):
         self._field_values["runtime_directory"] = runtime_directory
 
+    def set_external_runtime_directory(self, runtime_directory):
+        self._field_values["external_runtime_directory"] = runtime_directory
+
     def set_jobid(self, jobid):
         self._field_values["jobid"] = jobid
 
@@ -1137,6 +1164,10 @@ export NANOMATCH=%s
     @property
     def runtime_directory(self):
         return self._field_values["runtime_directory"]
+
+    @property
+    def external_runtime_directory(self):
+        return self._field_values["external_runtime_directory"]
 
     def set_aiida_valuedict(self, aiida_valuedict):
         self._aiida_valuedict = aiida_valuedict
@@ -2157,7 +2188,7 @@ class Workflow(WorkflowBase):
         self._path_to_aiida_uuid = {}
         self._filepath_to_aiida_uuid = {}
         from SimStackServer.RemoteServerManager import RemoteServerManager
-        self._remote_server_manager = kwargs.get("remote_server_manager", RemoteServerManager())
+        self._remote_server_manager = RemoteServerManager.get_instance()
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -2171,18 +2202,10 @@ class Workflow(WorkflowBase):
         self._field_values["storage"] = str(path.as_posix())
 
     def _check_if_job_is_local(self, job: WorkflowExecModule):
-        return job.resources.base_URI in ["", "localhost", "127.0.0.1"]
+        return job.check_if_job_is_local()
 
     def _get_clustermanager_from_job(self, job: WorkflowExecModule):
         return self._remote_server_manager.server_from_resource(job.resources)
-
-    @classmethod
-    def new_instance_from_xml_clustermanager(cls, filename, remote_server_manager = None):
-        with open(filename, 'rt') as infile:
-            myxml = etree.parse(infile).getroot()
-        a = cls(remote_server_manager=remote_server_manager)
-        a.from_xml(myxml)
-        return a
 
     def delete_storage(self):
         """
@@ -2502,6 +2525,16 @@ class Workflow(WorkflowBase):
         jobdirectory = wfem.runtime_directory
 
         myjobid = wfem.jobid
+
+        if not wfem.check_if_job_is_local():
+
+            from SimStackServer.ClusterManager import ClusterManager
+            mycm : ClusterManager = self._get_clustermanager_from_job(wfem)
+            runtime_dir = wfem.runtime_directory
+            ext_runtime_dir = wfem.external_runtime_directory
+            self._logger.info(f"Retrieving runtime directory of non-local job from {ext_runtime_dir} to {runtime_dir}.")
+            mycm.get_directory(ext_runtime_dir, runtime_dir)
+
 
         staging_filename_to_aiida_obj = {}
         if self.queueing_system == "AiiDA":
