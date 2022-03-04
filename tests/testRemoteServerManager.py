@@ -92,7 +92,11 @@ class TestRemoteServerManager(unittest.TestCase):
         return self._wf_submit(self._comp_wf_dir, self._comp_wf_loc)
 
     def test_wf_submit_remote_runthrough(self) -> None:
-        return self._wf_submit(self._comp_wf_dir_remote, self._comp_wf_loc_remote)
+        self._wf_submit(self._comp_wf_dir_remote, self._comp_wf_loc_remote)
+        rsm = RemoteServerManager.get_instance()
+        cm: ClusterManager = rsm.server_from_resource(self.resource1)
+        with cm.connection_context():
+            cm.send_shutdown_message()
 
     def test_wf_submit_remote(self) -> None:
         self._clear_server_state()
