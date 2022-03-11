@@ -1,4 +1,9 @@
+import copy
 import logging
+import os
+import pathlib
+import shutil
+import tempfile
 import unittest
 import numpy as np
 from os import path
@@ -9,6 +14,7 @@ from io import StringIO
 
 from lxml import etree
 
+from SimStackServer.Util import ClusterSettings
 from SimStackServer.Util.FileUtilities import mkdir_p, file_to_xml
 from SimStackServer.WorkflowModel import Resources, WorkflowExecModule, WorkflowElementList, DirectedGraph, Workflow, \
     StringList
@@ -49,6 +55,8 @@ class TestWorkflowModel(unittest.TestCase):
         logging.basicConfig(level=logging.DEBUG)
         self._input_dir = "%s/input_dirs/WorkflowModel" % path.dirname(path.realpath(__file__))
         self._exec_dir = "%s/exec_dirs/WorkflowModel" % path.dirname(path.realpath(__file__))
+        self._cluster_settings_test_dir = "%s/exec_dirs/ClusterSettingsTestDir" % path.dirname(path.realpath(__file__))
+        self._cluster_settings_test_dir_to = "%s/exec_dirs/ClusterSettingsTestDirTo" % path.dirname(path.realpath(__file__))
         mkdir_p(self._exec_dir)
 
 
@@ -75,7 +83,6 @@ class TestWorkflowModel(unittest.TestCase):
             print(mi)
         assert wfem.inputs.compare_with_other_list(wfem2.inputs)
         #assert wfem.inputs == wfem2.inputs
-
 
     def testResourceModel(self):
         """
@@ -107,19 +114,10 @@ class TestWorkflowModel(unittest.TestCase):
         resources.to_xml(res)
 
 
-        outstring = '<Resources walltime="3600" cpus_per_node="32" nodes="4" memory="65536">\
-<queue>not-default</queue>\
-<host>superhost</host>\
-<custom_requests>GPU=3</custom_requests>\
-<base_URI></base_URI>\
-<port>0</port>\
-<username>MaxPower</username>\
-<basepath></basepath>\
-<queueing_system>pbs</queueing_system>\
-<sw_dir_on_resource></sw_dir_on_resource>\
-<ssh_private_key></ssh_private_key>\
-</Resources>'
-        self.assertEqual(outstring, etree.tostring(res).decode())
+        outstring = '<Resources walltime="3600" cpus_per_node="32" nodes="4" memory="65536"><queue>not-default</queue><host>superhost</host><custom_requests>GPU=3</custom_requests><base_URI></base_URI><port>0</port><username>MaxPower</username><basepath></basepath><queueing_system>pbs</queueing_system><sw_dir_on_resource></sw_dir_on_resource><extra_config>None Required (default)</extra_config><ssh_private_key>UseSystemDefault</ssh_private_key></Resources>'
+        otheroutstring =  etree.tostring(res).decode()
+
+        self.assertEqual(outstring, otheroutstring)
 
         resdict = {}
         resources.to_dict(resdict)
@@ -127,12 +125,65 @@ class TestWorkflowModel(unittest.TestCase):
         other_resource = Resources()
         other_resource.from_dict(resdict)
 
-        self.assertEqual(resources.walltime, other_resource.walltime)
-        self.assertEqual(resources.cpus_per_node, other_resource.cpus_per_node)
-        self.assertEqual(resources.nodes, other_resource.nodes)
-        self.assertEqual(resources.memory, other_resource.memory)
-        self.assertEqual(resources.host, other_resource.host)
-        self.assertEqual(resources.queue, other_resource.queue)
+        other_resource_2 = Resources()
+        with tempfile.NamedTemporaryFile('wt') as outfile:
+            resources.to_json(pathlib.Path(outfile.name))
+            other_resource_2.from_json(pathlib.Path(outfile.name))
+
+        for oo in [other_resource_2, other_resource]:
+            self.assertEqual(resources.walltime, oo.walltime)
+            self.assertEqual(resources.cpus_per_node, oo.cpus_per_node)
+            self.assertEqual(resources.nodes, oo.nodes)
+            self.assertEqual(resources.memory, oo.memory)
+            self.assertEqual(resources.host, oo.host)
+            self.assertEqual(resources.queue, oo.queue)
+
+    def _assert_resource_equal(self,rs1,rs2):
+        self.assertEqual(rs1.walltime, rs2.walltime)
+        self.assertEqual(rs1.cpus_per_node, rs2.cpus_per_node)
+        self.assertEqual(rs1.nodes, rs2.nodes)
+        self.assertEqual(rs1.memory, rs2.memory)
+        self.assertEqual(rs1.host, rs2.host)
+        self.assertEqual(rs1.queue, rs2.queue)
+
+
+    def testClusterSettings(self):
+        example_resource_xml_fn = join(self._input_dir,"resources.xml")
+        print(example_resource_xml_fn)
+        myxml = file_to_xml(example_resource_xml_fn)
+
+        resources = Resources()
+        resources.from_xml(myxml)
+
+        resource2 = copy.deepcopy(resources)
+
+        resource3 = copy.deepcopy(resources)
+
+        outdict = { "hank": resources,
+                    "frank": resource2,
+                    "tank": resource3}
+        from_folder = pathlib.Path(self._cluster_settings_test_dir)
+        myset = ClusterSettings.get_cluster_settings_from_folder(from_folder)
+
+        for name in outdict.keys():
+            self._assert_resource_equal(myset[name], outdict[name])
+
+
+        to_folder = pathlib.Path(self._cluster_settings_test_dir_to)
+        if to_folder.is_dir():
+            shutil.rmtree(to_folder)
+        os.makedirs(to_folder, exist_ok=False)
+        ClusterSettings.save_cluster_settings_to_folder(to_folder, myset)
+
+        last_dict = ClusterSettings.get_cluster_settings_from_folder(to_folder)
+        for name in outdict.keys():
+            self._assert_resource_equal(last_dict[name], outdict[name])
+
+
+
+
+        
+        
 
 
 

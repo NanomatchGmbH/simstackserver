@@ -1,6 +1,7 @@
 import abc
 import copy
 import datetime
+import json
 import pathlib
 import re
 import time
@@ -259,6 +260,17 @@ class XMLYMLInstantiationBase(object):
         self.to_xml(me)
         with open(filename, 'wt') as infile:
             infile.write(etree.tostring(me,encoding="utf8",pretty_print=True).decode()+"\n")
+
+    def from_json(self, filename: pathlib.Path):
+        with filename.open('rt') as infile:
+            mydict = json.load(infile)
+        self.from_dict(mydict)
+
+    def to_json(self, filename: pathlib.Path):
+        outdict = {}
+        self.to_dict(outdict)
+        with filename.open('wt') as outfile:
+            json.dump(outdict, outfile)
 
     def fill_in_variables(self, vardict):
         pass
