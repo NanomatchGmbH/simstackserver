@@ -1,0 +1,1 @@
+{"walltime": "3600", "cpus_per_node": "32", "nodes": "4", "queue": "not-default", "host": "superhost", "memory": "65536", "custom_requests": "GPU=3", "base_URI": "", "port": "0", "username": "MaxPower", "basepath": "", "queueing_system": "pbs", "sw_dir_on_resource": "", "extra_config": "None Required (default)", "ssh_private_key": "UseSystemDefault"}
