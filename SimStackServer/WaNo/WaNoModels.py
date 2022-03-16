@@ -1115,6 +1115,9 @@ class WaNoModelRoot(WaNoModelDictLike):
         wd = WaNoDelta(infolder)
         self.read_from_wano_delta(wd, infolder)
 
+    def set_wano_dir_root(self, wano_dir_root):
+        self._wano_dir_root = wano_dir_root
+
     def get_metadata_dict(self):
         return {
             "name": self.name,
