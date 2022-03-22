@@ -107,11 +107,15 @@ class XMLYMLInstantiationBase(object):
     def contains(self,key):
         return key in self._field_names
 
+    def field_type(self, fieldname: str):
+        return self._field_types[fieldname]
+
     def set_field_value(self, fieldname, value):
         #this_index = [i for i in range(len(self._fields)) if self._fields if self._fields[i][0] == fieldname]
         #assert isinstance(value, self._fields[this_index][2]), "value is not of correct type"
         #self._fields[this_index][2] = value
         value = self._field_types[fieldname](value)
+
         assert isinstance(value, self._field_types[fieldname]), "Value for field %s does not have the correct type"%fieldname
         self._field_values[fieldname] = value
 
@@ -551,7 +555,30 @@ class Resources(XMLYMLInstantiationBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        assert len(self.render_order()) == len(self._fields), "Please add all fields to render_order."
 
+    def render_order(self):
+        """
+        Order this will usually be displayed in
+        :return:
+        """
+        return [
+            "base_URI",
+            "host",
+            "port",
+            "username",
+            "ssh_private_key",
+            "sw_dir_on_resource",
+            "basepath",
+            "queueing_system",
+            "extra_config",
+            "nodes",
+            "cpus_per_node",
+            "walltime",
+            "memory",
+            "queue",
+            "custom_requests"
+        ]
 
     @classmethod
     def fields(cls):
