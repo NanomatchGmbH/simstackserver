@@ -1,0 +1,103 @@
+{
+    "commands": {
+        "TABS.materials.materials": 2,
+        "TABS.materials.materials.0.TP": 5,
+        "TABS.materials.materials.1.TP": 5,
+        "TABS.device.layers.0.TP": 1,
+        "TABS.topology.pair parameters": 3
+    },
+    "values": {
+        "TABS": {
+            "general": {
+                "particle_types": {
+                    "electrons": true,
+                    "excitons": true
+                }
+            },
+            "IO": {
+                "use QP output": false,
+                "QP output file": [
+                    {}
+                ]
+            },
+            "materials": {
+                "materials": [
+                    {
+                        "name": "mol b",
+                        "input_mode_transport": "PAR: eaip,sig,l",
+                        "TP": [
+                            {},
+                            {},
+                            {},
+                            {},
+                            {},
+                            {}
+                        ]
+                    },
+                    {
+                        "input_mode_transport": "PAR: eaip,sig,l",
+                        "TP": [
+                            {},
+                            {},
+                            {},
+                            {},
+                            {},
+                            {}
+                        ]
+                    }
+                ],
+                "exciton_presets": [
+                    {},
+                    {},
+                    {},
+                    {}
+                ]
+            },
+            "device": {
+                "layers": [
+                    {
+                        "morphology_input_mode": "cubic",
+                        "molecule_species": [
+                            {}
+                        ]
+                    }
+                ],
+                "electrodes": [
+                    {
+                        "coupling_model": "parametrized"
+                    },
+                    {
+                        "coupling_model": "parametrized"
+                    }
+                ]
+            },
+            "topology": {
+                "max neighbours": 26,
+                "transfer_integral_source": "Miller-Abrahams",
+                "FRET": "use pairwise heuristic parameters",
+                "pair parameters": [
+                    {},
+                    {
+                        "molecule 1": "mol A"
+                    },
+                    {
+                        "molecule 1": "mol A",
+                        "molecule 2": "mol A"
+                    }
+                ]
+            },
+            "physics": {
+                "superexchange": false
+            },
+            "operation": {
+                "field_strength [V/nm]": "0.02",
+                "initial holes": "0",
+                "initial electrons": "0"
+            }
+        }
+    },
+    "metadata": {
+        "name": "lightforge2",
+        "folder": "lightforge2"
+    }
+}
