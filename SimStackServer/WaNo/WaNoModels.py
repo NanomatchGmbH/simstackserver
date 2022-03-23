@@ -329,7 +329,7 @@ class WaNoMatrixModel(AbstractWanoModel):
                     self.storage[i].append("")
         else:
             self.storage = self._fromstring(self.xml.text)
-        self._default = np.asarray(self.storage).copy()
+        self._default = copy.copy(self.storage)
 
     def _tostring(self, ar):
         returnstring = "[ "
@@ -359,7 +359,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         self.storage = self._fromstring(delta)
 
     def changed_from_default(self) -> bool:
-        return (np.asarray(self.storage) != np.asarray(self._default)).any()
+        return np.any(np.asarray(self.storage) != np.asarray(self._default))
 
     def _cast_to_correct_type(self, value):
         try:
