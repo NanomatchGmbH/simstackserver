@@ -336,7 +336,7 @@ class WaNoMatrixModel(AbstractWanoModel):
                     self.storage[i].append("")
         else:
             self.storage = self._fromstring(self.xml.text)
-        self._default = copy.copy(self.storage)
+        self._default = copy.deepcopy(self.storage)
 
     def _tostring(self, ar):
         returnstring = "[ "
