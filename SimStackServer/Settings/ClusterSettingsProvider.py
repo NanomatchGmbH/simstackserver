@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from SimStackServer.Util.ClusterSettings import get_cluster_settings_from_folder, save_cluster_settings_to_folder
@@ -20,7 +21,12 @@ class ClusterSettingsProvider:
         import appdirs
         ucd = Path(appdirs.user_config_dir(appname="SimStack", appauthor="Nanomatch", roaming=False))
         clusterconfig = ucd/"ClusterSettings"
+        os.makedirs(clusterconfig, exist_ok=True)
         return clusterconfig
+
+    @classmethod
+    def get_registries(cls):
+        return cls.get_instance()._settings_container
 
     def _parse_settings(self):
         self._settings_container = get_cluster_settings_from_folder(self._get_settings_folder())
