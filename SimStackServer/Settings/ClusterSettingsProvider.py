@@ -1,8 +1,10 @@
 import os
 from pathlib import Path
+from typing import Dict
 
 from SimStackServer.Util.ClusterSettings import get_cluster_settings_from_folder, save_cluster_settings_to_folder, \
     remove_clustersettings_from_folder
+from SimStackServer.WorkflowModel import Resources
 
 
 class ClusterSettingsProvider:
@@ -26,7 +28,7 @@ class ClusterSettingsProvider:
         return clusterconfig
 
     @classmethod
-    def get_registries(cls):
+    def get_registries(cls) -> Dict[str, Resources]:
         return cls.get_instance()._settings_container
 
     @classmethod

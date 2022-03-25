@@ -485,7 +485,8 @@ class ClusterManager(object):
 
         connect_address = "tcp://127.0.0.1:%d"%port
         if self._url != "localhost":
-            self._zmq_ssh_tunnel = ssh.tunnel_connection(socket, connect_address, self.get_ssh_url(), keyfile=key_filename, paramiko=True)
+            ssh_url = self.get_ssh_url()
+            self._zmq_ssh_tunnel = ssh.tunnel_connection(socket, connect_address, ssh_url, keyfile=key_filename, paramiko=True)
         else:
             self._zmq_ssh_tunnel = None
             socket.connect(connect_address)
@@ -501,7 +502,6 @@ class ClusterManager(object):
             except zmq.error.Again as e:
                 print("Port was not setup in time. Trying to connect again. Trial %d of 10."%i)
                 time.sleep(0.15)
-            
         messagetype, message = Message.unpack(data)
         if messagetype == MTS.CONNECT:
             self._should_be_connected = True
