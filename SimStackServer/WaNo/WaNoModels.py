@@ -16,7 +16,7 @@ from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.XMLUtils import is_regular_element
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path, WaNoListEntry_from_folder_or_zip
 from SimStackServer.WaNo.WaNoDelta import WaNoDelta
-from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList
+from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList, Resources
 
 import collections
 
@@ -807,6 +807,8 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._block_signals = False
         self._render_substitutions = {}
 
+        self._new_resource_model = Resources()
+
         if "model_only" in kwargs and kwargs["model_only"] is True:
             self.resources = None
             self.import_model = None
@@ -830,6 +832,9 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         self.metas = OrderedDictIterHelper()
         self._parse_defaults()
+
+    def get_new_resource_model(self) -> Resources:
+        return self._new_resource_model
 
     def block_signals(self,true_or_false):
         before = self._block_signals
