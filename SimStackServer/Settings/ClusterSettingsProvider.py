@@ -1,3 +1,4 @@
+import abc
 import os
 from pathlib import Path
 from typing import Dict
@@ -11,13 +12,14 @@ class ClusterSettingsProvider:
     _instance = None
 
     def __init__(self):
+        super().__init__()
         self._settings_container = {}
         self._parse_settings()
 
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            cls._instance = ClusterSettingsProvider()
+            cls._instance = cls()
         return cls._instance
 
     def _get_settings_folder(self) -> Path:
@@ -31,11 +33,14 @@ class ClusterSettingsProvider:
     def get_registries(cls) -> Dict[str, Resources]:
         return cls.get_instance()._settings_container
 
-    @classmethod
-    def remove_resource(cls, resource_name: str) -> None:
-        instance = cls.get_instance()
-        sc = instance._settings_container
-        folder = instance._get_settings_folder()
+    def add_resource(self, resource_name: str) -> Resources:
+        new_resource = Resources()
+        self._settings_container[resource_name] = new_resource
+        return new_resource
+
+    def remove_resource(self, resource_name: str) -> None:
+        sc = self._settings_container
+        folder = self._get_settings_folder()
         remove_clustersettings_from_folder(folder, resource_name)
         if resource_name in sc:
             del sc[resource_name]
