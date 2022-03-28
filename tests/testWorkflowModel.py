@@ -105,7 +105,6 @@ class TestWorkflowModel(unittest.TestCase):
         self.assertEqual(resources.cpus_per_node, 32)
         self.assertEqual(resources.nodes, 4)
         self.assertEqual(resources.memory, 65536)
-        self.assertEqual(resources.host, "superhost")
         self.assertEqual(resources.queue, "not-default")
         self.assertEqual(resources.custom_requests, "GPU=3")
         self.assertEqual(resources.username, "MaxPower")
@@ -135,7 +134,6 @@ class TestWorkflowModel(unittest.TestCase):
             self.assertEqual(resources.cpus_per_node, oo.cpus_per_node)
             self.assertEqual(resources.nodes, oo.nodes)
             self.assertEqual(resources.memory, oo.memory)
-            self.assertEqual(resources.host, oo.host)
             self.assertEqual(resources.queue, oo.queue)
 
     def _assert_resource_equal(self,rs1,rs2):

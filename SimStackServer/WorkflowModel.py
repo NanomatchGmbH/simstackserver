@@ -540,7 +540,6 @@ class Resources(XMLYMLInstantiationBase):
         ("cpus_per_node", np.uint64, 1, "Number of CPUs per Node", "a"),
         ("nodes",np.uint64, 1, "Number of Nodes", "a"),
         ("queue", str, "default", "String representation of queue", "m"),
-        ("host", str, "localhost", "String representation of host, might include port with :, might be ipv4 or ipv6","m"),
         ("memory", np.uint64, 4096,  "Memory in Megabytes", "a"),
         ("custom_requests", str, "", "Comma separated list specifying additional parameters not covered here.","m"),
         ("base_URI", str, "", "Base URI for resource", "m"),
@@ -564,7 +563,6 @@ class Resources(XMLYMLInstantiationBase):
         """
         return [
             "base_URI",
-            "host",
             "port",
             "username",
             "ssh_private_key",
@@ -599,10 +597,6 @@ class Resources(XMLYMLInstantiationBase):
     @property
     def queue(self):
         return self._field_values["queue"]
-
-    @property
-    def host(self):
-        return self._field_values["host"]
 
     @property
     def custom_requests(self):
