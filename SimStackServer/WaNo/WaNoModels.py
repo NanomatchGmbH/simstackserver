@@ -814,7 +814,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.import_model = None
             self.export_model = None
         else:
-            from WaNo.view.PropertyListView import ResourceTableModel, ImportTableModel, ExportTableModel
+            from WaNo.view.PropertyListView import ImportTableModel, ExportTableModel
 
             self.import_model = ImportTableModel(parent=None, wano_parent=self)
             self.import_model.make_default_list()
@@ -1415,7 +1415,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         """
 
         
-        wem = WorkflowExecModule(given_name = self.name, resources = self.resources.render_to_simstack_server_model(),
+        wem = WorkflowExecModule(given_name = self.name, resources = self.get_new_resource_model(),
                            inputs = WorkflowElementList(runtime_stagein_files),# + local_stagein_files),
                            outputs = WorkflowElementList(runtime_stageout_files),
                            exec_command = self.rendered_exec_command

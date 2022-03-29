@@ -51,10 +51,10 @@ def get_target_path():
     return Path("CI",str(uuid.uuid4()))
 
 def get_resources(possible_resource_file_path: pathlib.Path):
-    if not possible_resource_file_path.is_file():
-        return Resources()
-    client_listmodel = load_resource_list(possible_resource_file_path)
-    return ClientResourceModelToServerResourceModel(client_listmodel)
+    resources = Resources()
+    if possible_resource_file_path.is_file():
+        resources.from_json(possible_resource_file_path)
+    return resources
 
 def instantiate_wano(wano_dir_root, wanoxml):
     # MODELROOTDIRECT
