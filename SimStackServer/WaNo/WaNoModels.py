@@ -7,6 +7,7 @@ import logging
 import pathlib
 import re
 from functools import partial
+from json import JSONDecodeError
 from os.path import join, isabs
 from pathlib import Path
 
@@ -810,12 +811,10 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._new_resource_model = Resources()
 
         if "model_only" in kwargs and kwargs["model_only"] is True:
-            self.resources = None
             self.import_model = None
             self.export_model = None
         else:
             from WaNo.view.PropertyListView import ResourceTableModel, ImportTableModel, ExportTableModel
-            self.resources = ResourceTableModel(parent=None, wano_parent=self)
 
             self.import_model = ImportTableModel(parent=None, wano_parent=self)
             self.import_model.make_default_list()
@@ -851,9 +850,12 @@ class WaNoModelRoot(WaNoModelDictLike):
             exports_fn = directory / "exports.yml"
             self._exists_read_load(self.export_model, exports_fn)
 
-        if self.resources:
-            resources_fn = directory / "resources.yml"
-            self._exists_read_load(self.resources, resources_fn)
+        resources_fn = directory / "resources.yml"
+        if resources_fn.is_file():
+            try:
+                self._new_resource_model.from_json(resources_fn)
+            except JSONDecodeError as e:
+                resources_fn.unlink()
 
     @staticmethod
     def _parse_xml(xmlpath: pathlib.Path):
@@ -980,9 +982,6 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_type_str(self):
         return "WaNoRoot"
 
-    def get_resource_model(self):
-        return self.resources
-
     def get_import_model(self):
         return self.import_model
 
@@ -1018,26 +1017,6 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def save_xml(self, wano : WaNoListEntry):
         raise NotImplementedError("Saving the XML is not supported anymore.")
-        filename = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
-        print("Writing to ",filename)
-        self._wano_dir_root = wano.folder
-        success = False
-        try:
-            with filename.open('wt',newline='\n') as outfile:
-                outfile.write(etree.tostring(self.full_xml,pretty_print=True).decode("utf-8"))
-            success = True
-            resources_fn = self.wano_dir_root / "resources.yml"
-            self.resources.save(resources_fn)
-
-            imports_fn = self.wano_dir_root / "imports.yml"
-            self.import_model.save(imports_fn)
-
-            exports_fn = self.wano_dir_root / "exports.yml"
-            self.export_model.save(exports_fn)
-
-        except Exception as e:
-            print(e)
-        return success
 
     def get_changed_command_paths(self):
         """ These are paths, which require a WaNoElement to be changed, which is dynamic, such as multipleof or switch
@@ -1098,7 +1077,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def save_resources_and_imports(self, outfolder : Path):
         resources_fn = outfolder / "resources.yml"
-        self.resources.save(resources_fn)
+        self._new_resource_model.to_json(resources_fn)
 
         imports_fn = outfolder / "imports.yml"
         self.import_model.save(imports_fn)
