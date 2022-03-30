@@ -53,6 +53,9 @@ class TestWaNoModels(unittest.TestCase):
         self.lf_dir = "%s/inputs/wanos/lightforge2" % path.dirname(path.realpath(__file__))
         self.lfxml = path.join(self.lf_dir, "lightforge2.xml")
 
+        self.lf_rendered_dir = "%s/inputs/wanos/rendered_lightforge2" % path.dirname(path.realpath(__file__))
+        self.lf_rendered_xml = path.join(self.lf_rendered_dir, "lightforge2.xml")
+
         self.qp_dir = "%s/inputs/wanos/QuantumPatch3" % path.dirname(path.realpath(__file__))
         self.qpxml = path.join(self.qp_dir, "QuantumPatch3.xml")
 
@@ -63,6 +66,11 @@ class TestWaNoModels(unittest.TestCase):
         myfloatmodel = WaNoItemFloatModel(bypass_init = True)
         outdict = {}
         myfloatmodel.model_to_dict(outdict)
+
+    def test_read_rendered_lf_wano(self):
+        wmr = WaNoModelRoot(wano_dir_root=self.lf_rendered_dir, model_only=True, explicit_xml=self.lf_rendered_xml)
+        wmr.read(Path(self.lf_rendered_dir))
+        assert wmr.get_value("TABS.general.particle_types.electrons").get_data() is True
 
     def test_rendered_wano(self):
         wmr = self._construct_wano_nogui(self.qpxml)

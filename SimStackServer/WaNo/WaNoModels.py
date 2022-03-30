@@ -185,7 +185,7 @@ class WaNoChoiceModel(AbstractWanoModel):
         self.chosen = self.choices.index(delta)
         self.set_data(self.choices[self.chosen])
 
-    def set_chosen(self,choice):
+    def set_chosen(self, choice):
         self.chosen = int(choice)
         self.set_data(self.choices[self.chosen])
 
@@ -211,6 +211,7 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         self._updating = False
         self._registered = False
         self._registered_paths = []
+        self._delayed_delta_apply = None
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
@@ -226,7 +227,7 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         super().set_root(root)
         self._connected = True
         if not self._registered:
-            print(f"I am registering with {root} {self.path}")
+            #print(f"I am registering with {root} {self.path}")
             root.register_callback(self._collection_path, self._update_choices, self._collection_path.count("."))
             self._registered = True
 
@@ -266,12 +267,19 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         if len(self.choices) <= self.chosen:
             self.chosen = 0
 
-        #Workaround because set_chosen kills chosen
+        self._updating = False
+
+        if self._delayed_delta_apply:
+            super().apply_delta(self._delayed_delta_apply)
+            self._delayed_delta_apply = None
+
         if not self.view is None:
             self.view.init_from_model()
 
-        self._updating = False
 
+
+    def apply_delta(self, delta):
+        self._delayed_delta_apply = delta
 
     def set_chosen(self,choice):
         if not self._connected:
@@ -281,7 +289,6 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         self.chosen = int(choice)
         if len (self.choices) > self.chosen:
             self.set_data(self.choices[self.chosen])
-
 
     def update_xml(self):
         self.xml.attrib["chosen"] = str(self.chosen)
@@ -330,7 +337,7 @@ class WaNoMatrixModel(AbstractWanoModel):
                     self.storage[i].append("")
         else:
             self.storage = self._fromstring(self.xml.text)
-        self._default = np.asarray(self.storage).copy()
+        self._default = copy.deepcopy(self.storage)
 
     def _tostring(self, ar):
         returnstring = "[ "
@@ -360,7 +367,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         self.storage = self._fromstring(delta)
 
     def changed_from_default(self) -> bool:
-        return (np.asarray(self.storage) != np.asarray(self._default)).any()
+        return np.any(np.asarray(self.storage) != np.asarray(self._default))
 
     def _cast_to_correct_type(self, value):
         try:
@@ -1094,10 +1101,14 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.apply_delta_dict(wd.command_dict)
         self.apply_delta_dict(wd.value_dict)
         self._read_export(infolder)
+        self.datachanged_force()
 
     def read(self, infolder: pathlib.Path):
         wd = WaNoDelta(infolder)
         self.read_from_wano_delta(wd, infolder)
+
+    def set_wano_dir_root(self, wano_dir_root):
+        self._wano_dir_root = wano_dir_root
 
     def get_metadata_dict(self):
         return {
