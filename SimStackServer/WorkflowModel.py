@@ -535,8 +535,9 @@ class Resources(XMLYMLInstantiationBase):
     """
     Class to store computational resources. Used to create jobs. Host refers to the HPC master this is running on.
     """
+    _connected_server_text = "<Connected Server>"
     _fields = [
-        ("resource_name", str, "unset", "Name of the resource. Valid resource if unset", "a"),
+        ("resource_name", str, _connected_server_text, "Name of the resource. Valid resource if unset", "a"),
         ("walltime", np.uint64, 86399, "Walltime in seconds", "a"),
         ("cpus_per_node", np.uint64, 1, "Number of CPUs per Node", "a"),
         ("nodes",np.uint64, 1, "Number of Nodes", "a"),
