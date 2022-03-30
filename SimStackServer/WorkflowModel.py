@@ -536,6 +536,7 @@ class Resources(XMLYMLInstantiationBase):
     Class to store computational resources. Used to create jobs. Host refers to the HPC master this is running on.
     """
     _fields = [
+        ("resource_name", str, "unset", "Name of the resource. Valid resource if unset", "a"),
         ("walltime", np.uint64, 86399, "Walltime in seconds", "a"),
         ("cpus_per_node", np.uint64, 1, "Number of CPUs per Node", "a"),
         ("nodes",np.uint64, 1, "Number of Nodes", "a"),
@@ -562,6 +563,7 @@ class Resources(XMLYMLInstantiationBase):
         :return:
         """
         return [
+            "resource_name",
             "base_URI",
             "port",
             "username",
@@ -581,6 +583,10 @@ class Resources(XMLYMLInstantiationBase):
     @classmethod
     def fields(cls):
         return cls._fields
+
+    @property
+    def resource_name(self):
+        return self._field_values["resource_name"]
 
     @property
     def walltime(self):
