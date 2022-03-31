@@ -545,11 +545,11 @@ class Resources(XMLYMLInstantiationBase):
         ("memory", np.uint64, 4096,  "Memory in Megabytes", "a"),
         ("custom_requests", str, "", "Comma separated list specifying additional parameters not covered here.","m"),
         ("base_URI", str, "", "Base URI for resource", "m"),
-        ("port", np.uint64, 0, "Port to access resource", "m"),
+        ("port", np.uint64, 22, "Port to access resource", "m"),
         ("username", str, "", "Username on resource", "m"),
-        ("basepath", str, "", "Basepath where to execute workflows relative to home/username", "m"),
-        ("queueing_system", str, "", "Queuing System, e.g. slurm, pbs...", "m"),
-        ("sw_dir_on_resource", str, "", "Software directory on cluster", "m"),
+        ("basepath", str, "simstack_workspace", "Basepath where to execute workflows relative to home/username", "m"),
+        ("queueing_system", str, "slurm", "Queuing System, e.g. slurm, pbs...", "m"),
+        ("sw_dir_on_resource", str, "/home/nanomatch/nanomatch", "Software directory on cluster", "m"),
         ("extra_config", str, "None Required (default)", "Filepath on cluster to configuration file required before Serverstart is possible", "m"),
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m")
     ]
