@@ -25,7 +25,7 @@ import yaml
 from lxml import etree
 import lxml.html
 
-
+from SimStackServer.Util.localhost_checker import is_localhost
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoTreeWalker import subdict_skiplevel_path_version
 
@@ -724,7 +724,14 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         return self._runtime_variables
 
     def check_if_job_is_local(self):
-        return self.resources.base_URI in ["", "localhost", "127.0.0.1", None, "None"]
+        trivial_local = self.resources.resource_name in [None, Resources._connected_server_text]
+        if trivial_local:
+            return True
+        # The next two lines allow us to fake two SimStackServers on the same machine for unit testing.
+        username = os.getlogin()
+        if username != self.resources.username:
+            return False
+        return is_localhost(self.resources.base_URI)
 
     def rename(self, renamedict):
         myuid = self.uid
