@@ -34,7 +34,7 @@ class ClusterSettingsProvider:
         return cls.get_instance()._settings_container
 
     def add_resource(self, resource_name: str) -> Resources:
-        new_resource = Resources()
+        new_resource = Resources(resource_name=resource_name)
         self._settings_container[resource_name] = new_resource
         return new_resource
 
