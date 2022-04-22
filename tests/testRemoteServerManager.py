@@ -73,7 +73,8 @@ class TestRemoteServerManager(unittest.TestCase):
         cm.submit_single_job(wfem)
         cm.send_shutdown_message()
 
-    def _wf_submit(self, folder, wf_xml_loc):
+    @staticmethod
+    def _wf_submit(folder, wf_xml_loc):
         wf = Workflow.new_instance_from_xml(wf_xml_loc)
         wf.set_storage(Path(folder))
         maxcounter = 20
@@ -86,7 +87,7 @@ class TestRemoteServerManager(unittest.TestCase):
             if counter == maxcounter:
                 raise TimeoutError("Workflow should have been finished long ago.")
         outputfile = path.join(folder, "workflow_data", "EmployeeRecord", "outputs", "Rocko")
-        self.assert_(os.path.isfile(outputfile), f"File {outputfile} has to exist.")
+        assert os.path.isfile(outputfile), f"File {outputfile} has to exist."
 
     def test_wf_submit(self) -> None:
         return self._wf_submit(self._comp_wf_dir, self._comp_wf_loc)
@@ -111,7 +112,11 @@ class TestRemoteServerManager(unittest.TestCase):
         wf.jobloop()
         should_be_over = myjob.completed_or_aborted()
         self.assert_(should_be_over, "This workflow should have been done already.")
-        myjob._my_external_cluster_manager.send_shutdown_message()
+
+        rsm = RemoteServerManager.get_instance()
+        cm: ClusterManager = rsm.server_from_resource(self.resource1)
+        with cm.connection_context():
+            cm.send_shutdown_message()
 
     def test_wf_submit_remote_and_delete(self) -> None:
         self._clear_server_state()
@@ -126,7 +131,11 @@ class TestRemoteServerManager(unittest.TestCase):
         wf.jobloop()
         should_be_over = myjob.completed_or_aborted()
         self.assert_(should_be_over, "This workflow should have been done already.")
-        myjob._my_external_cluster_manager.send_shutdown_message()
+
+        rsm = RemoteServerManager.get_instance()
+        cm: ClusterManager = rsm.server_from_resource(self.resource1)
+        with cm.connection_context():
+            cm.send_shutdown_message()
 
     def test_transfer_directory(self) -> None:
         rsm = RemoteServerManager()

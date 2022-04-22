@@ -24,6 +24,7 @@
       <exec_command>echo "hello"; date > $HOME/lastrun; sleep 2.6; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </exec_command>
       <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
         <queue></queue>
+        <resource_name>int-strunk</resource_name>
         <host>int-strunk</host>
         <custom_requests></custom_requests>
         <base_URI>int-strunk</base_URI>
