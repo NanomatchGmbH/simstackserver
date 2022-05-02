@@ -6,7 +6,7 @@ from collections import OrderedDict
 from jinja2 import Template
 import logging
 
-from boolexp import Expression
+from SimStackServer.third_party.boolexp import Expression
 import abc
 import ast
 
