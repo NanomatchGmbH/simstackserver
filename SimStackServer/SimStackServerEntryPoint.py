@@ -12,32 +12,6 @@ from os.path import join
 
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 
-if __name__ == '__main__':
-    base_path = os.path.dirname(os.path.realpath(__file__))
-    dir_path = join(base_path,"external","clusterjob")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","python-crontab")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","python-daemon")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","threadfarm")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","treewalker")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","boolexp")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
 from SimStackServer.SimStackServer import SimStackServer, AlreadyRunningException
 from SimStackServer.Config import Config
 import daemon
@@ -73,7 +47,7 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup = False):
        
     
 
-if __name__ == '__main__':
+def main():
     ### Startup works like this:
     # We check if another server is doing setup at the moment.
     # If that is the case, we try to read the current password and port and write it to stdout
