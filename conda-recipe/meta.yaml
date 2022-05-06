@@ -1,0 +1,42 @@
+package:
+  name: simstackserver 
+  version: "1.0.0"
+about:
+  home: https://github.com/not_yet_existings
+  license: MIT
+  summary: 
+source:
+  path: ../
+build:
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed -vv .
+  noarch: python
+requirements:
+  build:
+    - python >=3.8
+    - build
+    - flit
+    - flit-core
+  run:
+    - python >=3.8
+    - appdirs >=1.4.4
+    - Jinja2 >=3.0.3
+    - lockfile >=0.12.2
+    - lxml >=4.8.0
+    - msgpack-python >=1.0.3
+    - networkx >=2.7.1
+    - numpy >=1.22.3
+    - paramiko >=2.9.2
+    - psutil >=5.9.0
+    - python-daemon >=2.3.0
+    - PyYAML >=6.0
+    - pyzmq  >=22.3.0
+    - sshtunnel >=0.4.0
+    - treewalker >=1.0.0
+    - xmltodict >=0.12.0
+test:
+  source_files:
+    - tests
+  requires:
+    - pytest
+  commands:
+    - pytest
