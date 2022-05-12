@@ -3,7 +3,7 @@ package:
   version: "1.0.0"
 about:
   home: https://github.com/not_yet_existings
-  license: MIT
+  license: Proprietary
   summary: 
 source:
   path: ../
@@ -33,6 +33,7 @@ requirements:
     - sshtunnel >=0.4.0
     - treewalker >=1.0.0
     - xmltodict >=0.12.0
+    - clusterjob ==2.0.0
 test:
   source_files:
     - tests
