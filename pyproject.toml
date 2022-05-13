@@ -7,7 +7,7 @@ name = "SimStackServer"
 authors = [{name = "Timo Strunk", email = "timo.strunk@gmail.com"}]
 readme = "README.rst"
 license = {file = "LICENSE"}
-classifiers = ["License :: OSI Approved :: MIT License"]
+classifiers = ["License :: Proprietary"]
 dynamic = ["version", "description"]
 
 [tool.pytest.ini_options]
