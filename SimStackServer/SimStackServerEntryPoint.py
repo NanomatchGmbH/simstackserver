@@ -12,7 +12,7 @@ from os.path import join
 
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 
-from SimStackServer.SimStackServer import SimStackServer, AlreadyRunningException
+from SimStackServer.SimStackServerMain import SimStackServer, AlreadyRunningException
 from SimStackServer.Config import Config
 import daemon
 

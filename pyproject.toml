@@ -18,4 +18,5 @@ testpaths = [
 ]
 
 [project.scripts]
-"SimStackServer.py" = "SimStackServer.SimStackServerEntryPoint:main"
+SimStackServer = "SimStackServer.SimStackServerEntryPoint:main"
+KillSimStackServer = "SimStackServer.Tools.KillSimStackServer:main"
