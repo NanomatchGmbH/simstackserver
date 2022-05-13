@@ -38,7 +38,7 @@ from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting import Templates
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler, abs_resolve_file
-from external.clusterjob.clusterjob import FAILED
+from clusterjob import FAILED
 from TreeWalker.flatten_dict import flatten_dict
 from jinja2 import Template
 
