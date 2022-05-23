@@ -371,33 +371,62 @@ class ClusterManager(object):
         stdin, stdout, stderr = myclient.exec_command(command)
         return stdout, stderr
 
-    def _get_server_command(self):
-        software_dir = self._software_directory
-        VDIR = self.get_newest_version_directory(software_dir)
-        software_dir += '/' + VDIR
+    def get_server_command_from_software_directory(self, software_directory: str):
+        VDIR = self.get_newest_version_directory(software_directory)
         if VDIR == "V2":
             raise NotImplementedError("V2 connection capability removed from SimStack client. Please upgrade to V4.")
         elif VDIR == "V3":
             raise NotImplementedError("V3 connection capability removed from SimStack client. Please upgrade to V4.")
-        elif VDIR != "V4":
-            print("Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V4."%VDIR)
-        myenv = "simstack_server"
+        elif VDIR == "V4":
+            pass
+        elif VDIR == "V6":
+            pass
+        else:
+            print(
+                "Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V4." % VDIR)
+            VDIR = "V4"
+
+        if VDIR != "V6":
+            software_directory += '/' + VDIR
+            myenv = "simstack_server"
+        else:
+            myenv = "simstack_server_v6"
+
         if self._queueing_system == "AiiDA":
             myenv = "aiida"
-            pythonproc = software_dir + '/local_anaconda/envs/%s/bin/python' %myenv
-            execproc = "source %s/local_anaconda/etc/profile.d/conda.sh; conda activate %s; %s" % (
-            software_dir, myenv, pythonproc)
-        else:
-            pythonproc = software_dir + '/local_anaconda/envs/%s/bin/python' % myenv
-            execproc = "source %s/local_anaconda/etc/profile.d/conda.sh; conda activate %s; %s"%(software_dir, myenv, pythonproc)
-        serverproc = software_dir + '/SimStackServer/SimStackServer.py'
-        if not self.exists(pythonproc):
-            raise FileNotFoundError("%s pythonproc was not found. Please check, whether the software directory in Configuration->Servers is correct and postinstall.sh was run"%pythonproc)
-        if not self.exists(serverproc):
-            raise FileNotFoundError("%s serverproc was not found. Please check, whether the software directory in Configuration->Servers is correct and the file exists" % serverproc)
 
-        command = "%s %s"%(execproc, serverproc)
-        return command
+        found_conda_shell = False
+        conda_sh_files = [f"{software_directory}/etc/profile.d/conda.sh",
+                          f"{software_directory}/local_anaconda/etc/profile.d/conda.sh",
+                          f"{software_directory}/simstack_conda_userenv.sh"]
+        for conda_sh_file in conda_sh_files:
+            print(f"Checking for {conda_sh_file}")
+            if self.exists(conda_sh_file):
+                found_conda_shell = conda_sh_file
+                break
+
+        if not found_conda_shell:
+            errmsg = f"""Could not find setup file for conda environment. Please either run postinstall.sh to unpack the embedded conda environment or
+        create "{software_directory}/simstack_conda_userenv.sh" to source your own environment with an installed simstack_server environment.
+        """
+            raise FileNotFoundError(errmsg)
+
+        if VDIR == "V6":
+            execproc = f"source {found_conda_shell}; conda activate {myenv}; "
+            serverproc = "SimStackServer"
+        else:
+            execproc = f"source {found_conda_shell}; conda activate {myenv}; python"
+            serverproc = software_directory + '/SimStackServer/SimStackServer.py'
+
+        if VDIR != "V6" and not self.exists(serverproc):
+            raise FileNotFoundError(
+                "%s serverproc was not found. Please check, whether the software directory in Configuration->Servers is correct and the file exists" % serverproc)
+
+        return "%s %s" % (execproc, serverproc)
+
+    def _get_server_command(self):
+        software_dir = self._software_directory
+        return self.get_server_command_from_software_directory(software_dir)
 
     def connect_zmq_tunnel(self, command, connect_http = True, verbose = True):
         """
@@ -610,8 +639,7 @@ class ClusterManager(object):
             return True
 
     def get_newest_version_directory(self, path):
-        VDIRS=[]
-        largest_version = 2 # we started using this server with V2
+        largest_version = -1
         try:
             for entry in self._sftp_client.listdir_attr(path):
                 mode = entry.st_mode
@@ -622,9 +650,10 @@ class ClusterManager(object):
                             myint = int(fn[1:])
                             if myint > largest_version:
                                 largest_version = myint
-                            VDIRS.append(myint)
                         except ValueError:
                             pass
+                if entry.filename == "condabin":
+                    largest_version = 6
         except FileNotFoundError as e:
             newfilenotfounderror = FileNotFoundError(e.errno,"No such file %s on remote %s"%(path,self._url), path)
             raise newfilenotfounderror from e
