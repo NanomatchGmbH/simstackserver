@@ -387,7 +387,6 @@ class ClusterManager(object):
             VDIR = "V4"
 
         if VDIR != "V6":
-            software_directory += '/' + VDIR
             myenv = "simstack_server"
         else:
             myenv = "simstack_server_v6"
@@ -398,6 +397,7 @@ class ClusterManager(object):
         found_conda_shell = False
         conda_sh_files = [f"{software_directory}/etc/profile.d/conda.sh",
                           f"{software_directory}/local_anaconda/etc/profile.d/conda.sh",
+                          f"{software_directory}/{VDIR}/local_anaconda/etc/profile.d/conda.sh",
                           f"{software_directory}/simstack_conda_userenv.sh"]
         for conda_sh_file in conda_sh_files:
             print(f"Checking for {conda_sh_file}")

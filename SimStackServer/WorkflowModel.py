@@ -768,7 +768,30 @@ UC_NODES=%d; export UC_NODES;
 UC_PROCESSORS_PER_NODE=%d; export UC_PROCESSORS_PER_NODE;
 UC_TOTAL_PROCESSORS=%d; export UC_TOTAL_PROCESSORS;
 UC_MEMORY_PER_NODE=%d; export UC_MEMORY_PER_NODE;
-export NANOMATCH=%s
+BASEFOLDER="%s"
+
+# The following are exports to resolve previous and future
+# versions of the SimStackServer conda / python interpreters
+###########################################################
+simstack_server_mamba_source () {{
+    if [ -d "$BASEFOLDER/local_anaconda" ]
+    then
+        source $BASEFOLDER/local_anaconda/etc/profile.d/conda.sh
+    else
+        source $BASEFOLDER/etc/profile.d/conda.sh
+    fi
+}}
+if [ -d "$BASEFOLDER/SimStackServer" ]
+then
+    # In this case we are in legacy installation mode:
+    export NANOMATCH="$BASEFOLDER"
+fi
+if [ -f "$BASEFOLDER/nanomatch_environment_config.sh" ]
+then
+    source "$BASEFOLDER/nanomatch_environment_config.sh"
+fi
+###########################################################
+
 """%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self.resources.memory, self._nmdir)
 
     @staticmethod
