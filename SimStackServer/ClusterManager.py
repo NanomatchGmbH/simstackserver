@@ -396,11 +396,9 @@ class ClusterManager(object):
 
         found_conda_shell = False
         conda_sh_files = [f"{software_directory}/etc/profile.d/conda.sh",
-                          f"{software_directory}/local_anaconda/etc/profile.d/conda.sh",
                           f"{software_directory}/{VDIR}/local_anaconda/etc/profile.d/conda.sh",
-                          f"{software_directory}/simstack_conda_userenv.sh"]
+                          f"{software_directory}/{VDIR}/simstack_conda_userenv.sh"]
         for conda_sh_file in conda_sh_files:
-            print(f"Checking for {conda_sh_file}")
             if self.exists(conda_sh_file):
                 found_conda_shell = conda_sh_file
                 break
