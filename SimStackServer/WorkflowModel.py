@@ -687,7 +687,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         if not "uid" in kwargs:
             self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
-        self._nmdir = self._init_nanomatch_directory()
+        self._nmdir = self.resources.sw_dir_on_resource
         self._logger = logging.getLogger(self.uid)
         self._runtime_variables = {}
         self._aiida_valuedict = None
@@ -744,18 +744,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         from SimStackServer.RemoteServerManager import RemoteServerManager
         remote_server_manager = RemoteServerManager.get_instance()
         return remote_server_manager.server_from_resource(self.resources)
-
-    def _init_nanomatch_directory(self):
-        # The file we are in might be compiled. We need a definitely uncompiled module.
-        import SimStackServer.Data as data
-
-        datadir = path.realpath(data.__path__[0])
-        #datadir is:
-        # '/home/nanomatch/nanomatch/V2/SimStackServer/SimStackServer/Data'
-        # we want: /home/nanomatch/nanomatch
-        datadirpath = Path(datadir)
-        nmdir = str(datadirpath.parent.parent.parent.parent)
-        return nmdir
 
     def _get_prolog_unicore_compatibility(self, resources):
         """
