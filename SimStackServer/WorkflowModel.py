@@ -687,7 +687,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         if not "uid" in kwargs:
             self._field_values["uid"] = str(uuid.uuid4())
         self._name = "WorkflowExecModule"
-        self._nmdir = self.resources.sw_dir_on_resource
+        self._conda_base_prefix = self._get_conda_basedir()
         self._logger = logging.getLogger(self.uid)
         self._runtime_variables = {}
         self._aiida_valuedict = None
@@ -695,6 +695,13 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._rendered_body_html = None
         self._failed = False
         self._my_external_cluster_manager = None
+
+    @staticmethod
+    def _get_conda_basedir():
+        conda_prefix = os.environ["CONDA_PREFIX"]
+        envloc = conda_prefix.find('envs/simstack_server')
+        conda_base_prefix = conda_prefix[0:envloc]
+        return conda_base_prefix
 
     @classmethod
     def fields(cls):
@@ -762,17 +769,17 @@ BASEFOLDER="%s"
 # versions of the SimStackServer conda / python interpreters
 ###########################################################
 simstack_server_mamba_source () {{
-    if [ -d "$BASEFOLDER/local_anaconda" ]
+    if [ -d "$BASEFOLDER/../local_anaconda" ]
     then
-        source $BASEFOLDER/local_anaconda/etc/profile.d/conda.sh
+        source $BASEFOLDER/../local_anaconda/etc/profile.d/conda.sh
     else
         source $BASEFOLDER/etc/profile.d/conda.sh
     fi
 }}
-if [ -d "$BASEFOLDER/SimStackServer" ]
+if [ -d "$BASEFOLDER/../local_anaconda" ]
 then
     # In this case we are in legacy installation mode:
-    export NANOMATCH="$BASEFOLDER"
+    export NANOMATCH="$BASEFOLDER/.."
 fi
 if [ -f "$BASEFOLDER/nanomatch_environment_config.sh" ]
 then
@@ -780,7 +787,7 @@ then
 fi
 ###########################################################
 
-"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self.resources.memory, self._nmdir)
+"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self.resources.memory, self._conda_base_prefix)
 
     @staticmethod
     def _time_from_seconds_to_clusterjob_timestring(time_in_seconds):
@@ -948,7 +955,7 @@ fi
                     envdict["UC_PROCESSORS_PER_NODE"] =  str(self.resources.cpus_per_node)
                     envdict["UC_TOTAL_PROCESSORS"] = str(self.resources.cpus_per_node * self.resources.nodes)
                     envdict["UC_MEMORY_PER_NODE"] = str(self.resources.memory)
-                    envdict["NANOMATCH"] = self._nmdir
+                    envdict["NANOMATCH"] = self._conda_base_prefix
 
                     inputs["metadata"]["options"]["exec_command"] = self.exec_command
                     inputs["metadata"]["options"]["environment_variables"] = envdict
