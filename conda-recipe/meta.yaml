@@ -1,6 +1,6 @@
 package:
   name: simstackserver 
-  version: "1.0.6"
+  version: "1.0.7"
 about:
   home: https://github.com/not_yet_existings
   license: proprietary
