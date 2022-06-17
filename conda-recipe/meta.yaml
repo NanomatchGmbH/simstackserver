@@ -34,7 +34,7 @@ requirements:
     - treewalker >=1.0.0
     - pyparsing >=3.0.9
     - xmltodict >=0.12.0
-    - clusterjob ==2.0.0
+    - clusterjob >=2.1.0,<2.2.0
     - threadfarm ==2.0.0
 test:
   source_files:
