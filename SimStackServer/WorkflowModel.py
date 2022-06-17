@@ -20,6 +20,7 @@ from os.path import join
 from pathlib import Path
 
 from os import path
+from typing import Optional
 
 import yaml
 from lxml import etree
@@ -551,7 +552,8 @@ class Resources(XMLYMLInstantiationBase):
         ("queueing_system", str, "unset", "Queuing System, e.g. slurm, pbs...", "m"),
         ("sw_dir_on_resource", str, "/home/nanomatch/nanomatch", "Software directory on cluster", "m"),
         ("extra_config", str, "None Required (default)", "Filepath on cluster to configuration file required before Serverstart is possible", "m"),
-        ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m")
+        ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m"),
+        ("sge_pe", str, "", "SGE Parallel Environment. Only applicable to SGE queue", "m"),
     ]
 
     def __init__(self, *args, **kwargs):
@@ -578,7 +580,8 @@ class Resources(XMLYMLInstantiationBase):
             "walltime",
             "memory",
             "queue",
-            "custom_requests"
+            "custom_requests",
+            "sge_pe",
         ]
 
     @classmethod
@@ -634,6 +637,10 @@ class Resources(XMLYMLInstantiationBase):
         return self._field_values["queueing_system"]
 
     @property
+    def sge_pe(self):
+        return self._field_values["sge_pe"]
+
+    @property
     def sw_dir_on_resource(self):
         return self._field_values["sw_dir_on_resource"]
 
@@ -679,7 +686,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("resources", Resources, None, "Computational resources", "m"),
         ("runtime_directory",str, "unstarted", "The directory this wfem was started in","m"),
         ("jobid", str, "unstarted", "The id of the job this wfem was started with.", "m"),
-        ("queueing_system", str, "unset", "The queueing system this job is submitted with. Kind of redundant currently.", "m"),
         ("external_runtime_directory", str, "", "If this is a non-local job, the directory on the external directory is stored here.","m")
     ]
     def __init__(self, *args, **kwargs):
@@ -787,7 +793,7 @@ then
 fi
 ###########################################################
 
-"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,self.resources.memory, self._conda_base_prefix)
+"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,resources.memory, self._conda_base_prefix)
 
     @staticmethod
     def _time_from_seconds_to_clusterjob_timestring(time_in_seconds):
@@ -810,13 +816,42 @@ fi
         timestring += "%02d"%seconds
         return timestring
 
-    def get_queueing_system(self):
-        queueing_system = self.resources.queueing_system
-        if queueing_system == "unset":
-            queueing_system = self.queueing_system
-        return queueing_system
+    def _map_resources_to_default_resources(self, default_resources : Optional[Resources], actual_resources :Resources):
+        if default_resources is None:
+            return actual_resources
+        queue = actual_resources.queue
+        replace_set = {"default", "", None, "None", "unset"}
+        if queue in replace_set:
+            queue = default_resources.queue
+        queueing_system = actual_resources.queueing_system
+        if queueing_system in replace_set:
+            queueing_system = default_resources.queueing_system
+        sge_pe = actual_resources.sge_pe
+        if sge_pe in replace_set:
+            sge_pe = default_resources.sge_pe
+        return_resources = Resources(
+            cpus_per_nodes = actual_resources.cpus_per_node,
+            nodes = actual_resources.nodes,
+            memory = actual_resources.memory,
+            sw_dir_on_resource = actual_resources.sw_dir_on_resource,
+            queueing_system = queueing_system,
+            queue = queue,
+            sge_pe = sge_pe,
+            resource_name = actual_resources.resource_name,
+            custom_requests = actual_resources.custom_requests,
+            base_URI = actual_resources.base_URI,
+            walltime = actual_resources.walltime,
+            username = actual_resources.username,
+            port = actual_resources.port,
+            extra_config = actual_resources.extra_config,
+            ssh_private_key = actual_resources.ssh_private_key,
+        )
+        return return_resources
 
-    def run_jobfile(self, queueing_system, external_cluster_manager = None):
+    def run_jobfile(self, default_wf_resources: Optional[Resources], external_cluster_manager = None):
+        actual_resources = self._map_resources_to_default_resources(default_wf_resources, self.resources)
+        self.set_field_value("resources", actual_resources)
+        queueing_system = actual_resources.queueing_system
         temphandler = StringLoggingHandler()
         temphandler.setLevel(logging.DEBUG)
         do_internal = False
@@ -831,7 +866,7 @@ fi
             with external_cluster_manager.connection_context():
                 ext_dir_name = external_cluster_manager.mkdir_random_singlejob_exec_directory(self.given_name)
 
-                ext_dir_abs = external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=self.resources.basepath)
+                ext_dir_abs = external_cluster_manager.put_directory(self.runtime_directory, ext_dir_name, basepath_override=actual_resources.basepath)
                 external_wfem = copy.deepcopy(self)
 
 
@@ -859,21 +894,21 @@ fi
             import clusterjob
             #Sanity checks
             # check if runtime directory is not unset
-            queue = self.resources.queue
+            queue = actual_resources.queue
 
             kwargs = {}
-            kwargs["queue"] = self.resources.queue
+            kwargs["queue"] = queue
             if queue is None or queue == "None" or queue == "":
                 # In case of empty string or unset, we let clusterjob decide
                 del kwargs["queue"]
-            if queue  == "default" and queueing_system in ["pbs","slurm"]:
+            if queue  == "default" and queueing_system in ["pbs","slurm", "sge"]:
                 # In case of pbs and slurm we let the queueing system decide:
                 del kwargs["queue"]
 
-            if self.resources.custom_requests.strip() != "" and self.resources.custom_requests != "None":
+            if actual_resources.custom_requests.strip() != "" and actual_resources.custom_requests != "None":
                 #we expect stuff like:
                 # -m "hostgroup1 hostgroup2", -B "fwiefj"
-                c_requests = self.resources.custom_requests
+                c_requests = actual_resources.custom_requests
                 crsplit = c_requests.strip().split(",")
 
                 for field in crsplit:
@@ -884,7 +919,7 @@ fi
                     val = " ".join(splitfield[1:])
                     kwargs[key] = val
 
-            mytime = self.resources.walltime
+            mytime = actual_resources.walltime
             if mytime < 61:
                 # We have to allocate at least 61 seconds
                 # to work around the specificities of clusterjob.
@@ -894,11 +929,12 @@ fi
             toexec = """%s
     cd $CLUSTERJOB_WORKDIR
     %s
-"""%(self._get_prolog_unicore_compatibility(self.resources), self.exec_command)
+"""%(self._get_prolog_unicore_compatibility(actual_resources), self.exec_command)
             try:
                 jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
-                                                 time = mytimestring, nodes = int(self.resources.nodes),
-                                                 ppn = int(self.resources.cpus_per_node), mem = self.resources.memory,
+                                                 time = mytimestring, nodes = int(actual_resources.nodes),
+                                                 ppn = int(actual_resources.cpus_per_node), mem = actual_resources.memory,
+                                                 sge_pe = actual_resources.sge_pe,
                                                  stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                                  workdir = self.runtime_directory, **kwargs
                 )
@@ -942,25 +978,25 @@ fi
                         }
                     }
                     aiida_resource_dict = {
-                        'num_mpiprocs_per_machine': int(self.resources.cpus_per_node),
+                        'num_mpiprocs_per_machine': int(actual_resources.cpus_per_node),
                         'num_cores_per_mpiproc' : 1,
-                        'num_machines': int(self.resources.nodes)
+                        'num_machines': int(actual_resources.nodes)
                     }
                     inputs['metadata']['options']['resources'] = aiida_resource_dict
 
-                    if not self.resources.queue in ["default", "None", None]:
-                        inputs['metadata']['options']['queue_name'] = self.resources.queue
+                    if not actual_resources.queue in ["default", "None", None]:
+                        inputs['metadata']['options']['queue_name'] = actual_resources.queue
 
-                    if self.resources.queue != "default":
-                        inputs['metadata']['options']['max_wallclock_seconds'] = int(self.resources.walltime)
+                    if actual_resources.queue != "default":
+                        inputs['metadata']['options']['max_wallclock_seconds'] = int(actual_resources.walltime)
                     # We also need to set the env variables here
                     # i.e. Nanomatch
                     # UC_PROCESSORS_PER_NODE
                     envdict = {}
-                    envdict["UC_NODES"] = str(self.resources.nodes)
-                    envdict["UC_PROCESSORS_PER_NODE"] =  str(self.resources.cpus_per_node)
-                    envdict["UC_TOTAL_PROCESSORS"] = str(self.resources.cpus_per_node * self.resources.nodes)
-                    envdict["UC_MEMORY_PER_NODE"] = str(self.resources.memory)
+                    envdict["UC_NODES"] = str(actual_resources.nodes)
+                    envdict["UC_PROCESSORS_PER_NODE"] =  str(actual_resources.cpus_per_node)
+                    envdict["UC_TOTAL_PROCESSORS"] = str(actual_resources.cpus_per_node * actual_resources.nodes)
+                    envdict["UC_MEMORY_PER_NODE"] = str(actual_resources.memory)
                     envdict["NANOMATCH"] = self._conda_base_prefix
 
                     inputs["metadata"]["options"]["exec_command"] = self.exec_command
@@ -977,12 +1013,12 @@ fi
                         outfile.write(str(jobscript).replace("$SLURM_SUBMIT_DIR",self.runtime_directory)+ '\n')
                     hostfile = self.runtime_directory + "/" + "HOSTFILE"
                     with open(hostfile, 'wt') as hoststream:
-                        for i in range(0, self.resources.cpus_per_node):
+                        for i in range(0, actual_resources.cpus_per_node):
                             hoststream.write("localhost\n")
                     if not dont_run:
                         from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
                         batchsys, _ = InternalBatchSystem.get_instance()
-                        jobid = batchsys.add_work_to_current_bracket(int(self.resources.cpus_per_node),"smp",runscript)
+                        jobid = batchsys.add_work_to_current_bracket(int(actual_resources.cpus_per_node),"smp",runscript)
                     else:
                         jobid = 1
                     self._logger.debug("Submitted as internal job %d"%jobid)
@@ -1004,6 +1040,7 @@ fi
 
 
     def abort_job(self):
+        actual_resources = self.resources
         if not self.check_if_job_is_local():
             self._logger.info("Aborting job in non-local server.")
             from SimStackServer.ClusterManager import ClusterManager
@@ -1013,11 +1050,11 @@ fi
 
 
 
-        elif self.resources.queueing_system == "AiiDA":
+        elif actual_resources.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(self.jobid)
             myjob.kill()
-        elif self.resources.queueing_system != "Internal":
+        elif actual_resources.queueing_system != "Internal":
             asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
             try:
                 asyncresult.status
@@ -1039,7 +1076,8 @@ fi
             batchsys.abort_job(self.jobid)
 
     def _recreate_asyncresult_from_jobid(self, jobid):
-        assert not self.resources.queueing_system == "Internal", "Recreating asyncresult from jobid not supported for Internal queueing system"
+        actual_resources = self.resources
+        assert not actual_resources.queueing_system == "Internal", "Recreating asyncresult from jobid not supported for Internal queueing system"
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
         from clusterjob import AsyncResult, JobScript
@@ -1047,7 +1085,7 @@ fi
             a = JobScript("DummyJob")
             assert len(JobScript._backends) > 0
 
-        ar = AsyncResult(JobScript._backends[self.resources.queueing_system])
+        ar = AsyncResult(JobScript._backends[actual_resources.queueing_system])
         ar.job_id = self.jobid
         from clusterjob.status import PENDING
         ar._status = PENDING
@@ -1077,11 +1115,8 @@ fi
     def outputpath(self):
         return self._field_values["outputpath"]
 
-    @property
-    def queueing_system(self):
-        return self._field_values["queueing_system"]
-
     def completed_or_aborted(self):
+        actual_resources = self.resources
         if self._my_external_cluster_manager != None:
             from SimStackServer.ClusterManager import ClusterManager
             self._my_external_cluster_manager:ClusterManager
@@ -1093,7 +1128,7 @@ fi
                 return True
             return False
 
-        if not self.resources.queueing_system in ["Internal", "AiiDA"] :
+        if not actual_resources.queueing_system in ["Internal", "AiiDA"] :
             try:
                 asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
                 return asyncresult.status >= 0
@@ -1106,7 +1141,7 @@ fi
                     return True
                 raise
 
-        elif self.resources.queueing_system == "AiiDA":
+        elif actual_resources.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(self.jobid)
             status = myjob.status()
@@ -2076,7 +2111,7 @@ class WorkflowBase(XMLYMLInstantiationBase):
         ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
         ("submit_name", str, "${SUBMIT_NAME}", "The name this workflow was submitted as. This has to be unique on the cluster (per user). The workflow will be rejected if its not.", "a"),
         ("status", int , JobStatus.READY, "Last checked status of the workflow", "a"),
-        ("queueing_system",str, "unset", "Name of the queueing system. Might move into WFEM in case of split jobs.", "a")
+        ("default_wf_resources", Resources, None, "Computational resources", "m"),
     ]
 
     def __init__(self, *args, **kwargs):
@@ -2214,8 +2249,11 @@ class WorkflowBase(XMLYMLInstantiationBase):
         return self._field_values["submit_name"]
 
     @property
-    def queueing_system(self) -> str:
-        return self._field_values["queueing_system"]
+    def default_wf_resources(self) -> Resources:
+        return self._field_values["default_wf_resources"]
+
+    def set_default_wf_resources(self, resources: Resources):
+        self._field_values["default_wf_resources"] = resources
 
     @property
     def status(self) -> str:
@@ -2354,12 +2392,10 @@ class Workflow(WorkflowBase):
                             external_cluster_manager = self._get_clustermanager_from_job(tostart)
                         else:
                             external_cluster_manager = None
-                        queueing_system = tostart.resources.queueing_system
-                        if queueing_system == "unset":
-                            # In this case nobody set our localqueue and we therefore override with the one we got from the workflow
-                            queueing_system = self.queueing_system
+
+                        queueing_system = self._get_wfem_queueing_system(tostart)
                         tostart.run_jobfile(
-                            queueing_system,
+                            self.default_wf_resources,
                             external_cluster_manager=external_cluster_manager
                         )
                         self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
@@ -2414,7 +2450,7 @@ class Workflow(WorkflowBase):
         queueing_system = wfem.resources.queueing_system
         if queueing_system == "unset":
             # In this case nobody set our localqueue and we therefore override with the one we got from the workflow
-            queueing_system = self.queueing_system
+            queueing_system = self.default_wf_resources.queueing_system
         return queueing_system
 
     def _prepare_job(self, wfem : WorkflowExecModule):

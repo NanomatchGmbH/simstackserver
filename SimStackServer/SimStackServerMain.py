@@ -339,7 +339,7 @@ class WorkflowManager(object):
             self._start_internal_queue()
         self._inprogress_singlejobs[tostart.uid] = tostart
 
-        tostart.run_jobfile(tostart.resources.queueing_system)
+        tostart.run_jobfile(None)
 
 
     def get_singlejob_status(self, wfem_uid: str):
