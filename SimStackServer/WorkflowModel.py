@@ -548,7 +548,7 @@ class Resources(XMLYMLInstantiationBase):
         ("port", np.uint64, 22, "Port to access resource", "m"),
         ("username", str, "", "Username on resource", "m"),
         ("basepath", str, "simstack_workspace", "Basepath where to execute workflows relative to home/username", "m"),
-        ("queueing_system", str, "slurm", "Queuing System, e.g. slurm, pbs...", "m"),
+        ("queueing_system", str, "unset", "Queuing System, e.g. slurm, pbs...", "m"),
         ("sw_dir_on_resource", str, "/home/nanomatch/nanomatch", "Software directory on cluster", "m"),
         ("extra_config", str, "None Required (default)", "Filepath on cluster to configuration file required before Serverstart is possible", "m"),
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m")
@@ -810,6 +810,11 @@ fi
         timestring += "%02d"%seconds
         return timestring
 
+    def get_queueing_system(self):
+        queueing_system = self.resources.queueing_system
+        if queueing_system == "unset":
+            queueing_system = self.queueing_system
+        return queueing_system
 
     def run_jobfile(self, queueing_system, external_cluster_manager = None):
         temphandler = StringLoggingHandler()
@@ -855,6 +860,7 @@ fi
             #Sanity checks
             # check if runtime directory is not unset
             queue = self.resources.queue
+
             kwargs = {}
             kwargs["queue"] = self.resources.queue
             if queue is None or queue == "None" or queue == "":
@@ -1005,11 +1011,13 @@ fi
             with cm.connection_context():
                 cm.send_abortsinglejob_message(self.uid)
 
-        elif self.queueing_system == "AiiDA":
+
+
+        elif self.resources.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(self.jobid)
             myjob.kill()
-        elif self.queueing_system != "Internal":
+        elif self.resources.queueing_system != "Internal":
             asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
             try:
                 asyncresult.status
@@ -1031,7 +1039,7 @@ fi
             batchsys.abort_job(self.jobid)
 
     def _recreate_asyncresult_from_jobid(self, jobid):
-        assert not self.queueing_system == "Internal", "Recreating asyncresult from jobid not supported for Internal queueing system"
+        assert not self.resources.queueing_system == "Internal", "Recreating asyncresult from jobid not supported for Internal queueing system"
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
         from clusterjob import AsyncResult, JobScript
@@ -1039,7 +1047,7 @@ fi
             a = JobScript("DummyJob")
             assert len(JobScript._backends) > 0
 
-        ar = AsyncResult(JobScript._backends[self.queueing_system])
+        ar = AsyncResult(JobScript._backends[self.resources.queueing_system])
         ar.job_id = self.jobid
         from clusterjob.status import PENDING
         ar._status = PENDING
@@ -1085,7 +1093,7 @@ fi
                 return True
             return False
 
-        if not self.queueing_system in ["Internal", "AiiDA"] :
+        if not self.resources.queueing_system in ["Internal", "AiiDA"] :
             try:
                 asyncresult = self._recreate_asyncresult_from_jobid(self.jobid)
                 return asyncresult.status >= 0
@@ -1098,7 +1106,7 @@ fi
                     return True
                 raise
 
-        elif self.queueing_system == "AiiDA":
+        elif self.resources.queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(self.jobid)
             status = myjob.status()
@@ -2334,7 +2342,6 @@ class Workflow(WorkflowBase):
             tostart = self.elements.get_element_by_uid(rdjob)
             if isinstance(tostart,WorkflowExecModule):
                 tostart : WorkflowExecModule
-                tostart.set_queueing_system(self.queueing_system)
                 try:
                     if not self._prepare_job(tostart):
                         self._logger.error("Error during job preparation. Aborting workflow %s"%self.submit_name)
@@ -2347,7 +2354,14 @@ class Workflow(WorkflowBase):
                             external_cluster_manager = self._get_clustermanager_from_job(tostart)
                         else:
                             external_cluster_manager = None
-                        tostart.run_jobfile(self.queueing_system, external_cluster_manager=external_cluster_manager)
+                        queueing_system = tostart.resources.queueing_system
+                        if queueing_system == "unset":
+                            # In this case nobody set our localqueue and we therefore override with the one we got from the workflow
+                            queueing_system = self.queueing_system
+                        tostart.run_jobfile(
+                            queueing_system,
+                            external_cluster_manager=external_cluster_manager
+                        )
                         self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
                 except Exception as e:
                     print(e)
@@ -2396,7 +2410,15 @@ class Workflow(WorkflowBase):
             return True
         return False
 
+    def _get_wfem_queueing_system(self, wfem: WorkflowExecModule):
+        queueing_system = wfem.resources.queueing_system
+        if queueing_system == "unset":
+            # In this case nobody set our localqueue and we therefore override with the one we got from the workflow
+            queueing_system = self.queueing_system
+        return queueing_system
+
     def _prepare_job(self, wfem : WorkflowExecModule):
+        queueing_system = self._get_wfem_queueing_system(wfem)
 
         jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
         counter = 0
@@ -2435,7 +2457,7 @@ class Workflow(WorkflowBase):
                                                     runtime_variables = wfem.get_runtime_variables()
                                                     )
         render_substitutions = wmr.get_render_substitutions()
-        if self.queueing_system == "AiiDA":
+        if queueing_system == "AiiDA":
             do_aiida = True
             from aiida.orm import load_node, SinglefileData
             import aiida.orm as orm
@@ -2589,7 +2611,7 @@ class Workflow(WorkflowBase):
 
     def _postjob_care(self, wfem : WorkflowExecModule):
         jobdirectory = wfem.runtime_directory
-
+        queueing_system = self._get_wfem_queueing_system(wfem)
         myjobid = wfem.jobid
 
         if not wfem.check_if_job_is_local():
@@ -2604,7 +2626,7 @@ class Workflow(WorkflowBase):
 
 
         staging_filename_to_aiida_obj = {}
-        if self.queueing_system == "AiiDA":
+        if queueing_system == "AiiDA":
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
             myjob = AiiDAJob(myjobid)
             process_class = myjob.get_process_class()
@@ -2612,7 +2634,7 @@ class Workflow(WorkflowBase):
             simstack_path_to_aiida_uuid = {}
 
 
-        if self.queueing_system == "AiiDA":
+        if queueing_system == "AiiDA":
             #from aiida.plugins import CalculationFactory
             #calcjob_class = CalculationFactory(wfem.name)
             pc = myjob.get_process_class()
@@ -2670,7 +2692,7 @@ class Workflow(WorkflowBase):
             topath = wfem.outputpath.replace('/','.')
             for key,value in flattened_output_variables.items():
                 self._output_variables["%s.%s"%(topath,key)] = value
-            if self.queueing_system == "AiiDA":
+            if queueing_system == "AiiDA":
                 for sims_path, uuid in simstack_path_to_aiida_uuid.items():
                     self._path_to_aiida_uuid["%s.%s"%(topath, sims_path)] = uuid
 

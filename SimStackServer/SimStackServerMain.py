@@ -270,9 +270,6 @@ class WorkflowManager(object):
 
     def start_wf(self, workflow_file):
         workflow = self.add_inprogress_workflow(workflow_file)
-        queueing_system = workflow.queueing_system
-        if queueing_system == 'Internal':
-            self._start_internal_queue()
         self._logger.debug("Added workflow from file %s with submit_name %s"%(workflow_file, workflow.submit_name))
 
     def backup_and_save(self):
@@ -334,10 +331,15 @@ class WorkflowManager(object):
             self._logger.error("Did not find workflow %s in model lists." %workflow_submitname)
 
     def start_singlejob(self, tostart : WorkflowExecModule):
-        if tostart.queueing_system == "Internal" and self._processfarm_thread is None:
+        queueing_system = tostart.resources.queueing_system
+        if queueing_system == "unset":
+            raise NotImplementedError("Single Jobs require a valid queueing system to be set")
+
+        if tostart.resources.queueing_system == "Internal" and self._processfarm_thread is None:
             self._start_internal_queue()
         self._inprogress_singlejobs[tostart.uid] = tostart
-        tostart.run_jobfile(tostart.queueing_system)
+
+        tostart.run_jobfile(tostart.resources.queueing_system)
 
 
     def get_singlejob_status(self, wfem_uid: str):
