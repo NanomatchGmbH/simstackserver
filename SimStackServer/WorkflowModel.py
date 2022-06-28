@@ -830,7 +830,7 @@ fi
         if sge_pe in replace_set:
             sge_pe = default_resources.sge_pe
         return_resources = Resources(
-            cpus_per_nodes = actual_resources.cpus_per_node,
+            cpus_per_node = actual_resources.cpus_per_node,
             nodes = actual_resources.nodes,
             memory = actual_resources.memory,
             sw_dir_on_resource = actual_resources.sw_dir_on_resource,
