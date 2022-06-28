@@ -785,7 +785,7 @@ simstack_server_mamba_source () {{
 if [ -d "$BASEFOLDER/../local_anaconda" ]
 then
     # In this case we are in legacy installation mode:
-    export NANOMATCH="$BASEFOLDER/.."
+    export NANOMATCH="$BASEFOLDER/../.."
 fi
 if [ -f "$BASEFOLDER/nanomatch_environment_config.sh" ]
 then
