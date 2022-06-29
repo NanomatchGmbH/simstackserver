@@ -830,7 +830,7 @@ fi
         return timestring
 
 
-    def run_jobfile(self, default_wf_resources: Optional[Resources], external_cluster_manager = None):
+    def run_jobfile(self, external_cluster_manager = None):
         actual_resources = self.resources
         self.set_field_value("resources", actual_resources)
         queueing_system = actual_resources.queueing_system
