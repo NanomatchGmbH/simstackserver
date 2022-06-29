@@ -832,7 +832,6 @@ fi
 
     def run_jobfile(self, external_cluster_manager = None):
         actual_resources = self.resources
-        self.set_field_value("resources", actual_resources)
         queueing_system = actual_resources.queueing_system
         temphandler = StringLoggingHandler()
         temphandler.setLevel(logging.DEBUG)
