@@ -652,6 +652,19 @@ class Resources(XMLYMLInstantiationBase):
     def extra_config(self):
         return self._field_values["extra_config"]
 
+    def overwrite_unset_fields_from_default_resources(self, default_resources):
+        queue = self.queue
+        replace_set = {"default", "", None, "None", "unset"}
+        if queue in replace_set:
+            self.set_field_value("queue", default_resources.queue)
+        queueing_system = self.queueing_system
+        if queueing_system in replace_set:
+            self.set_field_value("queueing_system", default_resources.queueing_system)
+        sge_pe = self.sge_pe
+        if sge_pe in replace_set:
+            self.set_field_value("sge_pe", default_resources.sge_pe)
+
+
 class CurrentTrash(object):
     otherfields = ["template_directory",
             "instantiated_directory",
@@ -816,40 +829,9 @@ fi
         timestring += "%02d"%seconds
         return timestring
 
-    def _map_resources_to_default_resources(self, default_resources : Optional[Resources], actual_resources :Resources):
-        if default_resources is None:
-            return actual_resources
-        queue = actual_resources.queue
-        replace_set = {"default", "", None, "None", "unset"}
-        if queue in replace_set:
-            queue = default_resources.queue
-        queueing_system = actual_resources.queueing_system
-        if queueing_system in replace_set:
-            queueing_system = default_resources.queueing_system
-        sge_pe = actual_resources.sge_pe
-        if sge_pe in replace_set:
-            sge_pe = default_resources.sge_pe
-        return_resources = Resources(
-            cpus_per_node = actual_resources.cpus_per_node,
-            nodes = actual_resources.nodes,
-            memory = actual_resources.memory,
-            sw_dir_on_resource = actual_resources.sw_dir_on_resource,
-            queueing_system = queueing_system,
-            queue = queue,
-            sge_pe = sge_pe,
-            resource_name = actual_resources.resource_name,
-            custom_requests = actual_resources.custom_requests,
-            base_URI = actual_resources.base_URI,
-            walltime = actual_resources.walltime,
-            username = actual_resources.username,
-            port = actual_resources.port,
-            extra_config = actual_resources.extra_config,
-            ssh_private_key = actual_resources.ssh_private_key,
-        )
-        return return_resources
 
     def run_jobfile(self, default_wf_resources: Optional[Resources], external_cluster_manager = None):
-        actual_resources = self._map_resources_to_default_resources(default_wf_resources, self.resources)
+        actual_resources = self.resources
         self.set_field_value("resources", actual_resources)
         queueing_system = actual_resources.queueing_system
         temphandler = StringLoggingHandler()
@@ -2111,7 +2093,6 @@ class WorkflowBase(XMLYMLInstantiationBase):
         ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
         ("submit_name", str, "${SUBMIT_NAME}", "The name this workflow was submitted as. This has to be unique on the cluster (per user). The workflow will be rejected if its not.", "a"),
         ("status", int , JobStatus.READY, "Last checked status of the workflow", "a"),
-        ("default_wf_resources", Resources, None, "Computational resources", "m"),
     ]
 
     def __init__(self, *args, **kwargs):
@@ -2247,13 +2228,6 @@ class WorkflowBase(XMLYMLInstantiationBase):
     @property
     def submit_name(self) -> str:
         return self._field_values["submit_name"]
-
-    @property
-    def default_wf_resources(self) -> Resources:
-        return self._field_values["default_wf_resources"]
-
-    def set_default_wf_resources(self, resources: Resources):
-        self._field_values["default_wf_resources"] = resources
 
     @property
     def status(self) -> str:
@@ -2393,9 +2367,8 @@ class Workflow(WorkflowBase):
                         else:
                             external_cluster_manager = None
 
-                        queueing_system = self._get_wfem_queueing_system(tostart)
+                        queueing_system = tostart.resources.queueing_system
                         tostart.run_jobfile(
-                            self.default_wf_resources,
                             external_cluster_manager=external_cluster_manager
                         )
                         self._logger.info("Started job >%s< in directory <%s> ."%(rdjob, tostart.runtime_directory))
@@ -2454,7 +2427,7 @@ class Workflow(WorkflowBase):
         return queueing_system
 
     def _prepare_job(self, wfem : WorkflowExecModule):
-        queueing_system = self._get_wfem_queueing_system(wfem)
+        queueing_system = wfem.resources.queueing_system
 
         jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
         counter = 0
@@ -2647,7 +2620,7 @@ class Workflow(WorkflowBase):
 
     def _postjob_care(self, wfem : WorkflowExecModule):
         jobdirectory = wfem.runtime_directory
-        queueing_system = self._get_wfem_queueing_system(wfem)
+        queueing_system = wfem.resources.queueing_system
         myjobid = wfem.jobid
 
         if not wfem.check_if_job_is_local():
