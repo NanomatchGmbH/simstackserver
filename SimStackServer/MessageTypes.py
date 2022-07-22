@@ -8,100 +8,61 @@ class InvalidMessageError(Exception):
     pass
 
 class JobStatus(IntEnum):
-    """
-    List of Job states:
+    QUEUED = 1
+    RUNNING = 2
+    READY = 3
+    FAILED = 4
+    SUCCESSFUL = 5
+    ABORTED = 6
+    MARKED_FOR_DELETION = 7
 
-    * QUEUED
-    * RUNNING
-    * READY
-    * FAILED
-    * SUCCESSFUL
-    * ABORTED
-    """
-    QUEUED      = auto()
-    RUNNING     = auto()
-    READY       = auto()
-    FAILED      = auto()
-    SUCCESSFUL  = auto()
-    ABORTED     = auto()
-    MARKED_FOR_DELETION = auto()
 
 class SSS_MESSAGETYPE(IntEnum):
-    CONNECT = auto()
-    ACK = auto()
-    LISTWFS = auto()
-    LISTWFSREPLY = auto()
-    LISTWFJOBS = auto()
-    LISTWFJOBSREPLY = auto()
-    GETSINGLEJOBSTATUS = auto()
-    GETSINGLEJOBSTATUSREPLY = auto()
-    ABORTSINGLEJOB = auto()
-    #LISTJOBS = auto()
-    #LISTJOBSREPLY = auto()
-    DELWF = auto()
-    ABORTWF = auto()
-    ABORTJOB = auto()
-    DELJOB = auto()
-    DISCONNECT = auto()
-    SUBMITWF = auto()
-    GETHTTPSERVER = auto()
-    NOOP = auto()
-    SHUTDOWN = auto()
-    SUBMITSINGLEJOB = auto()
-    CLEARSERVERSTATE = auto() # This message type should just be used for testing. It will completely clear the server state.
+    CONNECT = 1
+    ACK = 2
+    LISTWFS = 3
+    LISTWFSREPLY = 4
+    LISTWFJOBS = 5
+    LISTWFJOBSREPLY = 6
+    DELWF = 7
+    ABORTWF = 8
+    ABORTJOB = 9
+    DELJOB = 10
+    DISCONNECT = 11
+    SUBMITWF = 12
+    GETHTTPSERVER = 13
+    GETSINGLEJOBSTATUS = 14
+    GETSINGLEJOBSTATUSREPLY = 15
+    ABORTSINGLEJOB = 16
+    NOOP = 17
+    SHUTDOWN = 18
+    SUBMITSINGLEJOB = 19
+    CLEARSERVERSTATE = 20 # This message type should just be used for testing. It will completely clear the server state.
 
 
 class ResourceStatus(IntEnum):
-    """
-    List of Resource states:
-
-    * READY
-    * UNAVAILABLE
-    """
-    READY = auto()
-    UNAVAILABLE = auto()
+    READY = 1
+    UNAVAILABLE = 2
 
 class ErrorCodes(IntEnum):
-    """
-    List of Errors:
-
-    * NO_ERROR
-    * NOT_CONNECTED
-    * DECODE_ERROR
-    * MALFORMED_JSON
-    * EMPTY_RESPONSE
-    * NOT_A_FILE
-    * INVALID_QUERY
-    * INVALID_SETUP
-    * HTTP_ERROR
-    * CONN_TIMEOUT
-    * REQ_TIMEOUT
-    * SSL_ERROR
-    * CONN_ERROR
-    * UNKONWN_EXCPTION
-    * FILE_IO_ERROR
-    * REMOTE_FILE_NOT_FOUND
-    * RESOURCE_DOES_NOT_EXIST
-    """
-
-    NO_ERROR                    = auto()
-    NOT_CONNECTED               = auto()
-    DECODE_ERROR                = auto()
-    MALFORMED_JSON              = auto()
-    EMPTY_RESPONSE              = auto()
-    NOT_A_FILE                  = auto()
-    INVALID_QUERY               = auto()
-    INVALID_SETUP               = auto()
-    HTTP_ERROR                  = auto()
-    CONN_TIMEOUT                = auto()
-    REQ_TIMEOUT                 = auto()
-    SSL_ERROR                   = auto()
-    CONN_ERROR                  = auto()
-    UNKONWN_EXCPTION            = auto()
-    FILE_IO_ERROR               = auto()
-    REMOTE_FILE_NOT_FOUND       = auto()
-    RESOURCE_DOES_NOT_EXIST     = auto()
-    INVALID_CREDENTIALS         = auto()
+    NO_ERROR = 1
+    NOT_CONNECTED = 2
+    DECODE_ERROR = 3
+    MALFORMED_JSON = 4
+    EMPTY_RESPONSE = 5
+    NOT_A_FILE = 6
+    INVALID_QUERY = 7
+    INVALID_SETUP = 8
+    HTTP_ERROR = 9
+    CONN_TIMEOUT = 10
+    REQ_TIMEOUT = 11
+    SSL_ERROR = 12
+    CONN_ERROR = 13
+    UNKONWN_EXCPTION = 14
+    FILE_IO_ERROR = 15
+    REMOTE_FILE_NOT_FOUND = 16
+    RESOURCE_DOES_NOT_EXIST = 17
+    INVALID_CREDENTIALS = 18
 
 class ConnectionState(IntEnum):
     """
@@ -133,17 +94,12 @@ class ConnectionState(IntEnum):
              \___________________/
     """
 
-    #TODO implement missing transitions, ensure only the above transitions are
-    # allowed
-
-    CONNECTED       = auto()
-    CONNECTING      = auto()
-    DISCONNECTED    = auto()
-    DISCONNECTING   = auto()
-    NOT_SETUP       = auto()
-    FAILED          = auto()
-
-
+    CONNECTED = 1
+    CONNECTING = 2
+    DISCONNECTED = 3
+    DISCONNECTING = 4
+    NOT_SETUP = 5
+    FAILED = 6
 
 
 class Message(object):
