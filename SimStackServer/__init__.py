@@ -2,4 +2,4 @@
   SimStackServer
   Please read the docs found at: https://simstack.readthedocs.io/
 """
-__version__ = "1.1.6"
+__version__ = "1.2.0"
