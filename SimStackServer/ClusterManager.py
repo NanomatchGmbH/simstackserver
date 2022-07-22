@@ -409,12 +409,12 @@ class ClusterManager(object):
         """
             raise FileNotFoundError(errmsg)
 
-        if VDIR == "V6":
+        if VDIR != "V4":
             execproc = f"source {found_conda_shell}; conda activate {myenv}; "
             serverproc = "SimStackServer"
         else:
             execproc = f"source {found_conda_shell}; conda activate {myenv}; python"
-            serverproc = software_directory + '/SimStackServer/SimStackServer.py'
+            serverproc = f"{software_directory}/{VDIR}/SimStackServer/SimStackServer.py"
 
         if VDIR != "V6" and not self.exists(serverproc):
             raise FileNotFoundError(
