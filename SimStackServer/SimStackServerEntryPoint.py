@@ -93,7 +93,9 @@ def main():
         myport = get_open_port()
 
         with open(join(appdirs.user_config_dir,"portconfig.txt"),'wt') as outfile:
-            towrite = "Port, Secret %d %s %s\n"%(myport,mysecret, zmq.zmq_version())
+            from SimStackServer import __version__ as server_version
+            allversions = f"SERVER,{server_version},ZMQ,{zmq.zmq_version()}"
+            towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
             outfile.write(towrite)
             print(towrite[:-1])
         sys.stdout.flush()

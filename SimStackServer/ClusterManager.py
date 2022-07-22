@@ -480,11 +480,36 @@ class ClusterManager(object):
                 raise ConnectionError("Expected port and secret key and zmq version but myline was: <%s>"%firstline )
             password = myline[3]
             port = int(myline[2])
-            zmq_version_string = myline[4].strip()
-            if zmq_version_string != zmq.zmq_version():
-                errstring = "ZMQ version mismatch: Client: %s != Server: %s"%(zmq.zmq_version(), zmq_version_string)
-                # We should simply check if both version are above 4.3.2, then the version mismatch does not matter.
-                #print(errstring)
+            server_zmq_version_string = myline[4].strip()
+            if server_zmq_version_string.startswith("SERVER"):
+                #Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION
+                splitversion = server_zmq_version_string.split(",")
+                serverversion = splitversion[1]
+
+                semver_serversion = serverversion.split(".")[0:2]
+                from SimStackServer import __version__ as myversion
+
+                semver_myversion = myversion.split(".")[0:2]
+                for client_single, server_single in zip(semver_myversion, semver_serversion):
+                    if server_single > client_single:
+                        print(f"Server version {serverversion} newer than Client version {myversion}. This might lead to issues. Please update client.")
+                        print("Will still try to connect")
+                        break
+                    if client_single > server_single:
+                        print(f"Client version {myversion} newer than Server version {serverversion}. This might lead to issues. Please update server.")
+                        print("Will still try to connect")
+                        break
+
+                zmq_version_string=splitversion[3]
+            else:
+                print(f"Client version newer than Server version. This might lead to issues. Please update server.")
+
+                zmq_version_string=server_zmq_version_string
+
+            if zmq_version_string.startswith("4.2."):
+                # If new issues with ZMQ versions crop up, please specify here.
+                errstring = "ZMQ version mismatch: Client requires version newer than 4.3.x"
+                print(errstring)
 
             break
         stderrmessage = " - ".join(stderr)
