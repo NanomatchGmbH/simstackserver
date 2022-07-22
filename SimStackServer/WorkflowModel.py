@@ -2096,6 +2096,7 @@ class WorkflowBase(XMLYMLInstantiationBase):
         ("name", str, "Workflow", "Name of this workflow. Something like Hans or Fritz.", "a"),
         ("submit_name", str, "${SUBMIT_NAME}", "The name this workflow was submitted as. This has to be unique on the cluster (per user). The workflow will be rejected if its not.", "a"),
         ("status", int , JobStatus.READY, "Last checked status of the workflow", "a"),
+        ("queueing_system",str, "unset", "Only present for legacy purposes. Do not use.", "a")
     ]
 
     def __init__(self, *args, **kwargs):
@@ -2115,6 +2116,11 @@ class WorkflowBase(XMLYMLInstantiationBase):
     def _get_template_dir():
         data_dir = os.path.dirname(os.path.realpath(Templates.__file__))
         return data_dir
+
+    @property
+    def queueing_system(self) -> str:
+        return self._field_values["queueing_system"]
+
 
     def from_xml(self, in_xml):
         super().from_xml(in_xml)
