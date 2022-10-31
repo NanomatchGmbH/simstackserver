@@ -93,7 +93,7 @@ def wano_constructor(wano: WaNoListEntry):
     wano_dir_root = wano.folder
     xml = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
-    from WaNo.view.WaNoViews import WanoQtViewRoot
+    from simstack.view.WaNoViews import WanoQtViewRoot
     # MODELROOTDIRECT
     wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, explicit_xml=xml)
     wmr.set_view_class(WanoQtViewRoot)
@@ -143,7 +143,7 @@ class WaNoFactory(object):
             WaNoMatrixModel, WaNoThreeRandomLetters, WaNoSwitchModel, WaNoDynamicChoiceModel, \
             WaNoNoneModel
         try:
-            from WaNo.view.WaNoViews import WaNoItemFloatView, WaNoBoxView, WaNoItemStringView, \
+            from simstack.view.WaNoViews import WaNoItemFloatView, WaNoBoxView, WaNoItemStringView, \
                 WaNoItemBoolView, WaNoItemFileView, WaNoChoiceView, MultipleOfView, WaNoItemIntView, \
                 WaNoTabView, WaNoGroupView, WaNoScriptView, WaNoDropDownView, WaNoMatrixFloatView, WaNoMatrixStringView, \
                 WaNoSwitchView, WaNoInvisibleBoxView, WaNoNone

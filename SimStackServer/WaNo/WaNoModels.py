@@ -821,7 +821,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.import_model = None
             self.export_model = None
         else:
-            from WaNo.view.PropertyListView import ImportTableModel, ExportTableModel
+            from simstack.view.PropertyListView import ImportTableModel, ExportTableModel
 
             self.import_model = ImportTableModel(parent=None, wano_parent=self)
             self.import_model.make_default_list()
