@@ -804,9 +804,18 @@ then
     # In this case we are in legacy installation mode:
     export NANOMATCH="$BASEFOLDER/../.."
 fi
+
 if [ -f "$BASEFOLDER/nanomatch_environment_config.sh" ]
 then
     source "$BASEFOLDER/nanomatch_environment_config.sh"
+fi
+if [ -f "$BASEFOLDER/simstack_environment_config.sh" ]
+then
+    source "$BASEFOLDER/simstack_environment_config.sh"
+fi
+if [ -f "/etc/simstack/simstack_environment_config.sh" ]
+then
+    source "/etc/simstack/simstack_environment_config.sh"
 fi
 ###########################################################
 
