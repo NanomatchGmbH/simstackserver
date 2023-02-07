@@ -924,11 +924,12 @@ fi
     cd $CLUSTERJOB_WORKDIR
     %s
 """%(self._get_prolog_unicore_compatibility(actual_resources), self.exec_command)
+            if queueing_system == "sge":
+                kwargs["sge_pe"] = actual_resources.sge_pe
             try:
                 jobscript = clusterjob.JobScript(toexec, backend=queueing_system, jobname = self.given_name,
                                                  time = mytimestring, nodes = int(actual_resources.nodes),
                                                  ppn = int(actual_resources.cpus_per_node), mem = actual_resources.memory,
-                                                 sge_pe = actual_resources.sge_pe,
                                                  stdout = self.given_name + ".stdout", stderr = self.given_name + ".stderr",
                                                  workdir = self.runtime_directory, **kwargs
                 )
