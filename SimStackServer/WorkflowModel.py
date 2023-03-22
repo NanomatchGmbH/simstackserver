@@ -39,6 +39,7 @@ from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.Reporting import Templates
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler, abs_resolve_file
+from SimStackServer.Util.ResultRepo import ResultRepo
 from clusterjob import FAILED
 from TreeWalker.flatten_dict import flatten_dict
 from jinja2 import Template
@@ -2294,6 +2295,8 @@ class Workflow(WorkflowBase):
         self._filepath_to_aiida_uuid = {}
         from SimStackServer.RemoteServerManager import RemoteServerManager
         self._remote_server_manager = RemoteServerManager.get_instance()
+        self._result_repo = ResultRepo()
+        self._input_hashes = {}
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -2355,6 +2358,14 @@ class Workflow(WorkflowBase):
                     wfvars = self._postjob_care(running)
                     self.graph.finish(running_job)
                     print("Finished ",running_job)
+
+                    if running.uid not in self._input_hashes:
+                        self._logger.warning(f"[REPO] Result of {running} could not be stored in result database because its hash was not \
+                                          computed before starting the job.")
+                    else:
+                        running_hash = self._input_hashes[running.uid]
+                        self._result_repo.store_results(running_hash, running)
+
                 except WorkflowAbort as e:
                     self.graph.fail(running_job)
                     running.set_failed()
@@ -2379,8 +2390,20 @@ class Workflow(WorkflowBase):
                         self.abort()
                         return True
                     else:
-                        self._field_values["status"] = JobStatus.RUNNING
                         self.graph.start(rdjob)
+                        input_hash = self._result_repo.compute_input_hash(tostart)
+                        if input_hash in self._input_hashes:
+                            self._logger.warning(f"[REPO] A WFEM with the same hash as {tostart} ({input_hash}) has already been started in this workflow! \
+                                               This should not happen as all WFEMs within a workflow need to have a unique hash.")
+                        else:
+                            self._input_hashes[tostart.uid] = input_hash
+
+                            if self._result_repo.load_results(input_hash, tostart):
+                                self._postjob_care(tostart)
+                                self.graph.finish(rdjob)
+                                continue
+                        
+                        self._field_values["status"] = JobStatus.RUNNING
                         if not self._check_if_job_is_local(tostart):
                             external_cluster_manager = self._get_clustermanager_from_job(tostart)
                         else:
