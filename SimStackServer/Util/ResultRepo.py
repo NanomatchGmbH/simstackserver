@@ -37,7 +37,7 @@ def get_wfem_repr(wfem):
 
 def compute_files_hash(files: Iterable[Path], base_dir: Path):
     """
-    Compute the aggregate hash of a set of file consisting of their content and paths relative to base_dir.
+    Compute the aggregate hash of a set of files consisting of their content and paths relative to base_dir.
     """
     hash = hash_algorithm()
     for path in files:
@@ -129,7 +129,7 @@ class ResultRepo:
                               Results will be re-computed.")
             return False
 
-        source_dir = Path(existing_solution.output_directory)
+        source_dir = Path.home() / wfem.resources.basepath / Path(existing_solution.output_directory)
         target_dir = Path(wfem.runtime_directory)
 
         if not source_dir.exists():
@@ -162,6 +162,7 @@ class ResultRepo:
             wfem (WorkFlowExecModule)
         """
         source_dir = Path(wfem.runtime_directory)
+        base_path = Path.home() / wfem.resources.basepath
         with open(source_dir / "original_job.txt", "w") as f:
             f.write(f"original job path: {source_dir}")
 
@@ -172,7 +173,7 @@ class ResultRepo:
         result = Result(
             input_hash=input_hash,
             output_hash=output_hash,
-            output_directory=wfem.runtime_directory,
+            output_directory=str(source_dir.relative_to(base_path)),
         )
 
         with Session(engine) as session:
