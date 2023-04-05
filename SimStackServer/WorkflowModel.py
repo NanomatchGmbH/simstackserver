@@ -698,6 +698,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         ("path", str, "unset", "Path to this WFEM in the workflow.", "a"),
         ("wano_xml", str, "unset", "Name of the WaNo XML.", "a"),
         ("outputpath", str, "unset", "Path to the output directory of this wfem in the workflow.", "a"),
+        ("original_result_directory", str, "", "Path to the output directory of the wfem where the results were originally computed.", "a"),
         ("inputs",       WorkflowElementList, None, "List of Input URLs", "m"),
         ("outputs",      WorkflowElementList, None, "List of Outputs URLs", "m"),
         ("exec_command", str,                 None, "Command to be executed as part of BSS. Example: 'date'", "m"),
@@ -1281,6 +1282,12 @@ fi
         assert self._aiida_valuedict is not None, "AiiDA value dict was not generated before query."
         return self._aiida_valuedict
 
+    @property
+    def original_result_directory(self):
+        return self._field_values["original_result_directory"]
+    
+    def set_original_result_directory(self, directory_path):
+        self._field_values["original_result_directory"] = directory_path
 
 class DirectedGraph(object):
     def __init__(self, *args, **kwargs):
@@ -2390,6 +2397,7 @@ class Workflow(WorkflowBase):
                         self.abort()
                         return True
                     else:
+                        self._field_values["status"] = JobStatus.RUNNING
                         self.graph.start(rdjob)
                         input_hash = self._result_repo.compute_input_hash(tostart)
                         if input_hash in self._input_hashes:
@@ -2397,13 +2405,13 @@ class Workflow(WorkflowBase):
                                                This should not happen as all WFEMs within a workflow need to have a unique hash.")
                         else:
                             self._input_hashes[tostart.uid] = input_hash
-
-                            if self._result_repo.load_results(input_hash, tostart):
+                            found_result, original_path = self._result_repo.load_results(input_hash, tostart)
+                            if found_result:
                                 self._postjob_care(tostart)
+                                tostart.set_original_result_directory(original_path)
                                 self.graph.finish(rdjob)
                                 continue
                         
-                        self._field_values["status"] = JobStatus.RUNNING
                         if not self._check_if_job_is_local(tostart):
                             external_cluster_manager = self._get_clustermanager_from_job(tostart)
                         else:
@@ -2820,7 +2828,8 @@ class Workflow(WorkflowBase):
                     'name': jobobj.given_name,
                     'type': 'j',
                     'path': jobdir,
-                    'status': status
+                    'status': status,
+                    'original_result_directory': jobobj.original_result_directory if jobobj.original_result_directory != "" else None
                 }
                 files.append(jobdict)
         return files

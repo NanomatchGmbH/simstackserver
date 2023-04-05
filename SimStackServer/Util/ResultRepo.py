@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Tuple
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
 from sqlalchemy import create_engine, select, Text, String
 from pathlib import Path
@@ -106,7 +106,7 @@ class ResultRepo:
 
         return hash.hexdigest()
 
-    def load_results(self, input_hash: str, wfem) -> bool:
+    def load_results(self, input_hash: str, wfem) -> Tuple[bool, str]:
         """
         Look for an existing result for the given WFEM and place the output files in the exec_directory if a suitable result was found.
 
@@ -117,6 +117,7 @@ class ResultRepo:
         Returns:
             bool: True if a suitable result was found. False if no result was found in the database, 
                 the files no longer exist in the filesystem or the files no longer match the output_hash saved in the database.
+            str: The path from which the files were copied in case a suitable result was found
         """
         engine = self._get_engine(wfem.resources.basepath)
 
@@ -127,7 +128,7 @@ class ResultRepo:
         if existing_solution is None:
             self._logger.info(f"[REPO] Did not find existing solution for {get_wfem_repr(wfem)} with hash {input_hash}. \
                               Results will be re-computed.")
-            return False
+            return False, None
 
         source_dir = Path.home() / wfem.resources.basepath / Path(existing_solution.output_directory)
         target_dir = Path(wfem.runtime_directory)
@@ -135,7 +136,7 @@ class ResultRepo:
         if not source_dir.exists():
             self._logger.warning(
                 f"[REPO] Result directory {source_dir} could not be found. Results will be re-computed.")
-            return False
+            return False, None
 
         self._logger.info(
             f"[REPO] Found existing solution for {get_wfem_repr(wfem)} with hash {input_hash} in {source_dir}")
@@ -146,11 +147,11 @@ class ResultRepo:
         if source_hash != existing_solution.output_hash:
             self._logger.warning(f"[REPO] One or multiple files in {source_dir} appear to have changed. \
                                  Results will be re-computed.")
-            return False
+            return False, None
 
         self._logger.info(f"[REPO] Files will be copied from {source_dir} to {target_dir}")
         shutil.copytree(source_dir, target_dir, dirs_exist_ok=True)
-        return True
+        return True, str(source_dir)
 
     def store_results(self, input_hash: str, wfem):
         """
