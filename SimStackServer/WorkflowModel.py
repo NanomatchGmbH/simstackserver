@@ -75,6 +75,14 @@ def _is_basetype(check_type):
     # This can be made a bit better, but currently we just ask, whether a to_xml exists:
     return not hasattr(check_type, "to_xml")
 
+def _str_to_bool(value: str):
+    if value.lower() == "true":
+        return True
+    elif value.lower() == "false":
+        return False
+    else:
+        raise ValueError(f"Unknown bool '{value}'.")
+
 class XMLYMLInstantiationBase(object):
     """
     XMLYMLInstantiationBase provides XML and YML parsers and writers for more or less trivial data types.
@@ -201,6 +209,8 @@ class XMLYMLInstantiationBase(object):
             if _is_basetype(childtype):
                 if childtype == JobStatus:
                     self._field_values[field] = childtype(int(child.text))
+                elif childtype == bool:
+                    self._field_values[field] = _str_to_bool(child.text)
                 else:
                     self._field_values[field] = childtype(child.text)
             else:
@@ -214,6 +224,8 @@ class XMLYMLInstantiationBase(object):
             childtype = self._field_types[field]
             if childtype == JobStatus:
                 self._field_values[field] = childtype(int(value))
+            elif childtype == bool:
+                self._field_values[field] = _str_to_bool(value)
             else:
                 self._field_values[field] = self._field_types[field](value)
 
@@ -231,6 +243,8 @@ class XMLYMLInstantiationBase(object):
             if _is_basetype(childtype):
                 if childtype == JobStatus:
                     self._field_values[field] = childtype(int(value))
+                elif childtype == bool:
+                    self._field_values[field] = _str_to_bool(value)
                 else:
                     self._field_values[field] = childtype(value)
             else:
@@ -555,6 +569,7 @@ class Resources(XMLYMLInstantiationBase):
         ("extra_config", str, "None Required (default)", "Filepath on cluster to configuration file required before Serverstart is possible", "m"),
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m"),
         ("sge_pe", str, "", "SGE Parallel Environment. Only applicable to SGE queue", "m"),
+        ("reuse_results", bool, True, "Reuse existing results", "a"),
     ]
 
     def __init__(self, *args, **kwargs):
@@ -583,6 +598,7 @@ class Resources(XMLYMLInstantiationBase):
             "queue",
             "custom_requests",
             "sge_pe",
+            "reuse_results"
         ]
 
     @classmethod
@@ -652,6 +668,10 @@ class Resources(XMLYMLInstantiationBase):
     @property
     def extra_config(self):
         return self._field_values["extra_config"]
+
+    @property
+    def reuse_results(self):
+        return self._field_values["reuse_results"]
 
     def overwrite_unset_fields_from_default_resources(self, default_resources : 'Resources'):
         queue = self.queue
@@ -2401,17 +2421,19 @@ class Workflow(WorkflowBase):
                         self.graph.start(rdjob)
                         input_hash = self._result_repo.compute_input_hash(tostart)
                         if input_hash in self._input_hashes:
-                            self._logger.warning(f"[REPO] A WFEM with the same hash as {tostart} ({input_hash}) has already been started in this workflow! \
-                                               This should not happen as all WFEMs within a workflow need to have a unique hash.")
+                            self._logger.warning(f"[REPO] A WFEM with the same hash as {tostart.outputpath} ({self._input_hashes[input_hash].outputpath}) has already been started in this workflow! \
+                                                   This should not happen as all WFEMs within a workflow need to have a unique hash.")
                         else:
                             self._input_hashes[tostart.uid] = input_hash
-                            found_result, original_path = self._result_repo.load_results(input_hash, tostart)
-                            if found_result:
-                                self._postjob_care(tostart)
-                                tostart.set_original_result_directory(original_path)
-                                self.graph.finish(rdjob)
-                                continue
-                        
+                            if tostart.resources.reuse_results:
+                                found_result, original_path = self._result_repo.load_results(input_hash, tostart)
+                                if found_result:
+                                    self._postjob_care(tostart)
+                                    tostart.set_original_result_directory(original_path)
+                                    self.graph.finish(rdjob)
+                                    continue
+                            else:
+                                self._logger.info(f"[REPO] Any existing results will not be reused for {tostart.outputpath} since the feature is disabled by the resource configuration.")
                         if not self._check_if_job_is_local(tostart):
                             external_cluster_manager = self._get_clustermanager_from_job(tostart)
                         else:
