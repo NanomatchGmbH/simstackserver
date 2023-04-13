@@ -18,3 +18,4 @@ treewalker==1.0.0
 xmltodict==0.12.0
 clusterjob==2.0.0
 threadfarm==2.0.0
+SQLAlchemy==2.0.6
