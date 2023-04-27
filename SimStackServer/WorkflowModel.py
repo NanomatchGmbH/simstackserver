@@ -569,7 +569,7 @@ class Resources(XMLYMLInstantiationBase):
         ("extra_config", str, "None Required (default)", "Filepath on cluster to configuration file required before Serverstart is possible", "m"),
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m"),
         ("sge_pe", str, "", "SGE Parallel Environment. Only applicable to SGE queue", "m"),
-        ("reuse_results", bool, True, "Reuse existing results", "a"),
+        ("reuse_results", bool, False, "Reuse existing results", "a"),
     ]
 
     def __init__(self, *args, **kwargs):
