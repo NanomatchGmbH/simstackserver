@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.3] - 2023-04-13
 
+- Variables in SimStackServer environment provided to script execution env
+
+## [1.3.3] - 2023-04-13
+
 - Added reusability option
 
 ## [1.3.2] - 2023-02-07

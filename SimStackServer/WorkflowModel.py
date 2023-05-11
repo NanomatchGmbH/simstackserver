@@ -1,9 +1,11 @@
 import abc
 import copy
 import datetime
+import io
 import json
 import pathlib
 import re
+import subprocess
 import time
 import logging
 import os
@@ -20,7 +22,7 @@ from os.path import join
 from pathlib import Path
 
 from os import path
-from typing import Optional
+from typing import Optional, Dict
 
 import yaml
 from lxml import etree
@@ -797,30 +799,56 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         remote_server_manager = RemoteServerManager.get_instance()
         return remote_server_manager.server_from_resource(self.resources)
 
+    def _get_mamba_variables(self) -> Dict[str, str]:
+        """ Gets all manually exported conda variables. """
+        for com in ["mamba", "conda"]:
+            try:
+                conda_command = [com, "env", "config", "vars", "list", "--json"]
+                proc = subprocess.run(conda_command, capture_output=True, encoding="Utf-8")
+                if proc.returncode != 0:
+                    self._logger.error(f"Could not parse Conda variables. Stdout was: {proc.stdout}, Stderr: {proc.stderr}")
+                    continue
+                text = proc.stdout
+                vardict = json.loads(text)
+                return vardict
+            except FileNotFoundError:
+                pass
+        return {}
+
     def _get_prolog_unicore_compatibility(self, resources):
         """
 
         :param resources:
         :return:
         """
-        return """
-UC_NODES=%d; export UC_NODES;
-UC_PROCESSORS_PER_NODE=%d; export UC_PROCESSORS_PER_NODE;
-UC_TOTAL_PROCESSORS=%d; export UC_TOTAL_PROCESSORS;
-UC_MEMORY_PER_NODE=%d; export UC_MEMORY_PER_NODE;
-BASEFOLDER="%s"
+        exported_variables = self._get_mamba_variables()
+
+        varstring = [f"export {var}={content}" for var, content in exported_variables.items()]
+        varstring = "\n".join(varstring)
+
+        script = f"""
+UC_NODES={resources.nodes}; export UC_NODES;
+UC_PROCESSORS_PER_NODE={resources.cpus_per_node}; export UC_PROCESSORS_PER_NODE;
+UC_TOTAL_PROCESSORS={resources.cpus_per_node*resources.nodes}; export UC_TOTAL_PROCESSORS;
+UC_MEMORY_PER_NODE={resources.memory}; export UC_MEMORY_PER_NODE;
+BASEFOLDER="{self._conda_base_prefix}"
 
 # The following are exports to resolve previous and future
 # versions of the SimStackServer conda / python interpreters
 ###########################################################
-simstack_server_mamba_source () {{
+# These are the exports present in SimStackServer conda environment:
+{varstring}
+# End
+simstack_server_mamba_source () {{{{
     if [ -d "$BASEFOLDER/../local_anaconda" ]
     then
         source $BASEFOLDER/../local_anaconda/etc/profile.d/conda.sh
     else
         source $BASEFOLDER/etc/profile.d/conda.sh
     fi
-}}
+}}}}
+
+# Following are the legacy exports:
 if [ -d "$BASEFOLDER/../local_anaconda" ]
 then
     # In this case we are in legacy installation mode:
@@ -841,7 +869,8 @@ then
 fi
 ###########################################################
 
-"""%(resources.nodes,resources.cpus_per_node,resources.cpus_per_node*resources.nodes,resources.memory, self._conda_base_prefix)
+"""
+        return script
 
     @staticmethod
     def _time_from_seconds_to_clusterjob_timestring(time_in_seconds):
