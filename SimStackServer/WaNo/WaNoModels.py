@@ -10,6 +10,7 @@ from functools import partial
 from json import JSONDecodeError
 from os.path import join, isabs
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
@@ -110,6 +111,25 @@ class WaNoModelDictLike(AbstractWanoModel):
 
     def set_data(self, wano_dict):
         self.wano_dict = wano_dict
+
+    def get_secure_schema(self) -> Optional[str]:
+        child_properties_dict = {}
+
+        for wano_name, wano_element in self.wano_dict.items():
+            secure_schema = wano_element.get_secure_schema()
+            if secure_schema:
+                child_properties_dict.update(secure_schema)
+            else:
+                child_properties_dict[wano_name] = f"missing_{wano_element.__class__}"
+
+        properties_dict = {
+            self.name: {
+                "type": "object",
+                "properties": child_properties_dict,
+                "required": [*child_properties_dict.keys()]
+            },
+        }
+        return properties_dict
 
     def wanos(self):
         return self.wano_dict.values()
@@ -653,6 +673,24 @@ class MultipleOfModel(AbstractWanoModel):
     def listlike(self):
         return True
 
+    def get_secure_schema(self) -> Optional[str]:
+        first_item = self.list_of_dicts[0]
+        required_list = []
+        child_properties_dict = {}
+        for item_name, item_dict in first_item.items():
+            required_list.append(item_name)
+            child_properties_dict.update(item_dict.get_secure_schema())
+        schema = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties":  child_properties_dict,
+            },
+            "required": required_list,
+        }
+
+        return {self.name : schema}
+
     def number_of_multiples(self):
         return len(self.list_of_dicts)
 
@@ -838,6 +876,21 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         self.metas = OrderedDictIterHelper()
         self._parse_defaults()
+
+    def get_secure_schema(self) -> str:
+        child_properties = super().get_secure_schema()
+        # WaNoModelRoot has to filter one level and TABS due to the super call
+        child_properties = child_properties[self.name]["properties"]
+        baseline_schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://example.com/product.schema.json",
+            "title": self.name,
+            "description": f"{self.name} secure schema",
+            "type": "object",
+            "properties": child_properties,
+            "required": [*child_properties.keys()]
+        }
+        return json.dumps(baseline_schema, indent=2)
 
     def get_new_resource_model(self) -> Resources:
         return self._new_resource_model
@@ -1622,6 +1675,14 @@ class WaNoItemFloatModel(AbstractWanoModel):
             return import_delta
         return self.get_data()
 
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "number"
+            }
+        }
+        return schema
+
     def apply_delta(self, delta):
         if not self._apply_import_delta(delta):
             self.set_data(delta)
@@ -1668,6 +1729,14 @@ class WaNoItemIntModel(AbstractWanoModel):
 
     def get_data(self):
         return int(self.myint)
+
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "int"
+            }
+        }
+        return schema
 
     def set_data(self, data):
         self.myint = int(data)
@@ -1736,6 +1805,14 @@ class WaNoItemBoolModel(AbstractWanoModel):
     def get_delta_to_default(self):
         return self.mybool
 
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "boolean"
+            }
+        }
+        return schema
+
     def apply_delta(self, delta):
         self.mybool = delta
 
@@ -1782,6 +1859,14 @@ class WaNoItemFileModel(AbstractWanoModel):
     def set_data(self, data):
         self.mystring = str(data)
         super(WaNoItemFileModel,self).set_data(data)
+
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "string"
+            }
+        }
+        return schema
 
     def __getitem__(self, item):
         return None

@@ -27,7 +27,7 @@ from SimStackServer.WorkflowModel import Resources, WorkflowExecModule
 class SSHExpectedDirectoryError(Exception):
     pass
 
-class ClusterManager(object):
+class ClusterManager:
     def __init__(self,
                  url,
                  port,

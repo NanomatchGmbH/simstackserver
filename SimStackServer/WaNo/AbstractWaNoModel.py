@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import re
 from collections import OrderedDict
+from typing import Optional
 
 from jinja2 import Template
 import logging
@@ -106,6 +107,15 @@ class AbstractWanoModel:
     def get_view_class(self):
         return self._vc
 
+    @abc.abstractmethod
+    def get_secure_schema(self) -> Optional[str]:
+        """
+        Creates secure execution schema from WaNo element
+
+        :return:
+        Text block of secure schema or None if not applicable
+        """
+        return None
 
     @property
     def path(self):

@@ -1,17 +1,13 @@
 import os
-import sys
 import unittest
 
 
 from os import path
 
-import sys
-#sys.path.append()
 from pathlib import Path
 
 from lxml import etree
 
-from SimStackServer.WaNo import AbstractWaNoModel
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoFactory import wano_constructor_helper, wano_without_view_constructor_helper
 from SimStackServer.WaNo.WaNoModels import WaNoItemFloatModel, WaNoModelRoot
@@ -112,7 +108,7 @@ class TestWaNoModels(unittest.TestCase):
         wano_dir_root = Path(os.path.dirname(os.path.realpath(wanofile)))
 
         #MODELROOTDIRECT
-        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only=True)
+        wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only=True, explicit_xml=wanofile)
         wmr.parse_from_xml(xml)
         wmr = wano_without_view_constructor_helper(wmr)
         outdict = {}
@@ -135,6 +131,11 @@ class TestWaNoModels(unittest.TestCase):
         self.assertListEqual(pc.paths, wanopaths)
         return wmr
 
+    def test_dep_secure_schema(self):
+        mywano : WaNoModelRoot = self._construct_wano_nogui(self.depxml)
+        with open("deposit_secureschema.json",'wt') as outfile:
+            outfile.write(mywano.get_secure_schema())
 
     def test_dep_nogui(self):
-        self._construct_wano_nogui(self.depxml)
+        mywano : WaNoModelRoot = self._construct_wano_nogui(self.depxml)
+        print(mywano.get_secure_schema())

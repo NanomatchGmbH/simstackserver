@@ -691,21 +691,6 @@ class Resources(XMLYMLInstantiationBase):
         if sge_pe in replace_set:
             self.set_field_value("sge_pe", default_resources.sge_pe)
 
-
-class CurrentTrash(object):
-    otherfields = ["template_directory",
-            "instantiated_directory",
-            "input_files",
-            "output_files"]
-
-    def template_directory(self):
-        return self._template_directory
-
-    @property
-    def instantiated_directory(self):
-        return self._instantiated_directory
-
-
 class ReportError(Exception):
     pass
 
@@ -2549,6 +2534,9 @@ class Workflow(WorkflowBase):
         #    xml = etree.parse(infile)
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         #MODELROOTDIRECT
+        # Split zwischen TrustedExecutionWaNoModelRoot
+        #  TEWaNoModelRoot(...) # kein custom exec command
+
         wmr = WaNoModelRoot(wano_dir_root = wano_dir_root, model_only = True, explicit_xml=explicit_wfxml)
         try:
             wmr.read(wano_dir_root)
