@@ -116,7 +116,6 @@ class WaNoFactory(object):
             "WaNoMatrixString": WaNoMatrixModel,
             "WaNoInt": WaNoItemIntModel,
             "WaNoString": WaNoItemStringModel,
-            "WaNoListBox": WaNoModelListLike,
             "WaNoBox": WaNoModelDictLike,
             "WaNoDictBox": WaNoModelDictLike,
             "WaNoInviBox": WaNoModelDictLike,

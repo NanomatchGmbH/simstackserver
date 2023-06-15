@@ -136,6 +136,18 @@ class TestWaNoModels(unittest.TestCase):
         with open("deposit_secureschema.json",'wt') as outfile:
             outfile.write(mywano.get_secure_schema())
 
+        secure_schema = mywano.get_secure_schema()
+        print(secure_schema)
+
+
+    def test_lf_secure_schema(self):
+        mywano : WaNoModelRoot = self._construct_wano_nogui(self.lfxml)
+        with open("lf_secureschema.json",'wt') as outfile:
+            outfile.write(mywano.get_secure_schema())
+
+        secure_schema = mywano.get_secure_schema()
+        print(secure_schema)
+
     def test_dep_nogui(self):
         mywano : WaNoModelRoot = self._construct_wano_nogui(self.depxml)
         print(mywano.get_secure_schema())

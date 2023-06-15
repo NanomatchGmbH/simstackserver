@@ -114,21 +114,33 @@ class WaNoModelDictLike(AbstractWanoModel):
 
     def get_secure_schema(self) -> Optional[str]:
         child_properties_dict = {}
-
+        oneOf_properties_dict = None
+        required_keys = []
+        number_of_switches = 0
         for wano_name, wano_element in self.wano_dict.items():
+            if isinstance(wano_element, WaNoSwitchModel):
+                number_of_switches += 1
+                if number_of_switches == 2:
+                    raise NotImplementedError("Only a single switch supported per DictBox")
+                oneOf_properties_dict = wano_element.get_secure_schema()
+                continue
+
+            required_keys.append(wano_name)
             secure_schema = wano_element.get_secure_schema()
             if secure_schema:
                 child_properties_dict.update(secure_schema)
             else:
-                child_properties_dict[wano_name] = f"missing_{wano_element.__class__}"
+                raise NotImplementedError(f"missing_{wano_element.__class__} secure schema generator")
 
         properties_dict = {
             self.name: {
                 "type": "object",
                 "properties": child_properties_dict,
-                "required": [*child_properties_dict.keys()]
+                "required": required_keys,
             },
         }
+        if oneOf_properties_dict:
+            properties_dict[self.name].update(oneOf_properties_dict)
         return properties_dict
 
     def wanos(self):
@@ -219,6 +231,15 @@ class WaNoChoiceModel(AbstractWanoModel):
 
             if self.chosen == myid:
                 child.attrib["chosen"] = "True"
+
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "enum": self.choices,
+            }
+        }
+        return schema
+
 
 class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def __init__(self, *args, **kwargs):
@@ -323,6 +344,14 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
 
         super().decommission()
 
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "string"
+            }
+        }
+        return schema
+
 
 
 class WaNoMatrixModel(AbstractWanoModel):
@@ -420,6 +449,17 @@ class WaNoMatrixModel(AbstractWanoModel):
     def update_xml(self):
         self.xml.text = self._tostring(self.storage)
 
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name : {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": ["number", "string", "integer"],
+                }
+            }
+        }
+        return schema
 
 class WaNoModelListLike(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -488,10 +528,9 @@ class WaNoModelListLike(AbstractWanoModel):
             wano.decommission()
         super().decommission()
 
-    #def disconnectSignals(self):
-    #    super(WaNoModelListLike,self).disconnectSignals()
-    #    for wano in self.wano_list:
-    #        wano.disconnectSignals()
+    def get_secure_schema(self) -> Optional[str]:
+        raise NotImplementedError("WaNo Secure Schema not supported on pure WaNoModelListLike")
+
 
 class WaNoNoneModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -499,6 +538,7 @@ class WaNoNoneModel(AbstractWanoModel):
 
     def parse_from_xml(self, xml):
         self.xml = xml
+        super().parse_from_xml(xml)
 
     def get_data(self):
         return ""
@@ -521,6 +561,14 @@ class WaNoNoneModel(AbstractWanoModel):
 
     def __repr__(self):
         return ""
+
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "string",
+            }
+        }
+        return schema
 
 
 class WaNoSwitchModel(WaNoModelListLike):
@@ -638,6 +686,17 @@ class WaNoSwitchModel(WaNoModelListLike):
             wano.decommission()
         super().decommission()
 
+    def get_secure_schema(self) -> Optional[str]:
+        child_schemata = []
+        for child in self.wano_list:
+            if isinstance(child, WaNoSwitchModel):
+                raise NotImplementedError("A switch model cannot be directly inside a switch model.")
+            child_schemata.append(child.get_secure_schema())
+        schema = {
+            "oneOf": child_schemata,
+        }
+        return schema
+
 
 class MultipleOfModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -677,7 +736,15 @@ class MultipleOfModel(AbstractWanoModel):
         first_item = self.list_of_dicts[0]
         required_list = []
         child_properties_dict = {}
+        oneOf_property_dict = None
+        number_of_switches = 0
         for item_name, item_dict in first_item.items():
+            if isinstance(item_dict, WaNoSwitchModel):
+                number_of_switches+=1
+                if number_of_switches == 2:
+                    raise NotImplementedError("Only one WaNoSwitch allowed per MultipleOf")
+                oneOf_property_dict = item_dict.get_secure_schema()
+                continue
             required_list.append(item_name)
             child_properties_dict.update(item_dict.get_secure_schema())
         schema = {
@@ -688,6 +755,8 @@ class MultipleOfModel(AbstractWanoModel):
             },
             "required": required_list,
         }
+        if oneOf_property_dict is not None:
+            schema["items"].update(oneOf_property_dict)
 
         return {self.name : schema}
 
@@ -1635,19 +1704,6 @@ class WaNoModelRoot(WaNoModelDictLike):
             wano_sub.apply_delta(value)
 
 
-class WaNoVectorModel(AbstractWanoModel):
-    def __init__(self, *args, **kwargs):
-        super(WaNoVectorModel, self).__init__(*args, **kwargs)
-        self.myvalues = float(kwargs['xml'].text)
-        for child in self.xml:
-            if not is_regular_element(child):
-                continue
-            my_id = int(child.attrib["id"])
-            value = float(child.text)
-            while (len(self.myvalues) <= my_id):
-                self.myvalues.append(0.0)
-            self.myvalues[my_id] = value
-
 
 class WaNoItemFloatModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -2071,6 +2127,14 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def __repr__(self):
         return repr(self.mystring)
+
+    def get_secure_schema(self) -> Optional[str]:
+        schema = {
+            self.name: {
+                "type": "string"
+            }
+        }
+        return schema
 
 class WaNoThreeRandomLetters(WaNoItemStringModel):
     def __init__(self, *args, **kwargs):
