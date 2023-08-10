@@ -21,7 +21,6 @@ from paramiko import SFTPAttributes
 from SimStackServer.MessageTypes import Message, ErrorCodes
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories, filewalker
-from SimStackServer.WorkflowModel import Resources, WorkflowExecModule
 
 
 class SSHExpectedDirectoryError(Exception):
@@ -591,7 +590,6 @@ class ClusterManager:
         self._recv_ack_message()
 
     def submit_single_job(self, wfem):
-        wfem : WorkflowExecModule
         self._socket.send(Message.submit_single_job_message(wfem))
         self._recv_ack_message()
 

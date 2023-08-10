@@ -28,6 +28,8 @@ import yaml
 from lxml import etree
 import lxml.html
 
+from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
+from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.Util.localhost_checker import is_localhost
 from TreeWalker.TreeWalker import TreeWalker
 from SimStackServer.WaNo.WaNoTreeWalker import subdict_skiplevel_path_version
@@ -273,6 +275,7 @@ class XMLYMLInstantiationBase(object):
         with open(filename, 'rt') as infile:
             myxml = etree.parse(infile).getroot()
         a = cls()
+
         a.from_xml(myxml)
         return a
 
@@ -2514,7 +2517,7 @@ class Workflow(WorkflowBase):
 
     def _prepare_job(self, wfem : WorkflowExecModule):
         queueing_system = wfem.resources.queueing_system
-
+        secure_mode = SecureModeGlobal.get_secure_mode()
         jobdirectory = self.storage + '/exec_directories/' + self._get_job_directory(wfem)
         counter = 0
         while os.path.isdir(jobdirectory):
@@ -2571,6 +2574,13 @@ class Workflow(WorkflowBase):
 
         with open(join(jobdirectory, "rendered_wano.yml"), 'wt') as outfile:
             yaml.safe_dump(rendered_wano, outfile)
+
+        if secure_mode:
+            sws = SecureWaNos.get_instance()
+            approved_wano = sws.get_wano_by_name(wmr.name)
+            approved_wano.verify_against_secure_schema(rendered_wano)
+        else:
+            assert False, "REMOVE BEFORE RELEASE"
 
         # Debug dump
         if False:
@@ -2711,6 +2721,7 @@ class Workflow(WorkflowBase):
         jobdirectory = wfem.runtime_directory
         queueing_system = wfem.resources.queueing_system
         myjobid = wfem.jobid
+        secure_mode = SecureModeGlobal.get_secure_mode()
 
         if not wfem.check_if_job_is_local():
 
@@ -2763,12 +2774,34 @@ class Workflow(WorkflowBase):
                     continue
                 simstack_path_to_aiida_uuid[simstack_path] = mynode.uuid
 
+        found_output_dict = False
         """ Sanity check to check if all files are there """
         for myoutput in wfem.outputs:
             # tofile = myinput[0]
             output = myoutput[0]
             absfile = jobdirectory + '/' + output
 
+            # The next step after this one will render the output variables. We need to crosscheck these against the output schema
+            if secure_mode:
+                if output != "output_dict.yml":
+                    raise SecurityError(f"No other file allowed in secure mode except for output_dict.yml. File was {output}")
+                found_output_dict = True
+                sws = SecureWaNos.get_instance()
+
+
+
+                explicit_wfxml = join(self.storage, "workflow_data", wfem.path, "inputs", wfem.wano_xml)
+                wano_dir_root = Path(join(self.storage, "workflow_data", wfem.path, "inputs"))
+                from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
+                from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+                wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, model_only=True, explicit_xml=explicit_wfxml)
+
+
+                secure_wano = sws.get_wano_by_name(wmr.name)
+
+                with Path(absfile).open() as content_file:
+                    content = yaml.safe_load(content_file.read())
+                secure_wano.verify_output_against_schema(content)
 
             # In case of a glob pattern, we need special care
             if "*" in absfile:
@@ -2783,6 +2816,9 @@ class Workflow(WorkflowBase):
                     self._logger.error(mystdout)
                     raise WorkflowAbort(mystdout)
 
+        if secure_mode and not found_output_dict:
+            raise SecurityError("Secure Mode WaNos require an output_dict.yml")
+
         myvars = wfem.get_output_variables(render_report = True)
         # REPORT We need to collect the body files here -
         if isinstance(myvars, dict):
@@ -2796,6 +2832,7 @@ class Workflow(WorkflowBase):
 
         """ Same loop again this time copying files """
         for myoutput in wfem.outputs:
+            # Outputs already checked for secure mode above
             if wfem.outputpath == 'unset':
                 # Legacy behaviour in case of wfem missing outputpath
                 tofile = self.storage + '/' + myoutput[1]
@@ -2828,6 +2865,7 @@ class Workflow(WorkflowBase):
                 shutil.copyfile(tocopy, tofile)
                 if tocopy in staging_filename_to_aiida_obj:
                     self._filepath_to_aiida_uuid[tofile] = staging_filename_to_aiida_obj[tocopy].uuid
+
 
         return myvars
 

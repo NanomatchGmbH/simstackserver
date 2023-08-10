@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 
@@ -6,10 +7,15 @@ from os import path
 
 from pathlib import Path
 
+import jsonschema
+import pytest
 from lxml import etree
 
+from SimStackServer.WaNo import WaNoFactory
+from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry_from_folder_or_zip
 from TreeWalker.TreeWalker import TreeWalker
-from SimStackServer.WaNo.WaNoFactory import wano_constructor_helper, wano_without_view_constructor_helper
+from SimStackServer.WaNo.WaNoFactory import wano_constructor_helper, wano_without_view_constructor_helper, \
+    wano_constructor
 from SimStackServer.WaNo.WaNoModels import WaNoItemFloatModel, WaNoModelRoot
 from SimStackServer.WaNo.WaNoTreeWalker import ViewCollector, PathCollector, subdict_skiplevel, WaNoTreeWalker
 
@@ -51,6 +57,8 @@ class TestWaNoModels(unittest.TestCase):
 
         self.lf_rendered_dir = "%s/inputs/wanos/rendered_lightforge2" % path.dirname(path.realpath(__file__))
         self.lf_rendered_xml = path.join(self.lf_rendered_dir, "lightforge2.xml")
+
+        self.employee_record_dir = "%s/inputs/wanos/EmployeeRecord" % path.dirname(path.realpath(__file__))
 
         self.qp_dir = "%s/inputs/wanos/QuantumPatch3" % path.dirname(path.realpath(__file__))
         self.qpxml = path.join(self.qp_dir, "QuantumPatch3.xml")
@@ -132,13 +140,32 @@ class TestWaNoModels(unittest.TestCase):
         return wmr
 
     def test_dep_secure_schema(self):
-        mywano : WaNoModelRoot = self._construct_wano_nogui(self.depxml)
-        with open("deposit_secureschema.json",'wt') as outfile:
-            outfile.write(mywano.get_secure_schema())
-
-        secure_schema = mywano.get_secure_schema()
+        wle = WaNoListEntry_from_folder_or_zip(str(self.deposit_dir))
+        wano_model_root, _ = wano_constructor(wle, model_only=True)
+        secure_schema = wano_model_root.get_secure_schema()
         print(secure_schema)
 
+    def test_er_secure_schema(self):
+        wle = WaNoListEntry_from_folder_or_zip(str(self.employee_record_dir))
+        wano_model_root, _ = wano_constructor(wle, model_only=True)
+        wano_model_root :WaNoModelRoot
+        wano_model_root.datachanged_force()
+        wano_model_root.datachanged_force()
+        rendered_wano = wano_model_root.wano_walker()
+        rendered_wano = wano_model_root.wano_walker_render_pass(rendered_wano,submitdir=None,flat_variable_list=None,
+                    input_var_db = None,
+                    output_var_db = None,
+                    runtime_variables = None
+        )
+        secure_schema = wano_model_root.get_secure_schema()
+        wano_model_root.verify_against_secure_schema(rendered_wano)
+        # this wano has input == output
+        with open(os.path.join(self.employee_record_dir, "output_schema.json"), 'wt') as outfile:
+            json.dump(secure_schema, outfile,indent=2)
+        wano_model_root.verify_output_against_schema(rendered_wano)
+        rendered_wano["BROKEN"] = "BROKEN"
+        with pytest.raises(jsonschema.exceptions.ValidationError):
+            wano_model_root.verify_output_against_schema(rendered_wano)
 
     def test_lf_secure_schema(self):
         mywano : WaNoModelRoot = self._construct_wano_nogui(self.lfxml)

@@ -10,6 +10,7 @@ import contextlib
 
 from os.path import join
 
+from SimStackServer.SecureWaNos import SecureModeGlobal, SecureWaNos
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 
 from SimStackServer.SimStackServerMain import SimStackServer, AlreadyRunningException
@@ -58,17 +59,24 @@ def main():
     # Otherwise we also acquire the server lock
     # We get a new port and guess a new password.
     #    Now we have to be fast, because we release the port and it could be reallocated in extreme cases.
-
-
-
+    # Set secure mode global asap
+    if "--secure_mode" in sys.argv:
+        SecureModeGlobal.set_secure_mode()
+        SecureWaNos.get_instance()
     # We register another pid just for setup, because it takes three seconds from here to the Tag "PIDFILE TAKEOVER"
     appdirs = SimStackServer.get_appdirs()
     setup_pidfile = setup_pid()
     try:
         setup_pidfile.acquire(timeout = 0.0)
     except lockfile.AlreadyLocked as e:
-        flush_port_and_password_to_stdout(appdirs, True)
-        sys.exit(0)
+        try:
+            flush_port_and_password_to_stdout(appdirs, True)
+        except FileNotFoundError as e:
+            if "portconfig.txt" in str(e):
+                print("App Lock was found, but no portconfig. Most probably SimStackServer start process was interupted.")
+                print(f"Please check logs and remove {setup_pidfile}")
+                sys.exit(1)
+            raised
     logfilehandler = Config._setup_root_logger()
     my_runtime = get_my_runtime()
     try:
@@ -100,7 +108,6 @@ def main():
             print(towrite[:-1])
         sys.stdout.flush()
 
-        workdir = appdirs.user_cache_dir
         mystd = join(appdirs.user_log_dir, "sss.stdout")
         mystderr = join(appdirs.user_log_dir, "sss.stderr")
         mystdfileobj = open(mystd,'at')
@@ -126,7 +133,11 @@ def main():
             )
         with cm:
             logger = logging.getLogger("Startup")
-            logger.info("SimStackServer Daemon Startup")
+
+            if SecureModeGlobal.get_secure_mode():
+                logger.info("SimStackServer Secure Daemon Startup")
+            else:
+                logger.info("SimStackServer Daemon Startup")
             mypidfile.update_pid_to_current_process() # "PIDFILE TAKEOVER
             logger.debug("PID written")
             ss.setup_zmq_port(myport, mysecret)

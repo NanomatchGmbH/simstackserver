@@ -87,17 +87,19 @@ def wano_constructor_helper(wmr, start_path = None, parent_view = None):
     return wmr,rootview
 
 
-def wano_constructor(wano: WaNoListEntry):
-    # Timo: Begin path, Begin parse, etc. in the function above. Then call the function above
-    # and make this the main entry point
+
+def wano_constructor(wano: WaNoListEntry, model_only = False):
     wano_dir_root = wano.folder
     xml = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
-    from simstack.view.WaNoViews import WanoQtViewRoot
-    # MODELROOTDIRECT
-    wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, explicit_xml=xml)
-    wmr.set_view_class(WanoQtViewRoot)
-    wmr, rootview = wano_constructor_helper(wmr)
+    wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, explicit_xml=xml, model_only=model_only)
+    if model_only:
+        wmr = wano_without_view_constructor_helper(wmr)
+        rootview = None
+    else:
+        from simstack.view.WaNoViews import WanoQtViewRoot
+        wmr.set_view_class(WanoQtViewRoot)
+        wmr, rootview = wano_constructor_helper(wmr)
     return wmr, rootview
 
 

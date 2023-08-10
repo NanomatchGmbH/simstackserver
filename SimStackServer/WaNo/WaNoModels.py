@@ -10,8 +10,9 @@ from functools import partial
 from json import JSONDecodeError
 from os.path import join, isabs
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
+import jsonschema
 import numpy as np
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
@@ -137,6 +138,7 @@ class WaNoModelDictLike(AbstractWanoModel):
                 "type": "object",
                 "properties": child_properties_dict,
                 "required": required_keys,
+                "additionalProperties": False,
             },
         }
         if oneOf_properties_dict:
@@ -451,14 +453,27 @@ class WaNoMatrixModel(AbstractWanoModel):
 
     def get_secure_schema(self) -> Optional[str]:
         schema = {
-            self.name : {
-                "type": "array",
-                "items": {
-                    "type": "array",
-                    "items": ["number", "string", "integer"],
-                }
+            self.name: {
+                "type": "string",
+                "pattern": r"\[\s*\[.+\]\s*\]"
             }
         }
+        # schema = {
+        #     self.name : {
+        #         "type": "array",
+        #         "items": {
+        #             "type": "array",
+        #             "items": {
+        #                 "anyOf": [
+        #                     { "type": "number"},
+        #                     { "type": "string"},
+        #                     {"type": "integer"},
+        #                     {"type": "null"},
+        #                 ],
+        #             },
+        #         }
+        #     }
+        # }
         return schema
 
 class WaNoModelListLike(AbstractWanoModel):
@@ -752,6 +767,7 @@ class MultipleOfModel(AbstractWanoModel):
             "items": {
                 "type": "object",
                 "properties":  child_properties_dict,
+                "additionalProperties": False,
             },
             "required": required_list,
         }
@@ -919,6 +935,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._register_list = []
         self._wano_dir_root = kwargs["wano_dir_root"]
         self._my_export_paths = []
+        self._output_schema = None
         self._block_signals = False
         self._render_substitutions = {}
 
@@ -936,6 +953,9 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.export_model = ExportTableModel(parent=None, wano_parent=self)
             self.export_model.make_default_list()
             self._read_export(self._wano_dir_root)
+
+        self._read_output_schema(self._wano_dir_root)
+
         self._root = self
 
         self.rendered_exec_command = ""
@@ -946,7 +966,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.metas = OrderedDictIterHelper()
         self._parse_defaults()
 
-    def get_secure_schema(self) -> str:
+    def get_secure_schema(self) -> Dict[str, Any]:
         child_properties = super().get_secure_schema()
         # WaNoModelRoot has to filter one level and TABS due to the super call
         child_properties = child_properties[self.name]["properties"]
@@ -957,9 +977,14 @@ class WaNoModelRoot(WaNoModelDictLike):
             "description": f"{self.name} secure schema",
             "type": "object",
             "properties": child_properties,
-            "required": [*child_properties.keys()]
+            "required": [*child_properties.keys()],
+            "additionalProperties": False,
         }
-        return json.dumps(baseline_schema, indent=2)
+        return baseline_schema
+
+    def verify_against_secure_schema(self, verification_dict: Dict[str, Any]):
+        # Will raise in case of error
+        jsonschema.validate(verification_dict, self.get_secure_schema())
 
     def get_new_resource_model(self) -> Resources:
         return self._new_resource_model
@@ -985,6 +1010,16 @@ class WaNoModelRoot(WaNoModelDictLike):
                 self._new_resource_model.from_json(resources_fn)
             except JSONDecodeError as e:
                 resources_fn.unlink()
+
+    def _read_output_schema(self, directory: pathlib.Path):
+        output_schema = directory / "output_schema.json"
+        if output_schema.is_file():
+            self._output_schema = json.loads(output_schema.read_text())
+
+    def verify_output_against_schema(self, content: Dict[str, Any]):
+        if not self._output_schema:
+            raise ValueError("Could not verify content, because no output schema was found")
+        jsonschema.validate(content, self._output_schema)
 
     @staticmethod
     def _parse_xml(xmlpath: pathlib.Path):
@@ -1032,10 +1067,10 @@ class WaNoModelRoot(WaNoModelDictLike):
         if not el is None:
             self.metas = xmltodict.parse(etree.tostring(el))
 
+
         self.exec_command = self.full_xml.find("WaNoExecCommand").text
         for child in self.full_xml.find("WaNoExecCommand"):
             raise WaNoParseError("Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse.")
-        #print("My Exec Command is: %s"%self.exec_command)
 
         super().parse_from_xml(xml=subxml)
 

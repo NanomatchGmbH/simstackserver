@@ -23,6 +23,7 @@ from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
 from SimStackServer.RemoteServerManager import RemoteServerManager
+from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
 from SimStackServer.Util.FileUtilities import mkdir_p
 
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
@@ -31,7 +32,6 @@ from SimStackServer.WorkflowModel import Workflow, WorkflowExecModule
 
 class AlreadyRunningException(Exception):
     pass
-
 
 """
 TODO:
@@ -179,7 +179,6 @@ class WorkflowManager(object):
         """
         try:
             newwf = Workflow.new_instance_from_xml(workflow_filename)
-
         except FileNotFoundError as e:
             raise WorkflowError("Workflow was not found at file <%s>. Discarding Workflow.") from e
         newwf: Workflow
@@ -399,7 +398,6 @@ class SimStackServer(object):
         self._stop_main = False
         self._signal_termination = False
         self._filetime_on_init = self._get_module_mtime()
-
 
     def _clear_server_state(self):
         """
@@ -726,7 +724,8 @@ class SimStackServer(object):
         work_done = False
         # Do stuff
         if workflow_file is not None:
-            workflow = Workflow.new_instance_from_xml(workflow_file)
+            secure_mode = SecureModeGlobal.get_secure_mode()
+            workflow = Workflow.new_instance_from_xml(workflow_file, secure_mode = secure_mode)
 
             for i in range(0,10):
                 workflow.jobloop()
