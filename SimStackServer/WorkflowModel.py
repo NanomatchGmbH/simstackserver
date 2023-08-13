@@ -2385,6 +2385,7 @@ class Workflow(WorkflowBase):
 
     def jobloop(self):
         running_jobs = self.graph.get_running_jobs()
+        secure_mode = SecureModeGlobal.get_secure_mode()
 
         if self.status == JobStatus.ABORTED:
             """
@@ -2474,11 +2475,15 @@ class Workflow(WorkflowBase):
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
             elif isinstance(tostart, VariableElement):
+                if secure_mode:
+                    raise WorkflowAbort("Secure Mode WFs must not contain VariableElements.")
                 result = tostart.evaluate_equation(input_variables=self._input_variables, output_variables=self._output_variables)
                 self._output_variables[tostart.variable_name] = result
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
             elif isinstance(tostart, ForEachGraph) or isinstance(tostart, IfGraph) or isinstance(tostart,  WhileGraph):
+                if secure_mode:
+                    raise WorkflowAbort("Secure Mode WFs must not contain dynamic elements such as If, ForEach or While.")
                 new_connections, new_activity_elementlists, new_graphs = tostart.resolve_connect(base_storage=self.storage,
                                                                                                  input_variables = self._input_variables,
                                                                                                  output_variables = self._output_variables)
@@ -2579,8 +2584,9 @@ class Workflow(WorkflowBase):
             sws = SecureWaNos.get_instance()
             approved_wano = sws.get_wano_by_name(wmr.name)
             approved_wano.verify_against_secure_schema(rendered_wano)
-        else:
-            assert False, "REMOVE BEFORE RELEASE"
+            if approved_wano.exec_command.strip() != rendered_exec_command.strip():
+                raise SecurityError(f"The exec command of the approved WaNo {approved_wano.exec_command} was different from the rendered_version {rendered_exec_command}. Secure WaNos must not contain dynamic fields. Aborting.")
+
 
         # Debug dump
         if False:

@@ -722,9 +722,9 @@ class SimStackServer(object):
 
     def main_loop(self, workflow_file = None):
         work_done = False
+        secure_mode = SecureModeGlobal.get_secure_mode()
         # Do stuff
         if workflow_file is not None:
-            secure_mode = SecureModeGlobal.get_secure_mode()
             workflow = Workflow.new_instance_from_xml(workflow_file, secure_mode = secure_mode)
 
             for i in range(0,10):
@@ -778,7 +778,7 @@ class SimStackServer(object):
                     self._logger.info("Found updated SimStackServer files. Stopping server for update.")
                     self._stop_main = True
 
-            if time.time() > terminationtime:
+            if not secure_mode and (time.time() > terminationtime):
                 # We have been idling for maxidleduration. Terminating.
                 self._logger.info("Server has been idle for %d minutes. Terminating server."%(maxidleduration//60))
                 work_done = True

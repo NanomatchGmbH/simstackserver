@@ -26,6 +26,7 @@ requirements:
     - networkx >=2.7.1
     - numpy >=1.22.3
     - paramiko >=2.9.2
+    - genson >=1.2.2
     - psutil >=5.9.0
     - python-daemon >=2.3.0
     - PyYAML >=6.0

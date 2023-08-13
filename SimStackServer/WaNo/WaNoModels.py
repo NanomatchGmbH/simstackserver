@@ -16,6 +16,7 @@ import jsonschema
 import numpy as np
 
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
+from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.Util.XMLUtils import is_regular_element
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path, WaNoListEntry_from_folder_or_zip
 from SimStackServer.WaNo.WaNoDelta import WaNoDelta
@@ -1952,6 +1953,7 @@ class WaNoItemFileModel(AbstractWanoModel):
         super(WaNoItemFileModel,self).set_data(data)
 
     def get_secure_schema(self) -> Optional[str]:
+        raise SecurityError("WaNoFile not allowed in Secure Mode. Aborting.")
         schema = {
             self.name: {
                 "type": "string"
