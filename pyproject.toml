@@ -20,3 +20,4 @@ testpaths = [
 [project.scripts]
 SimStackServer = "SimStackServer.SimStackServerEntryPoint:main"
 KillSimStackServer = "SimStackServer.Tools.KillSimStackServer:main"
+SimStack_generate_json_schema = "SimStackServer.Tools.GenJsonEntrypoint:main"

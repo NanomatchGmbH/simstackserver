@@ -15,8 +15,7 @@ def add_additional_properties(subdict):
         return subdict
     return None
 
-
-if __name__ == '__main__':
+def main():
     with open("output_dict.yml", "r") as infile:
         content = yaml.safe_load(infile)
 
@@ -30,3 +29,6 @@ if __name__ == '__main__':
               subdict_visitor_function=add_additional_properties,
               capture=True)
     print(json.dumps(add_properties_schema, indent=2))
+
+if __name__ == '__main__':
+    main()
