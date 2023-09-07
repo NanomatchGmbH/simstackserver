@@ -9,4 +9,4 @@ if __name__ == '__main__':
     builder = SchemaBuilder()
     builder.add_object(content)
 
-print(builder.to_schema())
+print(json.dumps(builder.to_schema(), indent=2))
