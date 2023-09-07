@@ -725,7 +725,7 @@ class SimStackServer(object):
         secure_mode = SecureModeGlobal.get_secure_mode()
         # Do stuff
         if workflow_file is not None:
-            workflow = Workflow.new_instance_from_xml(workflow_file, secure_mode = secure_mode)
+            workflow = Workflow.new_instance_from_xml(workflow_file)
 
             for i in range(0,10):
                 workflow.jobloop()

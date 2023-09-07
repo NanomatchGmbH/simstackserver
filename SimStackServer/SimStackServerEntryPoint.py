@@ -59,10 +59,6 @@ def main():
     # Otherwise we also acquire the server lock
     # We get a new port and guess a new password.
     #    Now we have to be fast, because we release the port and it could be reallocated in extreme cases.
-    # Set secure mode global asap
-    if "--secure_mode" in sys.argv:
-        SecureModeGlobal.set_secure_mode()
-        SecureWaNos.get_instance()
     # We register another pid just for setup, because it takes three seconds from here to the Tag "PIDFILE TAKEOVER"
     appdirs = SimStackServer.get_appdirs()
     setup_pidfile = setup_pid()
@@ -134,6 +130,10 @@ def main():
         with cm:
             logger = logging.getLogger("Startup")
 
+            # Set secure mode global asap
+            if "--secure_mode" in sys.argv:
+                SecureModeGlobal.set_secure_mode()
+                SecureWaNos.get_instance()
             if SecureModeGlobal.get_secure_mode():
                 logger.info("SimStackServer Secure Daemon Startup")
             else:
@@ -153,7 +153,7 @@ def main():
             except Exception as e:
                 pass
             try:
-                if len(sys.argv) >= 2 and not "-D" in sys.argv:
+                if len(sys.argv) >= 2 and not "-D" in sys.argv and not "--secure_mode" in sys.argv:
                     wf_filename = sys.argv[1]
                     ss.main_loop(wf_filename)
                 else:

@@ -104,7 +104,7 @@ class Config(object):
         else:
             cls._get_cls_logger().debug("PID existed already %d"%pid)
             proc = psutil.Process(pid)
-            if not "SimStackServer" in proc.name():
+            if not "SimStackServer" in "".join(proc.cmdline()):
                 try:
                     cls._get_cls_logger().warning("Process was locked, but process name %s was different."%proc.name())
                     pidfile.break_lock()
