@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import sys
+import jsonschema
 import traceback
 import uuid
 from abc import abstractmethod, abstractclassmethod
@@ -2411,6 +2412,25 @@ class Workflow(WorkflowBase):
                         running_hash = self._input_hashes[running.uid]
                         self._result_repo.store_results(running_hash, running)
 
+                except (jsonschema.exceptions.ValidationError, SecurityError) as e:
+                    self.graph.fail(running_job)
+                    running.set_failed()
+                    runtime_dir = Path(running.runtime_directory)
+                    self.abort()
+                    assert runtime_dir != Path.home(), "Will not delete home dir"
+                    assert runtime_dir != Path('/'), "Will not delete root"
+                    if runtime_dir.is_dir():
+                        shutil.rmtree(runtime_dir)
+
+                    runtime_dir.mkdir(exist_ok=False)
+                    with (runtime_dir / 'security_error.log').open('w') as outfile:
+                        if isinstance(e, jsonschema.exceptions.ValidationError):
+                            outfile.write(f"Encountered security error. Error was: {e.message}.")
+                        else:
+                            outfile.write(f"Encountered security error. Error was: {e}.")
+                        traceback.print_tb(tb=e.__traceback__, file=outfile)
+
+                    return True
                 except WorkflowAbort as e:
                     self.graph.fail(running_job)
                     running.set_failed()
@@ -2532,8 +2552,8 @@ class Workflow(WorkflowBase):
                 time.sleep(0.1)
             if counter == 20:
                 raise WorkflowAbort("Job directory could not be generated even after 20 attempts.")
+        wfem.set_runtime_directory(jobdirectory)
         mkdir_p(jobdirectory)
-
 
         explicit_wfxml = join(self.storage, "workflow_data",wfem.path,"inputs",wfem.wano_xml)
         wano_dir_root = Path(join(self.storage, "workflow_data",wfem.path,"inputs"))
@@ -2582,10 +2602,24 @@ class Workflow(WorkflowBase):
 
         if secure_mode:
             sws = SecureWaNos.get_instance()
-            approved_wano = sws.get_wano_by_name(wmr.name)
-            approved_wano.verify_against_secure_schema(rendered_wano)
+            try:
+                approved_wano = sws.get_wano_by_name(wmr.name)
+                approved_wano.verify_against_secure_schema(rendered_wano)
+            except jsonschema.exceptions.ValidationError as e:
+                message = "Submitted WaNo could not be verified against input schema."
+                with (Path(jobdirectory) / 'security_error.log').open('w') as outfile:
+                    outfile.write(message)
+                raise e
+            except KeyError:
+                message = f"Could not find WaNo in secure_wanos folder. WaNo name was: {wmr.name}"
+                with (Path(jobdirectory) / 'security_error.log').open('w') as outfile:
+                    outfile.write(message)
+                raise SecurityError(message)
             if approved_wano.exec_command.strip() != rendered_exec_command.strip():
-                raise SecurityError(f"The exec command of the approved WaNo {approved_wano.exec_command} was different from the rendered_version {rendered_exec_command}. Secure WaNos must not contain dynamic fields. Aborting.")
+                message = f"The exec command of the approved WaNo {approved_wano.exec_command} was different from the rendered_version {rendered_exec_command}. Secure WaNos must not contain dynamic fields. Aborting."
+                with (Path(jobdirectory) / 'security_error.log').open('w') as outfile:
+                    outfile.write(message)
+                raise SecurityError(message)
 
 
         # Debug dump
@@ -2720,7 +2754,6 @@ class Workflow(WorkflowBase):
             aiida_rw["wano_name"] = wmr.name
             wfem.set_aiida_valuedict(aiida_rw)
 
-        wfem.set_runtime_directory(jobdirectory)
         return True
 
     def _postjob_care(self, wfem : WorkflowExecModule):
@@ -2790,7 +2823,10 @@ class Workflow(WorkflowBase):
             # The next step after this one will render the output variables. We need to crosscheck these against the output schema
             if secure_mode:
                 if output != "output_dict.yml":
-                    raise SecurityError(f"No other file allowed in secure mode except for output_dict.yml. File was {output}")
+                    message = f"No other file allowed in secure mode except for output_dict.yml. File was {output}"
+                    with (Path(jobdirectory) / 'security_error.log').open('w') as outfile:
+                        outfile.write(message)
+                    raise SecurityError(message)
                 found_output_dict = True
                 sws = SecureWaNos.get_instance()
 
@@ -2823,7 +2859,10 @@ class Workflow(WorkflowBase):
                     raise WorkflowAbort(mystdout)
 
         if secure_mode and not found_output_dict:
-            raise SecurityError("Secure Mode WaNos require an output_dict.yml")
+            message = "Secure Mode WaNos require an output_dict.yml"
+            with (Path(jobdirectory) / 'security_error.log').open('w') as outfile:
+                outfile.write(message)
+            raise SecurityError(message)
 
         myvars = wfem.get_output_variables(render_report = True)
         # REPORT We need to collect the body files here -
