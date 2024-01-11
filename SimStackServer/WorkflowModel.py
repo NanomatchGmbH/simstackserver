@@ -835,6 +835,7 @@ simstack_server_mamba_source () {{{{
     else
         source $BASEFOLDER/etc/profile.d/conda.sh
     fi
+    export MAMBA_EXE=mamba
 }}}}
 
 # Following are the legacy exports:
