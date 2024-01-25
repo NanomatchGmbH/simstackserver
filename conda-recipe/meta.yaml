@@ -1,6 +1,6 @@
 package:
   name: simstackserver 
-  version: "1.3.7"
+  version: "1.3.8"
 about:
   home: https://github.com/not_yet_existings
   license: proprietary
@@ -39,6 +39,7 @@ requirements:
     - clusterjob >=2.1.0,<2.2.0
     - threadfarm ==2.0.0
     - SQLAlchemy ==2.0.*
+    - micromamba >=1.5.6
 test:
   source_files:
     - tests

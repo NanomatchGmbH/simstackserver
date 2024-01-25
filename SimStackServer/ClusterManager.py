@@ -373,17 +373,17 @@ class ClusterManager:
     def get_server_command_from_software_directory(self, software_directory: str):
         VDIR = self.get_newest_version_directory(software_directory)
         if VDIR == "V2":
-            raise NotImplementedError("V2 connection capability removed from SimStack client. Please upgrade to V4.")
+            raise NotImplementedError("V2 connection capability removed from SimStack client. Please upgrade to V6.")
         elif VDIR == "V3":
-            raise NotImplementedError("V3 connection capability removed from SimStack client. Please upgrade to V4.")
+            raise NotImplementedError("V3 connection capability removed from SimStack client. Please upgrade to V6.")
         elif VDIR == "V4":
-            pass
+            raise NotImplementedError("V4 connection capability removed from SimStack client. Please upgrade to V6.")
         elif VDIR == "V6":
             pass
         else:
             print(
-                "Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V4." % VDIR)
-            VDIR = "V4"
+                "Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V6." % VDIR)
+            VDIR = "V6"
 
         if VDIR != "V6":
             myenv = "simstack_server"
@@ -393,22 +393,31 @@ class ClusterManager:
         if self._queueing_system == "AiiDA":
             myenv = "aiida"
 
+        found_micromamba = False
+
+        micromamba_bin = f"{software_directory}/envs/simstack_server_v6/bin/micromamba"
+        if self.exists(micromamba_bin):
+            found_micromamba = True
         found_conda_shell = False
         conda_sh_files = [f"{software_directory}/etc/profile.d/conda.sh",
                           f"{software_directory}/{VDIR}/local_anaconda/etc/profile.d/conda.sh",
                           f"{software_directory}/{VDIR}/simstack_conda_userenv.sh"]
-        for conda_sh_file in conda_sh_files:
-            if self.exists(conda_sh_file):
-                found_conda_shell = conda_sh_file
-                break
+        if not found_micromamba:
+            for conda_sh_file in conda_sh_files:
+                if self.exists(conda_sh_file):
+                    found_conda_shell = conda_sh_file
+                    break
 
-        if not found_conda_shell:
+        if not found_conda_shell and not found_micromamba:
             errmsg = f"""Could not find setup file for conda environment. Please either run postinstall.sh to unpack the embedded conda environment or
         create "{software_directory}/simstack_conda_userenv.sh" to source your own environment with an installed simstack_server environment.
         """
             raise FileNotFoundError(errmsg)
 
-        if VDIR != "V4":
+        if found_micromamba:
+            execproc = f"{micromamba_bin} run -r {software_directory} --name=simstack_server_v6"
+            serverproc = "SimStackServer"
+        elif VDIR != "V4":
             execproc = f"source {found_conda_shell}; conda activate {myenv}; "
             serverproc = "SimStackServer"
         else:
@@ -673,7 +682,7 @@ class ClusterManager:
                                 largest_version = myint
                         except ValueError:
                             pass
-                if entry.filename == "condabin":
+                if entry.filename == "envs":
                     largest_version = 6
         except FileNotFoundError as e:
             newfilenotfounderror = FileNotFoundError(e.errno,"No such file %s on remote %s"%(path,self._url), path)
