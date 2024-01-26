@@ -828,14 +828,23 @@ BASEFOLDER="{self._conda_base_prefix}"
 # These are the exports present in SimStackServer conda environment:
 {varstring}
 # End
+
 simstack_server_mamba_source () {{{{
-    if [ -d "$BASEFOLDER/../local_anaconda" ]
+    MICROMAMBA_BIN="$BASEFOLDER/envs/simstack_server_v6/bin/micromamba"
+    if [ -f "$MICROMAMBA_BIN" ]
     then
-        source $BASEFOLDER/../local_anaconda/etc/profile.d/conda.sh
+        export MAMBA_ROOT_PREFIX=$BASEFOLDER
+        eval "$($MICROMAMBA_BIN shell hook -s posix)"
+        export MAMBA_EXE=micromamba
     else
-        source $BASEFOLDER/etc/profile.d/conda.sh
+        if [ -d "$BASEFOLDER/../local_anaconda" ]
+        then
+            source $BASEFOLDER/../local_anaconda/etc/profile.d/conda.sh
+        else
+            source $BASEFOLDER/etc/profile.d/conda.sh
+        fi
+        export MAMBA_EXE=conda
     fi
-    export MAMBA_EXE=mamba
 }}}}
 
 # Following are the legacy exports:
