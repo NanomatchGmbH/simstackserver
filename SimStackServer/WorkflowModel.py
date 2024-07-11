@@ -927,7 +927,7 @@ fi
         elif queueing_system == "AiiDA":
             queueing_system = "slurm"
             do_aiida = True
-        elif queueing_system == "OnlyScript":
+        elif queueing_system == "OnlyScript" or queueing_system == 'Filegenerator':
             queueing_system = "slurm"
             do_internal = True
             dont_run = True
