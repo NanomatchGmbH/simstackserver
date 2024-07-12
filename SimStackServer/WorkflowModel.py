@@ -735,7 +735,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     @staticmethod
     def _get_conda_basedir():
         conda_prefix = os.environ["CONDA_PREFIX"]
-        envloc = conda_prefix.find('envs/simstack_server')
+        envloc = conda_prefix.find('/envs/')
         conda_base_prefix = conda_prefix[0:envloc]
         return conda_base_prefix
 
@@ -927,7 +927,7 @@ fi
         elif queueing_system == "AiiDA":
             queueing_system = "slurm"
             do_aiida = True
-        elif queueing_system == "OnlyScript":
+        elif queueing_system == "OnlyScript" or queueing_system == 'Filegenerator':
             queueing_system = "slurm"
             do_internal = True
             dont_run = True

@@ -61,7 +61,7 @@ class WorkflowError(Exception):
     pass
 
 
-class WorkflowManager(object):
+class WorkflowManager:
     def __init__(self):
         self._logger = logging.getLogger("WorkflowManager")
         self._inprogress_models = {}
@@ -726,10 +726,8 @@ class SimStackServer(object):
         # Do stuff
         if workflow_file is not None:
             workflow = Workflow.new_instance_from_xml(workflow_file)
-
-            for i in range(0,10):
-                workflow.jobloop()
-                time.sleep(3)
+            workflow.jobloop()
+            return
 
         counter = 0
         maxidleduration = 1200 # After 20 minutes idle (i.e. no running workflow and nobody doing anything) we quit.
