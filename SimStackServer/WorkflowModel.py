@@ -972,6 +972,7 @@ fi
 
             toexec = """%s
     cd $CLUSTERJOB_WORKDIR
+    #LOCAL_EXEC_HOSTFILE_PLACEHOLDER
     %s
 """%(self._get_prolog_unicore_compatibility(actual_resources), self.exec_command)
             if queueing_system == "sge":
@@ -1054,9 +1055,16 @@ fi
                 else:
 
                     runscript = self.runtime_directory + "/" + "jobscript.sh"
-                    with open(runscript, 'wt') as outfile:
-                        outfile.write(str(jobscript).replace("$SLURM_SUBMIT_DIR",self.runtime_directory)+ '\n')
                     hostfile = self.runtime_directory + "/" + "HOSTFILE"
+                    with open(runscript, 'wt') as outfile:
+                        outfile.write(str(jobscript).replace(
+                            "$SLURM_SUBMIT_DIR",
+                            self.runtime_directory
+                        ).replace(
+                            "#LOCAL_EXEC_HOSTFILE_PLACEHOLDER",
+                            f"export HOSTFILE={hostfile}"
+                        ) + '\n'
+                    )
                     with open(hostfile, 'wt') as hoststream:
                         for i in range(0, actual_resources.cpus_per_node):
                             hoststream.write("localhost\n")
