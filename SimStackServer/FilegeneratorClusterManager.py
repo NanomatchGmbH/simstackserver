@@ -11,14 +11,11 @@ from contextlib import contextmanager
 from datetime import datetime
 import random
 
-import paramiko
 from os import path
 import posixpath
 from pathlib import Path
 
 import sshtunnel
-import zmq
-from paramiko import SFTPAttributes
 
 from SimStackServer.BaseClusterManager import BaseClusterManager
 from SimStackServer.MessageTypes import Message, ErrorCodes

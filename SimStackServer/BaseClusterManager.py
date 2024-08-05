@@ -10,14 +10,17 @@ from contextlib import contextmanager
 from datetime import datetime
 import random
 
-import paramiko
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
+    import paramiko
+
 from os import path
 import posixpath
 from pathlib import Path
 
 import sshtunnel
 import zmq
-from paramiko import SFTPAttributes
 
 from SimStackServer.MessageTypes import Message, ErrorCodes
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
