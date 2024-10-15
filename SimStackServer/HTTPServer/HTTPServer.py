@@ -1,6 +1,5 @@
 import datetime
 import http.server
-import cgi
 import base64
 import json
 import logging
@@ -171,7 +170,7 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
 
-            postvars = self._parse_POST()
+            postvars = {}
             getvars = self._parse_GET()
 
             response = {
@@ -208,18 +207,6 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
 
         self.wfile.write(bytes(json.dumps(response), 'utf-8'))
 
-    def _parse_POST(self):
-        ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
-        if ctype == 'multipart/form-data':
-            postvars = cgi.parse_multipart(self.rfile, pdict)
-        elif ctype == 'application/x-www-form-urlencoded':
-            length = int(self.headers.getheader('content-length'))
-            postvars = urllib.parse.parse_qs(
-                self.rfile.read(length), keep_blank_values=1)
-        else:
-            postvars = {}
-
-        return postvars
 
     def _parse_GET(self):
         getvars = parse_qs(urlparse(self.path).query)
