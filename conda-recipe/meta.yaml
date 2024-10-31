@@ -1,6 +1,6 @@
 package:
   name: simstackserver 
-  version: "1.4.4"
+  version: "1.5.0"
 about:
   home: https://github.com/not_yet_existings
   license: proprietary
@@ -12,12 +12,12 @@ build:
   noarch: python
 requirements:
   build:
-    - python >=3.8
+    - python >=3.10
     - python-build
     - flit
     - flit-core
   run:
-    - python >=3.8
+    - python >=3.10
     - appdirs >=1.4.4
     - Jinja2 >=3.0.3
     - lockfile >=0.12.2
