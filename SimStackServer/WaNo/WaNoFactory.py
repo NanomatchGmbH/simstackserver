@@ -35,7 +35,7 @@ def wano_without_view_constructor_helper(wmr, start_path = None):
     return wmr
 
 def wano_constructor_helper(wmr, start_path = None, parent_view = None):
-    from Qt import QtWidgets
+    from PySide6 import QtWidgets
 
     if start_path is None:
         start_path = []

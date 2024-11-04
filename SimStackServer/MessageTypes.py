@@ -65,7 +65,7 @@ class ErrorCodes(IntEnum):
     INVALID_CREDENTIALS = 18
 
 class ConnectionState(IntEnum):
-    """
+    r"""
     Connection state machine:
         NOT_SETUP
             |
