@@ -1499,10 +1499,10 @@ class WaNoModelRoot(WaNoModelDictLike):
                 print("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
                 raise FileNotFoundErrorSimStack("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
 
-            outfile = os.path.join(basefolder,remote_file)
+            outfile = os.path.join(basefolder,local_file)
             dirn=os.path.dirname(outfile)
             mkdir_p(dirn)
-            print("Copying from %s to %s"%(comp_filename, dirn))
+            print(f"Copying from {comp_filename} to {dirn}. Remote filename was {remote_file}")
             shutil.copy(comp_filename, dirn)
 
     def flat_variable_list_to_jsdl(self,fvl,basedir,stageout_basedir):
