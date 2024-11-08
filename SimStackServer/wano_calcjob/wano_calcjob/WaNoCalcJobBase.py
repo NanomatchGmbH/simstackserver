@@ -7,13 +7,12 @@ from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
 from aiida.orm import SinglefileData
-from jinja2 import Template
 from lxml import etree
 
 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 from SimStackServer.wano_calcjob.wano_calcjob.wano_calcjob_exceptions import UnknownTypeError
-from TreeWalker.TreeWalker import TreeWalker
-from TreeWalker.flatten_dict import flatten_dict
+from nestdictmod.nestdictmod import NestDictMod
+from nestdictmod.flatten_dict import flatten_dict
 
 
 class WaNoCalcJob(CalcJob):
@@ -430,7 +429,7 @@ def rewrite_path(inpath):
 
 
 def clean_dict_for_aiida(input_dictionary):
-    tw = TreeWalker(input_dictionary)
+    tw = NestDictMod(input_dictionary)
     visitor_functions = {
         "path_visitor_function":None,
         "path_rewrite_function": WaNoCalcJob.clean_path,

@@ -32,7 +32,7 @@ import lxml.html
 from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
 from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.Util.localhost_checker import is_localhost
-from TreeWalker.TreeWalker import TreeWalker
+from nestdictmod.nestdictmod import NestDictMod
 from SimStackServer.WaNo.WaNoTreeWalker import subdict_skiplevel_path_version
 
 
@@ -46,7 +46,7 @@ from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.FileUtilities import mkdir_p, StringLoggingHandler, abs_resolve_file
 from SimStackServer.Util.ResultRepo import ResultRepo
 from clusterjob import FAILED
-from TreeWalker.flatten_dict import flatten_dict
+from nestdictmod.flatten_dict import flatten_dict
 from jinja2 import Template
 
 
@@ -2735,7 +2735,7 @@ class Workflow(WorkflowBase):
             from aiida.orm import load_node
 
             aiida_rw = wmr.get_valuedict_with_aiida_types(aiida_files_by_relpath = aiida_files_by_relpath)
-            aiida_rw_tw = TreeWalker(aiida_rw)
+            aiida_rw_tw = NestDictMod(aiida_rw)
             topath = wfem.outputpath.replace('/','.')
             for mypath in render_substitutions.keys():
                 #print("I would try to replace",mypath)
@@ -2751,8 +2751,6 @@ class Workflow(WorkflowBase):
                     print("Keys were", self._path_to_aiida_uuid.keys())
 
 
-            #tw_aiida_rw = TreeWalker(aiida_rw)
-            #tw_aiida_rw.get
             aiida_rw["static_extra_files"] = {}
             aiida_files.append(SinglefileData("%s/rendered_wano.yml"%jobdirectory, filename="rendered_wano.yml"))
             for myfile in aiida_files:

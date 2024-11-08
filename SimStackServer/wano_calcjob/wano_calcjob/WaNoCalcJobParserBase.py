@@ -3,8 +3,7 @@ from aiida.common import NotExistent
 from aiida.orm import SinglefileData
 from aiida.parsers import Parser
 
-#from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob
-from TreeWalker.flatten_dict import flatten_dict
+from nestdictmod.flatten_dict import flatten_dict
 
 
 class WaNoCalcJobParser(Parser):

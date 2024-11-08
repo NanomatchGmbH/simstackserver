@@ -1,11 +1,4 @@
-from os.path import join
-
-from TreeWalker.TreeWalker import TreeWalker, EraseEntryError
-
-
-def attribute_dict_to_normal_dict(attribute_dict):
-    pass
-
+from nestdictmod.nestdictmod import NestDictMod
 
 
 class PathCollector:
@@ -29,7 +22,7 @@ class PathCollector:
         return twpath
 
     def assemble_paths_and_values(self, data, call_info):
-        tw_paths = call_info["treewalker_paths"]
+        tw_paths = call_info["nestdictmod_paths"]
         abspath = tw_paths.abspath
         if abspath is None:
             return
@@ -37,7 +30,7 @@ class PathCollector:
         self._path_to_value[mypath] = data
 
     def assemble_paths_and_type(self, data, call_info):
-        tw_paths = call_info["treewalker_paths"]
+        tw_paths = call_info["nestdictmod_paths"]
         abspath = tw_paths.abspath
         if abspath is None:
             return
@@ -45,7 +38,7 @@ class PathCollector:
         self._path_to_value[mypath] = data
 
 
-class WaNoTreeWalker(TreeWalker):
+class WaNoTreeWalker(NestDictMod):
     @staticmethod
     def _isdict(myobject) -> bool:
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
@@ -80,8 +73,8 @@ class ViewCollector:
         self._start_path = start_path
 
     def _get_mypath_treewalker(self, call_info):
-        tw_paths = call_info["treewalker_paths"]
-        tw: TreeWalker = call_info["treewalker"]
+        tw_paths = call_info["nestdictmod_paths"]
+        tw: NestDictMod = call_info["nestdictmod"]
         abspath = tw_paths.abspath
         if abspath is None:
             listpath = []
@@ -238,7 +231,7 @@ def subdict_skiplevel(subdict,
         pvf = call_info["path_visitor_function"]
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
-        tw = TreeWalker(newsubdict)
+        tw = NestDictMod(newsubdict)
         return tw.walker(capture = True, path_visitor_function=pvf,
                   subdict_visitor_function=svf,
                   data_visitor_function=dvf
@@ -267,7 +260,7 @@ def subdict_skiplevel_to_type(subdict,
         pvf = call_info["path_visitor_function"]
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
-        tw = TreeWalker(newsubdict)
+        tw = NestDictMod(newsubdict)
         return tw.walker(capture = True, path_visitor_function=pvf,
                   subdict_visitor_function=svf,
                   data_visitor_function=dvf
@@ -317,7 +310,7 @@ def subdict_skiplevel_to_aiida_type(subdict,
         pvf = call_info["path_visitor_function"]
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
-        tw = TreeWalker(newsubdict)
+        tw = NestDictMod(newsubdict)
         return tw.walker(capture = True, path_visitor_function=pvf,
                   subdict_visitor_function=svf,
                   data_visitor_function=dvf

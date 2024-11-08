@@ -13,7 +13,7 @@ from lxml import etree
 
 from SimStackServer.WaNo import WaNoFactory
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry_from_folder_or_zip
-from TreeWalker.TreeWalker import TreeWalker
+from nestdictmod.nestdictmod import NestDictMod
 from SimStackServer.WaNo.WaNoFactory import wano_constructor_helper, wano_without_view_constructor_helper, \
     wano_constructor
 from SimStackServer.WaNo.WaNoModels import WaNoItemFloatModel, WaNoModelRoot
@@ -36,7 +36,7 @@ def subdict_view(subdict,
         pvf = call_info["path_visitor_function"]
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
-        tw = TreeWalker(newsubdict)
+        tw = NestDictMod(newsubdict)
         return tw.walker(capture = True, path_visitor_function=pvf,
                   subdict_visitor_function=svf,
                   data_visitor_function=dvf
@@ -122,7 +122,7 @@ class TestWaNoModels(unittest.TestCase):
         outdict = {}
         wmr.model_to_dict(outdict)
 
-        tw = TreeWalker(outdict)
+        tw = NestDictMod(outdict)
         secondoutdict = tw.walker(capture = True, path_visitor_function=None, subdict_visitor_function=None, data_visitor_function=None)
 
         self.assertDictEqual(outdict, secondoutdict)
@@ -130,7 +130,7 @@ class TestWaNoModels(unittest.TestCase):
                                  data_visitor_function=None)
 
         pc = PathCollector()
-        tw = TreeWalker(thirdoutdict)
+        tw = NestDictMod(thirdoutdict)
         tw.walker(path_visitor_function=pc.assemble_paths,
                   subdict_visitor_function=None,
                   data_visitor_function=None)

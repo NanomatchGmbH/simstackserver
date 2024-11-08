@@ -1,39 +1,10 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import time
-from os import path
-from os.path import join
+
 from pathlib import Path
 
-if __name__ == '__main__':
-    base_path = join(os.path.dirname(os.path.realpath(__file__)),"..")
-    if not base_path in sys.path:
-        sys.path.append(base_path)
-    dir_path = join(base_path,"external","clusterjob")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","python-crontab")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","python-daemon")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","threadfarm")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","treewalker")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","boolexp")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
 
 from SimStackServer.WorkflowModel import Workflow
 

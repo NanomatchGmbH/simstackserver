@@ -14,7 +14,7 @@ from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 ssspath = path.join(path.dirname(path.realpath(__file__)),"..","..","..")
 print(ssspath)
 sys.path.append(ssspath)
-sys.path.append(join(ssspath,"external","treewalker"))
+sys.path.append(join(ssspath,"external","nestdictmod"))
 sys.path.append(join(ssspath,"external","boolexp"))
 
 from aiida.engine import submit, run_get_node
