@@ -18,7 +18,7 @@ if [ $(id -u) -eq 0 ]; then
 fi
 
 # otherwise kill process for current user
-PID="$(ps x -u $USER | grep SimStackServer | grep -v Kill | grep python | grep -v grep | gawk '{print $1}')"
+PID="$(ps x -u $USER | grep SimStackServer | grep -v Kill | grep python | grep -v grep | awk '{print $1}')"
 if [ "AA$PID" != "AA" ]
 then
     echo "Killing SimStackServer process $PID. Please wait 20 seconds for it to shutdown."
