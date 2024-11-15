@@ -681,6 +681,8 @@ class Resources(XMLYMLInstantiationBase):
 
     def overwrite_unset_fields_from_default_resources(self, default_resources : 'Resources'):
         queue = self.queue
+        if self.resource_name == self._connected_server_text:
+            self.set_field_value("basepath",default_resources.basepath)
         if default_resources.base_URI == self.base_URI:
             # In this case this WaNo will run on the same computer
             self.set_field_value("base_URI",None)
