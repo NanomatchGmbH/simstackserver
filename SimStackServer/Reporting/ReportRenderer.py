@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
 import configparser
 from os.path import join
+from typing import Any
 
 import yaml
 import os
 
 from jinja2 import Template
+
+
+def _config_as_dict(config: configparser.ConfigParser) -> dict[str, Any]:
+    """
+    Converts a ConfigParser object into a dictionary.
+
+    The resulting dictionary has sections as keys which point to a dict of the
+    sections options as key => value pairs.
+    """
+    the_dict = {}
+    for section in config.sections():
+        the_dict[section] = {}
+        for key, val in config.items(section):
+            the_dict[section][key] = val
+    return the_dict
 
 
 class ReportRenderer:
@@ -26,7 +42,19 @@ class ReportRenderer:
 </html>
 """
 
-    def __init__(self, export_dictionaries):
+    def __init__(self, export_dictionaries: dict[str, Any]):
+        """
+        Class to read wano export dictionaries and render a report from the info inside.
+
+        export_dictinaries: Filenames of the dictionaries containing the wano export variables.
+
+        # Example export_dictionaries variable filled with data
+        export_dictionaries = {
+            "output_config": "output_config.ini",
+            "output_dict": "output_dict.yml",
+            "wano": "rendered_wano.yml",
+        }
+        """
         self._body_html = None
         self._export_dictionaries = {}
         for dict_name, filename in export_dictionaries.items():
@@ -35,7 +63,7 @@ class ReportRenderer:
                 with open(filename, "rt") as infile:
                     content_string = "[DEFAULT]\n" + infile.read()
                 content.read_string(content_string)
-                content = self._config_as_dict(content)
+                content = _config_as_dict(content)
             elif filename.endswith(".yml"):
                 with open(filename, "rt") as infile:
                     content = yaml.safe_load(infile)
@@ -46,21 +74,6 @@ class ReportRenderer:
         for indict in self._export_dictionaries.values():
             outdict.update(indict)
         return outdict
-
-    @staticmethod
-    def _config_as_dict(config):
-        """
-        Converts a ConfigParser object into a dictionary.
-
-        The resulting dictionary has sections as keys which point to a dict of the
-        sections options as key => value pairs.
-        """
-        the_dict = {}
-        for section in config.sections():
-            the_dict[section] = {}
-            for key, val in config.items(section):
-                the_dict[section][key] = val
-        return the_dict
 
     @staticmethod
     def _parse_html_parts(html_parts):
