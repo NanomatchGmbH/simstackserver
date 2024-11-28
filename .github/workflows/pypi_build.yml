@@ -1,0 +1,27 @@
+name: "Build pypi Package"
+on:
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+jobs:
+  build_conda_package:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          environments: condabuild
+      - name: Build
+        id: build
+        run: |
+          pixi run pythonbuild
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypipackage
+          path: dist/*

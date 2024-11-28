@@ -1,0 +1,19 @@
+{
+  "template": "https://github.com/NanomatchGmbH/python-pixi-cruft.git",
+  "commit": "899ded876f6744fbce926fa9911b49660fefd3b1",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "author_name": "Timo Strunk",
+      "email": "timo.strunk@gmail.com",
+      "github_username": "timostrunk",
+      "project_name": "SimStackServer",
+      "project_slug": "simstackserver",
+      "project_short_description": "Server Component of the SimStack workflow system",
+      "github_url": "https://github.com/NanomatchGmbH/simstackserver",
+      "conda_publish_url": "https://prefix.dev/api/v1/upload/nanomatch-testing",
+      "_template": "https://github.com/NanomatchGmbH/python-pixi-cruft.git"
+    }
+  },
+  "directory": null
+}
