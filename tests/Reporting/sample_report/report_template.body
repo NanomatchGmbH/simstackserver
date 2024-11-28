@@ -1,0 +1,4 @@
+Test1={{ output_dict["Test1Key"]  }}
+Test2={{ output_config["Test2Key"] }}
+wano1={{ wano["wano1key"] }}
+
