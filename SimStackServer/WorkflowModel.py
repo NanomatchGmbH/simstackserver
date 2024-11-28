@@ -123,7 +123,7 @@ class XMLYMLInstantiationBase(object):
 
         for key, value in kwargs.items():
             if self.contains(key):
-                if value != None:
+                if value is not None:
                     self._field_values[key] = value
 
     def contains(self, key):
@@ -474,7 +474,6 @@ class WorkflowElementList(object):
         :return:
         """
         self._clear()
-        seqnum = 0
         for child in in_xml:
             field = child.attrib["type"]
 
@@ -1138,7 +1137,7 @@ fi
                         }
                         myexe = queue_to_qsub[queueing_system]
                         exists = shutil.which(myexe)
-                        if exists == None:
+                        if exists is None:
                             raise JobSubmitException(
                                 "Did not find submission utility %s in path." % myexe
                             )
@@ -1301,7 +1300,7 @@ fi
         from clusterjob import AsyncResult, JobScript
 
         if len(JobScript._backends) == 0:
-            a = JobScript("DummyJob")
+            JobScript("DummyJob")
             assert len(JobScript._backends) > 0
 
         ar = AsyncResult(JobScript._backends[actual_resources.queueing_system])
@@ -1337,7 +1336,7 @@ fi
 
     def completed_or_aborted(self):
         actual_resources = self.resources
-        if self._my_external_cluster_manager != None:
+        if self._my_external_cluster_manager is not None:
             from SimStackServer.ClusterManager import ClusterManager
 
             self._my_external_cluster_manager: ClusterManager
