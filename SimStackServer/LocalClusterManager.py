@@ -196,7 +196,7 @@ class LocalClusterManager:
         if self._socket is not None:
             self._socket.close()
 
-        if self._sftp_client != None:
+        if self._sftp_client is not None:
             self._sftp_client.close()
 
         self._ssh_client.close()
@@ -854,7 +854,7 @@ class LocalClusterManager:
         """
         if self._socket is not None:
             self._socket.close()
-        if self._sftp_client != None:
+        if self._sftp_client is not None:
             self._sftp_client.close()
         self._ssh_client.close()
         if (

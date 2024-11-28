@@ -14,8 +14,6 @@ def test_pw_default(
 ):
     entry_point_name = "arithmetic.add"
 
-    parameters = {}
-
     inputs = {
         "code": generate_code_localhost(entry_point_name, fixture_computer_localhost),
         #'parameters': parameters,

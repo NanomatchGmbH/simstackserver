@@ -44,11 +44,11 @@ class TestClusterManager(unittest.TestCase):
         cm.put_file(self._testfilename, "unittest_testfile.txt")
         cm.get_file("unittest_testfile.txt", self._output_testfilename)
 
-        res = Resources()
+        Resources()
 
         # cm.write_jobfile("test.jobscript","echo HELLO WORLD\n",res,"HELLO_WORLD")
-        assert cm.exists_as_directory("huubbertt") == False
-        assert cm.exists_as_directory("/") == True
+        assert cm.exists_as_directory("huubbertt") is False
+        assert cm.exists_as_directory("/") is True
         self.assertRaises(
             SSHExpectedDirectoryError, cm.exists_as_directory, "/dev/urandom"
         )
@@ -57,7 +57,7 @@ class TestClusterManager(unittest.TestCase):
         return
         assert (
             cm.exists_as_directory(self._remote_dir + "2del/Test/hubababbiiibidi")
-            == True
+            is True
         )
 
         with open(self._testfilename, "rt") as in1:

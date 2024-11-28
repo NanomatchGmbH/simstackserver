@@ -532,7 +532,6 @@ class WaNoModelListLike(AbstractWanoModel):
             model = ModelClass()
             model.set_view_class(ViewClass)
             model.parse_from_xml(child)
-            start_path = [*self.path.split(".")] + [str(current_id)]
             self.wano_list.append(model)
 
     @property
@@ -1279,7 +1278,6 @@ class WaNoModelRoot(WaNoModelDictLike):
         tw = WaNoTreeWalker(self)
 
         def leafnode_change_detector(leaf_node: AbstractWanoModel, call_info):
-            twp = call_info["nestdictmod_paths"].abspath
             if leaf_node.changed_from_default():
                 return leaf_node.get_delta_to_default()
             else:
@@ -1294,7 +1292,6 @@ class WaNoModelRoot(WaNoModelDictLike):
         )
 
         def empty_dict_remover(subdict, call_info):
-            twp = call_info["nestdictmod_paths"].abspath
             relpath = call_info["nestdictmod_paths"].relpath
 
             # We should not do anything which entries which were lists before to protect multipleof:
@@ -1370,7 +1367,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         return True
 
     def wano_walker_paths(self, parent=None, path="", output=[]):
-        if parent == None:
+        if parent is None:
             parent = self
 
         if isinstance(parent, WaNoSwitchModel):
@@ -1378,7 +1375,6 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         listlike, dictlike = self._listlike_dictlike(parent)
         if listlike:
-            my_list = []
             for key, wano in parent.items():
                 mypath = copy.copy(path)
                 if mypath == "":
@@ -1404,7 +1400,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         return output
 
     def wano_walker(self, parent=None, path=""):
-        if parent == None:
+        if parent is None:
             parent = self
 
         if isinstance(parent, WaNoSwitchModel):
@@ -1473,7 +1469,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         output_var_db=None,
         runtime_variables=None,
     ):
-        if parent == None:
+        if parent is None:
             parent = self
 
         if isinstance(parent, WaNoSwitchModel):
@@ -1637,8 +1633,6 @@ class WaNoModelRoot(WaNoModelDictLike):
             shutil.copy(comp_filename, dirn)
 
     def flat_variable_list_to_jsdl(self, fvl, basedir, stageout_basedir):
-        files = []
-
         local_stagein_files = []
         runtime_stagein_files = []
         runtime_stageout_files = []
@@ -2371,7 +2365,7 @@ class WaNoThreeRandomLetters(WaNoItemStringModel):
         self.mystring = str(data)
         if len(self.mystring) > 3:
             self.mystring = self.mystring[0:3]
-            if self.view != None:
+            if self.view is not None:
                 self.view.init_from_model()
 
         super(WaNoThreeRandomLetters, self).set_data(self.mystring)

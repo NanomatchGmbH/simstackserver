@@ -1563,16 +1563,6 @@ class DirectedGraph(object):
                         self._graph.add_edge(fromid, toids)
                         all_node_ids.add(toids)
 
-        status_dict = {}
-        # for node in all_node_ids:
-        #    status_dict[node] = "unstarted"
-        #    nx.set_node_attributes(self._graph, status_dict, "status")
-
-        # for node in nx.dfs_tree(self._graph):
-        #   all_node_ids.remove(node)
-        #    # All nodes have to be reached via a DFS
-        # The code above was removed, because of the ForEach implementation. Now the graph will have breaks on each foreach
-
         self._init_graph_to_unstarted()
 
     def _init_graph_to_unstarted(self):
@@ -1600,7 +1590,6 @@ class DirectedGraph(object):
         if explicit_overrides is None:
             explicit_overrides = {}
         allnodename = list(self._graph.nodes)
-        newnames = []
         rename_dict = {}
         for i, oldnodename in enumerate(allnodename):
             if oldnodename in explicit_overrides:
@@ -1682,7 +1671,7 @@ class DirectedGraph(object):
             raise ParserError("No graph element found.")
 
     def report_order_generator(self):
-        nodes = self._graph.nodes
+        self._graph.nodes
         for a in nx.bfs_tree(self._graph, "0"):
             yield a
 
@@ -1900,7 +1889,7 @@ class IfGraph(XMLYMLInstantiationBase):
             self._logger.error("Output var: {0}".format(output_variables))
             raise WorkflowAbort from e
 
-        if type(outcome) != bool:
+        if not isinstance(outcome, bool):
             raise WorkflowAbort(
                 "Condition %s was resolved to %s of type: %s"
                 % (condition, outcome, type(outcome))
@@ -2337,7 +2326,7 @@ class WhileGraph(XMLYMLInstantiationBase):
             self._logger.error("Input var: {0}".format(input_variables))
             self._logger.error("Output var: {0}".format(output_variables))
             raise WorkflowAbort from e
-        if type(outcome) != bool:
+        if not isinstance(outcome, bool):
             raise WorkflowAbort(
                 "While Condition %s was resolved to %s of type: %s"
                 % (condition, outcome, type(outcome))
@@ -2819,7 +2808,7 @@ class Workflow(WorkflowBase):
             running: WorkflowExecModule
             if running.completed_or_aborted():
                 try:
-                    wfvars = self._postjob_care(running)
+                    self._postjob_care(running)
                     self.graph.finish(running_job)
                     print("Finished ", running_job)
 
@@ -2917,7 +2906,6 @@ class Workflow(WorkflowBase):
                         else:
                             external_cluster_manager = None
 
-                        queueing_system = tostart.resources.queueing_system
                         tostart.run_jobfile(
                             external_cluster_manager=external_cluster_manager
                         )
@@ -2979,8 +2967,6 @@ class Workflow(WorkflowBase):
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
 
-        current_time = time.time()
-        # if current_time - self._last_dump_time > 2:
         if False:
             self._last_dump_time = time.time()
             outfile1 = join(self.storage, "input_variables.yml")
@@ -3055,7 +3041,6 @@ class Workflow(WorkflowBase):
 
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
-        fvl = []
         rendered_wano = wmr.wano_walker_render_pass(
             rendered_wano,
             submitdir=None,
@@ -3151,7 +3136,6 @@ class Workflow(WorkflowBase):
             myabsfile = self.storage + "/" + source
 
             allfiles = []
-            already_copied = []
             globmode = False  # In this case we need to rewrite something
             if "*" in myabsfile:
                 allfiles = glob(myabsfile)
@@ -3396,8 +3380,8 @@ class Workflow(WorkflowBase):
             for key, value in flattened_output_variables.items():
                 self._output_variables["%s.%s" % (topath, key)] = value
             if queueing_system == "AiiDA":
-                for sims_path, uuid in simstack_path_to_aiida_uuid.items():
-                    self._path_to_aiida_uuid["%s.%s" % (topath, sims_path)] = uuid
+                for sims_path, my_uuid in simstack_path_to_aiida_uuid.items():
+                    self._path_to_aiida_uuid["%s.%s" % (topath, sims_path)] = my_uuid
 
         """ Same loop again this time copying files """
         for myoutput in wfem.outputs:

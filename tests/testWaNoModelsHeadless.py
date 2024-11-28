@@ -96,7 +96,6 @@ class TestWaNoModels(unittest.TestCase):
         wmr.datachanged_force()
         rendered_wano = wmr.wano_walker()
         # We do two render passes, in case the rendering reset some values:
-        fvl = []
 
         delta_dict = {
             "Tabs": {"General": {"General Settings": {"Charge Damping": 200020.032}}}
@@ -155,7 +154,7 @@ class TestWaNoModels(unittest.TestCase):
             data_visitor_function=None,
         )
         wanopaths = wmr.get_all_variable_paths()
-        wanotypes = wmr.get_paths_and_type_dict_aiida()
+        wmr.get_paths_and_type_dict_aiida()
         self.assertListEqual(pc.paths, wanopaths)
         return wmr
 

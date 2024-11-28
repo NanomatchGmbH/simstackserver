@@ -29,8 +29,8 @@ class TestConfig(unittest.TestCase):
 
     def test_is_running_and_pid(self):
         config = Config()
-        assert config.is_running() == False
+        assert config.is_running() is False
         config.register_pid()
-        assert config.is_running() == True
+        assert config.is_running() is True
         config.teardown_pid()
-        assert config.is_running() == False
+        assert config.is_running() is False

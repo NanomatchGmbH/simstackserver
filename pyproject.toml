@@ -129,6 +129,7 @@ testpaths = [
 
 [tool.ruff.lint.per-file-ignores]
 "SimStackServer/third_party/*" = ["D", "E", "F"]
+"SimStackServer/wano_calcjob/*" = ["D", "E", "F"]
 
 [tool.mypy]
 mypy_path = "$MYPY_CONFIG_FILE_DIR/src"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import signal
-import sys, os
+import sys
+import os
 import time
 import lockfile
 import logging
@@ -82,7 +83,7 @@ def main():
                 )
                 print(f"Please check logs and remove {setup_pidfile}")
                 sys.exit(1)
-            raised
+            raise
     logfilehandler = Config._setup_root_logger()
     my_runtime = get_my_runtime()
     try:

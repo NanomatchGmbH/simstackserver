@@ -334,7 +334,7 @@ class AbstractWanoModel:
                 del self.xml.attrib["import_from"]
 
     def decommission(self):
-        if self._view != None:
+        if self._view is not None:
             self._view.decommission()
 
         if self._root is not None:
