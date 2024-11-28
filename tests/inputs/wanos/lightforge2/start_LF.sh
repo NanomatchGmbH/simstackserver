@@ -22,12 +22,12 @@ then
     $MPI_PATH/bin/mpirun -genvall -machinefile $HOSTFILE python -m mpi4py $LFPATH/lightforge.py -s settings
 else
     lightforge.py -s settings
-fi 
+fi
 zip -r results.zip  results
 zip -r lightforge_data.zip lightforge_data
 
 for i in 0;do
-    zip -r lightforge_data_subset.zip lightforge_data/material_data/*_"$i".* 
+    zip -r lightforge_data_subset.zip lightforge_data/material_data/*_"$i".*
     zip -r lightforge_data_subset.zip lightforge_data/runtime_data/*_"$i".*
     zip -r lightforge_data_subset.zip lightforge_data/runtime_data/replay_"$i"
 done

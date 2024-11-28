@@ -1,6 +1,7 @@
 import socket
 from ipaddress import ip_address
 
+
 def is_localhost(host):
     for family in (socket.AF_INET, socket.AF_INET6):
         try:

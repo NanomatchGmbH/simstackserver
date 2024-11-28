@@ -1,15 +1,12 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import os
-from lxml import etree
 
 from SimStackServer.WaNo.WaNoTreeWalker import ViewCollector, WaNoTreeWalker
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path
 
 
-
-def wano_without_view_constructor_helper(wmr, start_path = None):
+def wano_without_view_constructor_helper(wmr, start_path=None):
     if start_path is None:
         start_path = []
 
@@ -19,22 +16,33 @@ def wano_without_view_constructor_helper(wmr, start_path = None):
 
     # Stage 3.5: Set Root Model
     vc.set_wano_model_root(wmr.get_root())
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.root_setter_subdict,
-                 data_visitor_function=vc.root_setter_data)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.root_setter_subdict,
+        data_visitor_function=vc.root_setter_data,
+    )
 
     # Stage 2: Set all model paths
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.path_setter_subdict,
-                 data_visitor_function=vc.path_setter_data)
-
-
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.path_setter_subdict,
+        data_visitor_function=vc.path_setter_data,
+    )
 
     # Stage 2: Parent all models
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.assemble_model_parenter,
-                 data_visitor_function=vc.data_visitor_model_parenter)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.assemble_model_parenter,
+        data_visitor_function=vc.data_visitor_model_parenter,
+    )
 
     return wmr
 
-def wano_constructor_helper(wmr, start_path = None, parent_view = None):
+
+def wano_constructor_helper(wmr, start_path=None, parent_view=None):
     from PySide6 import QtWidgets
 
     if start_path is None:
@@ -46,26 +54,46 @@ def wano_constructor_helper(wmr, start_path = None, parent_view = None):
 
     # Stage 3.5: Set Root Model
     vc.set_wano_model_root(wmr.get_root())
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.root_setter_subdict,
-                 data_visitor_function=vc.root_setter_data)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.root_setter_subdict,
+        data_visitor_function=vc.root_setter_data,
+    )
 
     # Stage 1: Construct all views
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.assemble_views,
-                 data_visitor_function=vc.data_visitor_view_assembler)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.assemble_views,
+        data_visitor_function=vc.data_visitor_view_assembler,
+    )
 
     views_by_path = vc.get_views_by_path()
 
     # Stage 2: Set all model paths
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.path_setter_subdict,
-                 data_visitor_function=vc.path_setter_data)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.path_setter_subdict,
+        data_visitor_function=vc.path_setter_data,
+    )
 
     # Stage 2: Parent all models
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.assemble_model_parenter,
-                 data_visitor_function=vc.data_visitor_model_parenter)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.assemble_model_parenter,
+        data_visitor_function=vc.data_visitor_model_parenter,
+    )
 
     # Stage 2: Parent all views
-    newtw.walker(capture=False, path_visitor_function=None, subdict_visitor_function=vc.assemble_views_parenter,
-                 data_visitor_function=vc.data_visitor_view_parenter)
+    newtw.walker(
+        capture=False,
+        path_visitor_function=None,
+        subdict_visitor_function=vc.assemble_views_parenter,
+        data_visitor_function=vc.data_visitor_view_parenter,
+    )
 
     # Stage 3 (or Stage 0): Initialize the rootview parent
     rootview = vc.get_views_by_path()[()]
@@ -83,21 +111,24 @@ def wano_constructor_helper(wmr, start_path = None, parent_view = None):
     rootview.init_from_model()
 
     # Stage 5: Update the layout
-    #anonymous_parent.update()
-    return wmr,rootview
+    # anonymous_parent.update()
+    return wmr, rootview
 
 
-
-def wano_constructor(wano: WaNoListEntry, model_only = False):
+def wano_constructor(wano: WaNoListEntry, model_only=False):
     wano_dir_root = wano.folder
     xml = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
-    wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, explicit_xml=xml, model_only=model_only)
+
+    wmr = WaNoModelRoot(
+        wano_dir_root=wano_dir_root, explicit_xml=xml, model_only=model_only
+    )
     if model_only:
         wmr = wano_without_view_constructor_helper(wmr)
         rootview = None
     else:
         from simstack.view.WaNoViews import WanoQtViewRoot
+
         wmr.set_view_class(WanoQtViewRoot)
         wmr, rootview = wano_constructor_helper(wmr)
     return wmr, rootview
@@ -106,11 +137,21 @@ def wano_constructor(wano: WaNoListEntry, model_only = False):
 class WaNoFactory(object):
     @classmethod
     def get_model_class(cls, name):
-        from SimStackServer.WaNo.WaNoModels import WaNoItemFloatModel, WaNoModelListLike, \
-            WaNoItemStringModel, WaNoItemBoolModel, WaNoModelDictLike, WaNoChoiceModel, \
-            MultipleOfModel, WaNoItemFileModel, WaNoItemIntModel, WaNoItemScriptFileModel, \
-            WaNoMatrixModel, WaNoThreeRandomLetters, WaNoSwitchModel, WaNoDynamicChoiceModel, \
-            WaNoNoneModel
+        from SimStackServer.WaNo.WaNoModels import (
+            WaNoItemFloatModel,
+            WaNoItemStringModel,
+            WaNoItemBoolModel,
+            WaNoModelDictLike,
+            WaNoChoiceModel,
+            MultipleOfModel,
+            WaNoItemFileModel,
+            WaNoItemIntModel,
+            WaNoMatrixModel,
+            WaNoThreeRandomLetters,
+            WaNoSwitchModel,
+            WaNoDynamicChoiceModel,
+            WaNoNoneModel,
+        )
 
         wano_list = {  # kwargs['xml'] = self.full_xml.find("WaNoRoot")
             "WaNoFloat": WaNoItemFloatModel,
@@ -132,24 +173,51 @@ class WaNoFactory(object):
             "WaNoDynamicDropDown": WaNoDynamicChoiceModel,
             "WaNoTabs": WaNoModelDictLike,
             "WaNone": WaNoNoneModel,
-            "WaNoThreeRandomLetters": WaNoThreeRandomLetters
+            "WaNoThreeRandomLetters": WaNoThreeRandomLetters,
         }
         return wano_list[name]
 
     @classmethod
     def get_qt_view_class(cls, name):
-        from SimStackServer.WaNo.WaNoModels import WaNoItemFloatModel, WaNoModelListLike, \
-            WaNoItemStringModel, WaNoItemBoolModel, WaNoModelDictLike, WaNoChoiceModel, \
-            MultipleOfModel, WaNoItemFileModel, WaNoItemIntModel, WaNoItemScriptFileModel, \
-            WaNoMatrixModel, WaNoThreeRandomLetters, WaNoSwitchModel, WaNoDynamicChoiceModel, \
-            WaNoNoneModel
+        from SimStackServer.WaNo.WaNoModels import (
+            WaNoItemFloatModel,
+            WaNoModelListLike,
+            WaNoItemStringModel,
+            WaNoItemBoolModel,
+            WaNoModelDictLike,
+            WaNoChoiceModel,
+            MultipleOfModel,
+            WaNoItemFileModel,
+            WaNoItemIntModel,
+            WaNoMatrixModel,
+            WaNoThreeRandomLetters,
+            WaNoSwitchModel,
+            WaNoDynamicChoiceModel,
+            WaNoNoneModel,
+        )
+
         try:
-            from simstack.view.WaNoViews import WaNoItemFloatView, WaNoBoxView, WaNoItemStringView, \
-                WaNoItemBoolView, WaNoItemFileView, WaNoChoiceView, MultipleOfView, WaNoItemIntView, \
-                WaNoTabView, WaNoGroupView, WaNoScriptView, WaNoDropDownView, WaNoMatrixFloatView, WaNoMatrixStringView, \
-                WaNoSwitchView, WaNoInvisibleBoxView, WaNoNone
-        except ImportError as e:
-            #Workaround to make this work from within SimStackServer
+            from simstack.view.WaNoViews import (
+                WaNoItemFloatView,
+                WaNoBoxView,
+                WaNoItemStringView,
+                WaNoItemBoolView,
+                WaNoItemFileView,
+                WaNoChoiceView,
+                MultipleOfView,
+                WaNoItemIntView,
+                WaNoTabView,
+                WaNoGroupView,
+                WaNoScriptView,
+                WaNoDropDownView,
+                WaNoMatrixFloatView,
+                WaNoMatrixStringView,
+                WaNoSwitchView,
+                WaNoInvisibleBoxView,
+                WaNoNone,
+            )
+        except ImportError:
+            # Workaround to make this work from within SimStackServer
             return None
 
         wano_list = {  # kwargs['xml'] = self.full_xml.find("WaNoRoot")
@@ -173,6 +241,6 @@ class WaNoFactory(object):
             "WaNoDynamicDropDown": (WaNoDynamicChoiceModel, WaNoDropDownView),
             "WaNoTabs": (WaNoModelDictLike, WaNoTabView),
             "WaNone": (WaNoNoneModel, WaNoNone),
-            "WaNoThreeRandomLetters": (WaNoThreeRandomLetters, WaNoItemStringView)
+            "WaNoThreeRandomLetters": (WaNoThreeRandomLetters, WaNoItemStringView),
         }
         return wano_list[name][1]

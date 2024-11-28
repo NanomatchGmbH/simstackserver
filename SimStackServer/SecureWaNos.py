@@ -1,10 +1,10 @@
 import logging
-import pathlib
 from pathlib import Path
 
 from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry_from_folder_or_zip
 from SimStackServer.WaNo.WaNoFactory import wano_constructor
+
 
 class SecureModeGlobal:
     _secure_mode = False
@@ -18,9 +18,9 @@ class SecureModeGlobal:
         return cls._secure_mode
 
 
-
 class SecureWaNos:
     _instance = None
+
     def __init__(self):
         self._wano_dict = {}
         self._init_wano_dict()
@@ -30,17 +30,21 @@ class SecureWaNos:
 
     def _init_wano_dict(self):
         from SimStackServer.SimStackServerMain import SimStackServer
+
         appdirs = SimStackServer.get_appdirs()
 
-        wano_config_directory = Path(appdirs.user_config_dir)/"secure_wanos"
+        wano_config_directory = Path(appdirs.user_config_dir) / "secure_wanos"
         logging.info(f"Reading secure wanos from {wano_config_directory}")
         if not wano_config_directory.is_dir():
-            raise SecurityError(f"SimStackSecure WaNo Directory {wano_config_directory} not found. Please create and fill with WaNos.")
+            raise SecurityError(
+                f"SimStackSecure WaNo Directory {wano_config_directory} not found. Please create and fill with WaNos."
+            )
         for wano_dir in wano_config_directory.iterdir():
             try:
                 wle = WaNoListEntry_from_folder_or_zip(str(wano_dir))
                 wano_model_root, _ = wano_constructor(wle, model_only=True)
                 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+
                 wano_model_root: WaNoModelRoot
                 logging.info(f"Parsing secure wano {wano_model_root.name}")
                 self._wano_dict[wano_model_root.name] = wano_model_root

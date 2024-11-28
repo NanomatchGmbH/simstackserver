@@ -1,7 +1,7 @@
 <WaNoTemplate>
   <WaNoRoot name="lightforge2">
     <WaNoTabs name="TABS">
-      
+
       <WaNoGroup name="general">
         <WaNoDropDown name="device_layout">
           <Entry id="0">stack</Entry>
@@ -17,7 +17,7 @@
           <WaNoBool name="x">False</WaNoBool>
           <WaNoBool name="y">True</WaNoBool>
           <WaNoBool name="z">True</WaNoBool>
-        </WaNoDictBox> 
+        </WaNoDictBox>
 
         <WaNoBool name="connect_electrodes">True</WaNoBool>
 
@@ -73,7 +73,7 @@
                 <WaNoDynamicDropDown visibility_condition="%s == True" visibility_var_path="TABS.general.particle_types.excitons" name="exciton preset" collection_path="TABS.materials.exciton_presets" subpath="name" chosen="0" />
                 <WaNoBool visibility_condition="%s == True" visibility_var_path="TABS.materials.manual dopant selection" name="is_dopant">False</WaNoBool>
               </WaNoDictBox>
-              
+
               <WaNoDictBox switch_name="QP: sig,l PAR: eaip" name="molecule_parameters">
                 <WaNoFile logical_filename="molecule_{{ path[3] }}.pdb" name="molecule_pdb">Put file here</WaNoFile>
                 <WaNoDynamicDropDown name="QP_output_sigma" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
@@ -146,7 +146,7 @@
               <WaNoString name="binding_energy">1.0</WaNoString>
               <WaNoFloat name="energy_disorder">0.1</WaNoFloat>
               <WaNoFloat name="singlet_triplet_gap">0.4</WaNoFloat>
-            </WaNoDictBox>  
+            </WaNoDictBox>
           </Element>
 
           <Element id="1">
@@ -168,8 +168,8 @@
               <WaNoString name="binding_energy">1.0</WaNoString>
               <WaNoFloat name="energy_disorder">0.1</WaNoFloat>
               <WaNoFloat name="singlet_triplet_gap">0.4</WaNoFloat>
-            </WaNoDictBox>  
-          </Element>   
+            </WaNoDictBox>
+          </Element>
 
           <Element id="2">
             <WaNoString name="name">doping</WaNoString>
@@ -190,8 +190,8 @@
               <WaNoString name="binding_energy">0.0</WaNoString>
               <WaNoFloat name="energy_disorder">0.0</WaNoFloat>
               <WaNoFloat name="singlet_triplet_gap">0.0</WaNoFloat>
-            </WaNoDictBox>  
-          </Element>         
+            </WaNoDictBox>
+          </Element>
         </WaNoMultipleOf>
       </WaNoGroup>
 
@@ -224,11 +224,11 @@
               <WaNoInviBox switch_name="custom Files: morphology, eaip" name="box1">
                 <WaNoFile name="morphology file" logical_filename="COM{{ path[3] }}.dat">Put file here</WaNoFile>
                 <WaNoFile name="eaip_file" logical_filename="eaip{{ path[3] }}.dat">Put file here</WaNoFile>
-              </WaNoInviBox> 
+              </WaNoInviBox>
               <WaNoInviBox switch_name="custom Files: morphology, homolumo" name="box1">
                 <WaNoFile name="morphology file" logical_filename="COM{{ path[3] }}.dat">Put file here</WaNoFile>
                 <WaNoFile name="homolumo file" logical_filename="homolumo{{ path[3] }}.dat">Put file here</WaNoFile>
-              </WaNoInviBox>           
+              </WaNoInviBox>
               <WaNoDynamicDropDown switch_name="select QP_output" name="morphology_QP_output" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
             </WaNoSwitch>
 
@@ -281,7 +281,7 @@
           <Entry id="1">edcm</Entry>
           <Entry id="2">no expansion (!dimensions fixed!)</Entry>
         </WaNoDropDown>
-      </WaNoGroup>  
+      </WaNoGroup>
 
 
 
@@ -301,7 +301,7 @@
           <Element id="0">
             <WaNoDynamicDropDown name="molecule 1" collection_path="TABS.materials.materials" subpath="name" chosen="0" />
             <WaNoDynamicDropDown name="molecule 2" collection_path="TABS.materials.materials" subpath="name" chosen="0" />
-  
+
             <WaNoDynamicDropDown visibility_condition="'%s' == 'QP_output'" visibility_var_path="TABS.topology.transfer_integral_source" name="QP_output" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
             <WaNoDynamicDropDown visibility_condition="'%s' == 'QP'" visibility_var_path="TABS.physics.coulomb_correction_mode" name="QP_output_coulomb" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
             <WaNoDynamicDropDown visibility_condition="'%s' == 'QP'" visibility_var_path="TABS.physics.coulomb_correction_mode" name="QP_output_coulomb_EAIP" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
@@ -328,7 +328,7 @@
             <WaNoDictBox visibility_condition="'%s' == 'use heuristic parameters'" visibility_var_path="TABS.materials.excitonics" name="Foerster_parameters_S1">
               <WaNoString name="Foerster_radius_forwards">2.5</WaNoString>
               <WaNoString name="Foerster_radius_backwards">0.5</WaNoString>
-            </WaNoDictBox>        
+            </WaNoDictBox>
             <WaNoDictBox visibility_condition="'%s' == 'use heuristic parameters'" visibility_var_path="TABS.materials.excitonics" name="Foerster_parameters_T1">
               <WaNoString name="Foerster_radius_forwards">2.5</WaNoString>
               <WaNoString name="Foerster_radius_backwards">0.5</WaNoString>
@@ -336,11 +336,11 @@
             <WaNoDictBox visibility_condition="'%s' == 'use heuristic parameters'" visibility_var_path="TABS.materials.excitonics" name="Foerster_parameters_S1T1">
               <WaNoString name="Foerster_radius_forwards">1.0</WaNoString>
               <WaNoString name="Foerster_radius_backwards">1.0</WaNoString>
-            </WaNoDictBox> 
+            </WaNoDictBox>
             <WaNoDictBox visibility_condition="'%s' == 'use heuristic parameters'" visibility_var_path="TABS.materials.excitonics" name="Foerster_parameters_T1S1">
               <WaNoString name="Foerster_radius_forwards">1.0</WaNoString>
               <WaNoString name="Foerster_radius_backwards">1.0</WaNoString>
-            </WaNoDictBox>  
+            </WaNoDictBox>
 
           </Element>
         </WaNoMultipleOf>
@@ -384,7 +384,7 @@
           <WaNoFloat name="exciton_separation">1.0</WaNoFloat>
           <WaNoFloat name="charge_injection">1.0</WaNoFloat>
           <WaNoFloat name="ptq">1.0</WaNoFloat>
-        </WaNoDictBox>  
+        </WaNoDictBox>
 
       </WaNoGroup>
 

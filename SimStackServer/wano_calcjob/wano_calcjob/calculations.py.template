@@ -6,4 +6,3 @@ from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob
 from os.path import join
 
 from wano_calcjob.WaNoCalcJobParserBase import WaNoCalcJobParser
-

@@ -82,7 +82,7 @@ then
     $OPENMPI_PATH/bin/mpirun --bind-to none $NMMPIARGS $ENVCOMMAND --hostfile $HOSTFILE --mca btl self,vader,tcp python -m mpi4py $LFPATH/lightforge.py -s settings
 else
     lightforge.py -s settings
-fi 
+fi
 zip -r results.zip  results
 
 zip_lf_data=`awk 'BEGIN{z="False"} $1=="ziplightforge_data:"&&$2=="true" {z="True"} END{print z}' settings`
@@ -90,7 +90,7 @@ zip_lf_data=`awk 'BEGIN{z="False"} $1=="ziplightforge_data:"&&$2=="true" {z="Tru
 cat settings > output_dict.yml
 
 for i in 0;do
-    zip -r lightforge_data_subset.zip lightforge_data/material_data/*_"$i".* 
+    zip -r lightforge_data_subset.zip lightforge_data/material_data/*_"$i".*
     zip -r lightforge_data_subset.zip lightforge_data/runtime_data/*_"$i".*
     zip -r lightforge_data_subset.zip lightforge_data/runtime_data/replay_"$i"
 done

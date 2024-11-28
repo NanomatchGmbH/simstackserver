@@ -9,8 +9,10 @@ from pathlib import Path
 
 from lxml import etree
 
+
 class PathSplitError(Exception):
     pass
+
 
 def split_directory_in_subdirectories(mypath: str):
     """
@@ -22,32 +24,37 @@ def split_directory_in_subdirectories(mypath: str):
     """
     togenerate = []
     from os.path import split
-    if not mypath.endswith('/') and not mypath == "":
+
+    if not mypath.endswith("/") and not mypath == "":
         togenerate.append(mypath)
     first = "A"
     counter = 0
     while first != "" and first != "/":
-        counter+=1
-        first,second = split(mypath)
-        if not first in togenerate:
+        counter += 1
+        first, second = split(mypath)
+        if first not in togenerate:
             if first != "/" and first != "":
                 togenerate.append(first)
         mypath = first
         if counter == 5000:
-            raise PathSplitError("Directory %s cannot be split into subdirectories"%mypath)
+            raise PathSplitError(
+                "Directory %s cannot be split into subdirectories" % mypath
+            )
 
     togenerate.reverse()
     return togenerate
 
-def abs_resolve_file(directory : str):
-    if not directory.startswith('/'):
+
+def abs_resolve_file(directory: str):
+    if not directory.startswith("/"):
         home = str(Path.home())
-        return join(home,directory)
+        return join(home, directory)
     return directory
 
 
 def mkdir_p(path):
     import errno
+
     try:
         os.makedirs(path)
     except OSError as exc:  # Python >2.5
@@ -56,7 +63,9 @@ def mkdir_p(path):
         else:
             raise exc
 
+
 sserver_open = open
+
 
 def xml_to_file(xml_element, path):
     """
@@ -65,8 +74,9 @@ def xml_to_file(xml_element, path):
     :param path (str): Path to a file in an existing folder
     :return: Nothing
     """
-    with sserver_open(path,'w') as out:
+    with sserver_open(path, "w") as out:
         out.write(etree.tostring(xml_element))
+
 
 def file_to_xml(path):
     """
@@ -74,14 +84,14 @@ def file_to_xml(path):
     :param path (str): String to file
     :return (lxml.etree.Element): Parsed XML object
     """
-    with sserver_open(path,'r') as infile:
+    with sserver_open(path, "r") as infile:
         xml = etree.parse(infile)
     return xml.getroot()
 
 
 def trace_to_logger(f):
     @wraps(f)
-    def wrapper(*args,**kwargs):
+    def wrapper(*args, **kwargs):
         try:
             return f(*args, **kwargs)
         except Exception as e:
@@ -90,6 +100,7 @@ def trace_to_logger(f):
             raise e
 
     return wrapper
+
 
 class StringLoggingHandler(logging.StreamHandler):
     def __init__(self):
@@ -110,7 +121,7 @@ def copytree(src, dst, symlinks=False, ignore=None):
             shutil.copy2(s, d)
 
 
-def copytree_pathlib(srcpath: Path, destpath: Path, symlinks = False, ignore = None):
+def copytree_pathlib(srcpath: Path, destpath: Path, symlinks=False, ignore=None):
     if isinstance(srcpath, zipfile.Path):
         zipfilepath = str(srcpath)[:-1]
         zz = zipfile.ZipFile(zipfilepath)
@@ -120,9 +131,9 @@ def copytree_pathlib(srcpath: Path, destpath: Path, symlinks = False, ignore = N
 
 
 def filewalker(basedir):
-    for root,dirs,files in os.walk(basedir):
+    for root, dirs, files in os.walk(basedir):
         if len(files) > 0:
             for mf in files:
-                fullpath = os.path.join(root,mf)
+                fullpath = os.path.join(root, mf)
                 if os.path.isfile(fullpath):
                     yield fullpath

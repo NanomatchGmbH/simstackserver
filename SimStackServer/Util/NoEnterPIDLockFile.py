@@ -6,8 +6,9 @@ class NoEnterPIDLockFile(daemon.pidfile.PIDLockFile):
     This class is a carbon copy of PIDLockFile with the one difference that it does not lock on enter.
     Using this class, we can create a lock and pass it to python-daemon without it locking again.
     """
+
     def __init__(self, *args, **kwargs):
-        super().__init__(*args,**kwargs)
+        super().__init__(*args, **kwargs)
 
     def __enter__(self):
         return self

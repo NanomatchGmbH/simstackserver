@@ -1,11 +1,14 @@
-from enum import IntEnum, auto
+from enum import IntEnum
 
 import msgpack
-#Alias here to be able to switch to json
+
+# Alias here to be able to switch to json
 mypacker = msgpack
+
 
 class InvalidMessageError(Exception):
     pass
+
 
 class JobStatus(IntEnum):
     QUEUED = 1
@@ -37,12 +40,13 @@ class SSS_MESSAGETYPE(IntEnum):
     NOOP = 17
     SHUTDOWN = 18
     SUBMITSINGLEJOB = 19
-    CLEARSERVERSTATE = 20 # This message type should just be used for testing. It will completely clear the server state.
+    CLEARSERVERSTATE = 20  # This message type should just be used for testing. It will completely clear the server state.
 
 
 class ResourceStatus(IntEnum):
     READY = 1
     UNAVAILABLE = 2
+
 
 class ErrorCodes(IntEnum):
     NO_ERROR = 1
@@ -63,6 +67,7 @@ class ErrorCodes(IntEnum):
     REMOTE_FILE_NOT_FOUND = 16
     RESOURCE_DOES_NOT_EXIST = 17
     INVALID_CREDENTIALS = 18
+
 
 class ConnectionState(IntEnum):
     r"""
@@ -125,14 +130,18 @@ class Message(object):
 
     @classmethod
     def getsinglejobstatus_message(cls, wfem_uid: str):
-        mydict = {"MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUS,
-                  "WFEM_UID": wfem_uid}
+        mydict = {
+            "MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUS,
+            "WFEM_UID": wfem_uid,
+        }
         return mypacker.dumps(mydict)
 
     @classmethod
     def getsinglejobstatus_message_reply(cls, reply: str):
-        mydict = {"MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUSREPLY,
-                  "status": reply}
+        mydict = {
+            "MessageType": SSS_MESSAGETYPE.GETSINGLEJOBSTATUSREPLY,
+            "status": reply,
+        }
         return mypacker.dumps(mydict)
 
     @classmethod
@@ -142,29 +151,31 @@ class Message(object):
 
     @classmethod
     def abortsinglejob_message(cls, wfem_uid: str):
-        mydict = {"MessageType": SSS_MESSAGETYPE.ABORTSINGLEJOB,
-                  "WFEM_UID": wfem_uid}
+        mydict = {"MessageType": SSS_MESSAGETYPE.ABORTSINGLEJOB, "WFEM_UID": wfem_uid}
         return mypacker.dumps(mydict)
 
     """
         The two next functions exist in case we need to fumble with encoding.
         ... which turned out to be true
     """
+
     @staticmethod
     def _loads(message):
-        return mypacker.loads(message, raw = False, strict_map_key = False)
+        return mypacker.loads(message, raw=False, strict_map_key=False)
 
     @staticmethod
     def _dumps(indict):
-        return mypacker.dumps(indict, use_bin_type = True)
+        return mypacker.dumps(indict, use_bin_type=True)
 
     @classmethod
     def unpack(cls, message):
-        #Another indirection in case we want to remove MessageType somehow.
+        # Another indirection in case we want to remove MessageType somehow.
 
         upack = cls._loads(message)
-        if not "MessageType" in upack:
-            raise InvalidMessageError("MessageType not found in Message. Message was: %s"%upack)
+        if "MessageType" not in upack:
+            raise InvalidMessageError(
+                "MessageType not found in Message. Message was: %s" % upack
+            )
         messagetype = upack["MessageType"]
         return messagetype, upack
 
@@ -175,7 +186,7 @@ class Message(object):
 
     @classmethod
     def _empty_dict_with_messagetype(cls, messagetype):
-        return {"MessageType" : messagetype}
+        return {"MessageType": messagetype}
 
     @classmethod
     def list_wfs_message(cls):
@@ -183,49 +194,38 @@ class Message(object):
 
     @classmethod
     def delete_wf_message(cls, workflow_submit_name):
-        mydict = {
-            "workflow_submit_name": workflow_submit_name
-        }
+        mydict = {"workflow_submit_name": workflow_submit_name}
         return cls.dict_message(SSS_MESSAGETYPE.DELWF, mydict)
 
     @classmethod
     def list_jobs_of_wf_message(cls, workflow_submit_name):
-        mydict = {
-            "workflow_submit_name": workflow_submit_name
-        }
+        mydict = {"workflow_submit_name": workflow_submit_name}
         return cls.dict_message(SSS_MESSAGETYPE.LISTWFJOBS, mydict)
 
     @classmethod
     def get_http_server_request_message(cls, basefolder):
-        mydict = {
-            "basefolder": basefolder
-        }
+        mydict = {"basefolder": basefolder}
         return cls.dict_message(SSS_MESSAGETYPE.GETHTTPSERVER, mydict)
 
     @classmethod
     def submit_single_job_message(cls, wfem):
         from SimStackServer.WorkflowModel import WorkflowExecModule
-        wfem:WorkflowExecModule
-        mydict = {
-            "wfem": {}
-        }
+
+        wfem: WorkflowExecModule
+        mydict = {"wfem": {}}
         wfem.to_dict(mydict["wfem"])
         return cls.dict_message(SSS_MESSAGETYPE.SUBMITSINGLEJOB, mydict)
 
     @classmethod
     def get_http_server_ack_message(cls, port, user, password):
-        mydict = {
-            "http_port": port,
-            "http_user": user,
-            "http_pass": password
-        }
+        mydict = {"http_port": port, "http_user": user, "http_pass": password}
         return cls.dict_message(SSS_MESSAGETYPE.GETHTTPSERVER, mydict)
 
     @classmethod
     def list_jobs_of_wf_message_reply(cls, workflow_submit_name, list_of_jobs):
         mydict = {
             "workflow_submit_name": workflow_submit_name,
-            "list_of_jobs": list_of_jobs
+            "list_of_jobs": list_of_jobs,
         }
         return cls.dict_message(SSS_MESSAGETYPE.LISTWFJOBSREPLY, mydict)
 
@@ -237,14 +237,10 @@ class Message(object):
 
     @classmethod
     def submit_wf_message(cls, filename):
-        mydict = {
-            "filename": filename
-        }
+        mydict = {"filename": filename}
         return cls.dict_message(SSS_MESSAGETYPE.SUBMITWF, mydict)
 
     @classmethod
     def abort_wf_message(cls, workflow_submit_name):
-        mydict = {
-            "workflow_submit_name": workflow_submit_name
-        }
+        mydict = {"workflow_submit_name": workflow_submit_name}
         return cls.dict_message(SSS_MESSAGETYPE.ABORTWF, mydict)

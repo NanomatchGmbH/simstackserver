@@ -32,4 +32,3 @@ class WaNoDelta:
     @property
     def value_dict(self):
         return self._delta_dict["values"]
-

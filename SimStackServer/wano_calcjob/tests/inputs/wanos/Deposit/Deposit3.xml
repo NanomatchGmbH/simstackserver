@@ -24,8 +24,8 @@
   </WaNoGroup>
  <WaNoGroup name="Molecules">
   <WaNoBool name="Restart from existing morphology">False</WaNoBool>
-  <WaNoFile logical_filename="restartfile.zip" 
-            visibility_condition="%s == True" visibility_var_path="TABS.Molecules.Restart from existing morphology" 
+  <WaNoFile logical_filename="restartfile.zip"
+            visibility_condition="%s == True" visibility_var_path="TABS.Molecules.Restart from existing morphology"
             name="Restartfile">restartfile.zip</WaNoFile>
   <WaNoMultipleOf name="Molecules">
     <Element id="0">

@@ -1,5 +1,3 @@
-
-
 from aiida import orm
 from aiida.common.datastructures import CalcInfo, CodeInfo
 from aiida.common.folders import Folder
@@ -18,23 +16,30 @@ class WaNoCalcJob(CalcJob):
         super().define(spec)
 
         # We need an iterator over the WaNo Repo. WaNoRepo on server?
-        spec.input('x', valid_type=(orm.Int, orm.Float), help='The left operand.')
-        spec.input('y', valid_type=(orm.Int, orm.Float), help='The right operand.')
-        spec.output('sum', valid_type=(orm.Int, orm.Float), help='The sum of the left and right operand.')
+        spec.input("x", valid_type=(orm.Int, orm.Float), help="The left operand.")
+        spec.input("y", valid_type=(orm.Int, orm.Float), help="The right operand.")
+        spec.output(
+            "sum",
+            valid_type=(orm.Int, orm.Float),
+            help="The sum of the left and right operand.",
+        )
         # set default options (optional)
-        spec.inputs['metadata']['options']['parser_name'].default = 'arithmetic.add'
-        spec.inputs['metadata']['options']['input_filename'].default = 'aiida.in'
-        spec.inputs['metadata']['options']['output_filename'].default = 'aiida.out'
-        spec.inputs['metadata']['options']['resources'].default = {'num_machines': 1, 'num_mpiprocs_per_machine': 1}
+        spec.inputs["metadata"]["options"]["parser_name"].default = "arithmetic.add"
+        spec.inputs["metadata"]["options"]["input_filename"].default = "aiida.in"
+        spec.inputs["metadata"]["options"]["output_filename"].default = "aiida.out"
+        spec.inputs["metadata"]["options"]["resources"].default = {
+            "num_machines": 1,
+            "num_mpiprocs_per_machine": 1,
+        }
         # start exit codes - marker for docs
-        #spec.exit_code(310, 'ERROR_READING_OUTPUT_FILE', message='The output file could not be read.')
-        #spec.exit_code(320, 'ERROR_INVALID_OUTPUT', message='The output file contains invalid output.')
-        #spec.exit_code(410, 'ERROR_NEGATIVE_NUMBER', message='The sum of the operands is a negative number.')
-        #spec.exit_code(310, 'ERROR_READING_OUTPUT_FILE', message='The output file could not be read.')
-        #spec.exit_code(320, 'ERROR_INVALID_OUTPUT', message='The output file contains invalid output.')
-        #spec.exit_code(410, 'ERROR_NEGATIVE_NUMBER', message='The sum of the operands is a negative number.')
+        # spec.exit_code(310, 'ERROR_READING_OUTPUT_FILE', message='The output file could not be read.')
+        # spec.exit_code(320, 'ERROR_INVALID_OUTPUT', message='The output file contains invalid output.')
+        # spec.exit_code(410, 'ERROR_NEGATIVE_NUMBER', message='The sum of the operands is a negative number.')
+        # spec.exit_code(310, 'ERROR_READING_OUTPUT_FILE', message='The output file could not be read.')
+        # spec.exit_code(320, 'ERROR_INVALID_OUTPUT', message='The output file contains invalid output.')
+        # spec.exit_code(410, 'ERROR_NEGATIVE_NUMBER', message='The sum of the operands is a negative number.')
         # To enable parser
-        spec.inputs['metadata']['options']['parser_name'].default = 'arithmetic.add'
+        spec.inputs["metadata"]["options"]["parser_name"].default = "arithmetic.add"
 
     def prepare_for_submission(self, folder: Folder) -> CalcInfo:
         """Prepare the calculation for submission.
@@ -47,8 +52,12 @@ class WaNoCalcJob(CalcJob):
         :param folder: a temporary folder on the local file system.
         :returns: the `CalcInfo` instance
         """
-        with folder.open(self.options.input_filename, 'w', encoding='utf8') as handle:
-            handle.write('echo $(({x} + {y}))\n'.format(x=self.inputs.x.value, y=self.inputs.y.value))
+        with folder.open(self.options.input_filename, "w", encoding="utf8") as handle:
+            handle.write(
+                "echo $(({x} + {y}))\n".format(
+                    x=self.inputs.x.value, y=self.inputs.y.value
+                )
+            )
 
         codeinfo = CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
@@ -61,9 +70,10 @@ class WaNoCalcJob(CalcJob):
 
         return calcinfo
 
+
 """
 class SimpleArithmeticAddParser(Parser):
-    
+
     def parse(self, **kwargs):
         from aiida.orm import Int
 

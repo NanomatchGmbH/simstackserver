@@ -3,75 +3,70 @@ from math import floor
 
 
 def convert_boolean(string, location, tokens):
-
-    if tokens[0] == 'True':
+    if tokens[0] == "True":
         return True
-    elif tokens[0] == 'False':
+    elif tokens[0] == "False":
         return False
 
-def convert_expression(string, location, t):
 
+def convert_expression(string, location, t):
     if len(t) == 1:
         return t[0]
 
     elif len(t) == 3:
-        return Operator(t[1],t[0],t[2])
+        return Operator(t[1], t[0], t[2])
 
     else:
         raise Exception(t)
 
-def convert_not_expression(string, location, t):
 
+def convert_not_expression(string, location, t):
     if len(t) == 1:
         return t
 
-    if len(t) == 2 and t[0] == 'not':
+    if len(t) == 2 and t[0] == "not":
         return NotOperator(t[1])
 
     else:
         raise Exception(t)
 
-def convert_upper_lower(string, location, tokens):
 
+def convert_upper_lower(string, location, tokens):
     if len(tokens) == 2:
-        if tokens[1] == 'upper':
+        if tokens[1] == "upper":
             return UpperModificator(tokens[0])
 
-        elif tokens[1] == 'lower':
+        elif tokens[1] == "lower":
             return LowerModificator(tokens[0])
-   
+
     else:
         raise Exception(tokens)
-        
+
 
 def convert_split_strip(self, location, tokens):
-
-    if not len(tokens) in [2,3]:
+    if len(tokens) not in [2, 3]:
         raise Exception(tokens)
 
-    arg = ' '
+    arg = " "
     if len(tokens) == 3:
         arg = tokens[2]
 
-    if tokens[1] == 'split':
+    if tokens[1] == "split":
         return SplitModificator(tokens[0], arg)
 
-    elif tokens[1] == 'strip':
+    elif tokens[1] == "strip":
         return StripModificator(tokens[0], arg)
 
-   
 
 class Constant(object):
-    
     def __init__(self, constant):
         self.constant = constant
-        
+
     def get_value(self, context):
         return self.constant
 
 
 class Variable(object):
-
     def __init__(self, tokens):
         self.parts = tokens
 
@@ -83,9 +78,9 @@ class Variable(object):
 
         return result
 
-class Array(object):
 
-    def __init__(self,tokens):
+class Array(object):
+    def __init__(self, tokens):
         self.parts = tokens
 
     def get_value(self, context):
@@ -96,8 +91,8 @@ class Array(object):
 
         return result
 
+
 class NotOperator(object):
-    
     def __init__(self, operand):
         self.operand = operand
 
@@ -106,39 +101,36 @@ class NotOperator(object):
 
 
 class Operator(object):
-
     def __init__(self, operator, left, right):
         self.left = left
         self.right = right
         self.operator = operator
-   
-    def get_value(self, context):
 
-        if self.operator == '==':
+    def get_value(self, context):
+        if self.operator == "==":
             return self.left.get_value(context) == self.right.get_value(context)
 
-        elif self.operator == '!=':
+        elif self.operator == "!=":
             return self.left.get_value(context) != self.right.get_value(context)
-       
-        elif self.operator == '<':
+
+        elif self.operator == "<":
             return self.left.get_value(context) < self.right.get_value(context)
 
-        elif self.operator == '>':
+        elif self.operator == ">":
             return self.left.get_value(context) > self.right.get_value(context)
 
-        elif self.operator == '<=':
+        elif self.operator == "<=":
             return self.left.get_value(context) <= self.right.get_value(context)
 
-        elif self.operator == '>=':
+        elif self.operator == ">=":
             return self.left.get_value(context) >= self.right.get_value(context)
 
-        if self.operator == 'and':
-            #TODO: not evaluate second operand unil first is false
+        if self.operator == "and":
+            # TODO: not evaluate second operand unil first is false
             left = self.left.get_value(context)
 
             if type(left) == bool:
-
-                if left:  
+                if left:
                     right = self.right.get_value(context)
                     if type(right) == bool:
                         return right
@@ -148,65 +140,73 @@ class Operator(object):
             else:
                 raise
 
-        if self.operator == 'or':
+        if self.operator == "or":
             left = self.left.get_value(context)
             right = self.right.get_value(context)
 
             if self.ensure_bool(left, right):
-                return (left or right)
+                return left or right
             else:
                 raise
 
-        if self.operator == 'in':
-            #if type(right) == list or type(right) == set:
+        if self.operator == "in":
+            # if type(right) == list or type(right) == set:
             return self.left.get_value(context) in self.right.get_value(context)
-                    
-        if self.operator == '+':
+
+        if self.operator == "+":
             left = self.left.get_value(context)
             right = self.right.get_value(context)
 
-            if not type(left) in (int,float):
+            if type(left) not in (int, float):
                 raise ValueError("left argument of + operator must be integer or float")
-            
-            if not type(right) in (int,float):
-                raise ValueError("right argument of + operator must be integer or float")
-            
+
+            if type(right) not in (int, float):
+                raise ValueError(
+                    "right argument of + operator must be integer or float"
+                )
+
             return left + right
 
-        if self.operator == '-':
+        if self.operator == "-":
             left = self.left.get_value(context)
             right = self.right.get_value(context)
 
-            if not type(left) in (int,float):
+            if type(left) not in (int, float):
                 raise ValueError("left argument of - operator must be integer or float")
-            
-            if not type(right) in (int,float):
-                raise ValueError("right argument of - operator must be integer or float")
-            
+
+            if type(right) not in (int, float):
+                raise ValueError(
+                    "right argument of - operator must be integer or float"
+                )
+
             return left - right
 
-        if self.operator == '*':
+        if self.operator == "*":
             left = self.left.get_value(context)
             right = self.right.get_value(context)
 
-            if not type(left) in (int,float):
+            if type(left) not in (int, float):
                 raise ValueError("left argument of * operator must be integer or float")
-            
-            if not type(right) in (int,float):
-                raise ValueError("right argument of * operator must be integer or float")
-            
+
+            if type(right) not in (int, float):
+                raise ValueError(
+                    "right argument of * operator must be integer or float"
+                )
+
             return left * right
 
-        if self.operator == '/':
+        if self.operator == "/":
             left = self.left.get_value(context)
             right = self.right.get_value(context)
 
-            if not type(left) in (int,float):
+            if type(left) not in (int, float):
                 raise ValueError("left argument of * operator must be integer or float")
-            
-            if not type(right) in (int,float):
-                raise ValueError("right argument of * operator must be integer or float")
-            
+
+            if type(right) not in (int, float):
+                raise ValueError(
+                    "right argument of * operator must be integer or float"
+                )
+
             result = float(left) / right
 
             floor_result = floor(result)
@@ -216,22 +216,20 @@ class Operator(object):
             else:
                 return result
 
-
-    def ensure_bool(self,left,right):
-
+    def ensure_bool(self, left, right):
         if type(left) == bool and type(right) == bool:
             return True
         else:
             return False
 
+
 class LowerModificator(object):
-    
     def __init__(self, value):
         self.value = value
 
     def get_value(self, context):
         string = self.value.get_value(context)
-        
+
         if type(string) == str:
             return string.lower()
         else:
@@ -239,13 +237,12 @@ class LowerModificator(object):
 
 
 class UpperModificator(object):
-    
     def __init__(self, value):
         self.value = value
 
     def get_value(self, context):
         string = self.value.get_value(context)
-        
+
         if type(string) == str:
             return string.upper()
         else:
@@ -253,14 +250,13 @@ class UpperModificator(object):
 
 
 class StripModificator(object):
-    
     def __init__(self, value, argument):
         self.value = value
         self.argument = argument
 
     def get_value(self, context):
         string = self.value.get_value(context)
-        
+
         if type(string) == str and type(self.argument) == str:
             return string.strip(self.argument)
 
@@ -269,14 +265,13 @@ class StripModificator(object):
 
 
 class SplitModificator(object):
-    
     def __init__(self, value, argument):
         self.value = value
         self.argument = argument
 
     def get_value(self, context):
         string = self.value.get_value(context)
-        
+
         if type(string) == str and type(self.argument) == str:
             return string.split(self.argument)
 
@@ -285,69 +280,73 @@ class SplitModificator(object):
 
 
 class Grammar(object):
+    # number constants
+    plusorminus = Literal("+") | Literal("-")
+    point = Literal(".")
+    dot = Literal(".").suppress()
+    bar = Literal("|").suppress()
+    comma = Literal(",").suppress()
+    larray = Literal("[").suppress()
+    rarray = Literal("]").suppress()
+    lbracket = Literal("(").suppress()
+    rbracket = Literal(")").suppress()
 
-    #number constants
-    plusorminus = Literal('+') | Literal('-')
-    point = Literal('.')
-    dot = Literal('.').suppress()
-    bar = Literal('|').suppress()
-    comma = Literal(',').suppress()
-    larray = Literal('[').suppress()
-    rarray = Literal(']').suppress()
-    lbracket = Literal('(').suppress()
-    rbracket = Literal(')').suppress()
-
-    string_lower = Literal('lower')
-    string_upper = Literal('upper')
-    string_split = Literal('split')
-    string_strip = Literal('strip')
+    string_lower = Literal("lower")
+    string_upper = Literal("upper")
+    string_split = Literal("split")
+    string_strip = Literal("strip")
 
     integer = Optional(plusorminus) + Word(nums)
-    integer.setParseAction(lambda s,l,t: int(''.join(t)))
+    integer.setParseAction(lambda s, l, t: int("".join(t)))
 
-    floatnumber = Combine( integer + point + Word(nums) )
-    floatnumber.setParseAction(lambda s,l,t: float(t[0]))
+    floatnumber = Combine(integer + point + Word(nums))
+    floatnumber.setParseAction(lambda s, l, t: float(t[0]))
 
     number = floatnumber | integer
 
-    #boolean constants
-    boolean = Literal('True') | Literal('False')
+    # boolean constants
+    boolean = Literal("True") | Literal("False")
     boolean.setParseAction(convert_boolean)
 
-    #string constants
+    # string constants
     string = dblQuotedString | quotedString
     string.setParseAction(removeQuotes)
 
-    array_of_numbers =  Literal('[') 
-    array_of_strings =  Literal('[') 
+    array_of_numbers = Literal("[")
+    array_of_strings = Literal("[")
 
-    constant = number | boolean | string 
-    constant.setParseAction(lambda s,l,t: Constant(t[0]))
+    constant = number | boolean | string
+    constant.setParseAction(lambda s, l, t: Constant(t[0]))
 
     # array
     empty_array = larray + rarray
     array = empty_array | (larray + OneOrMore(constant + ZeroOrMore(comma)) + rarray)
-    array.setParseAction(lambda s,l,t: Array(t))
+    array.setParseAction(lambda s, l, t: Array(t))
 
-    #variable name
-    name = Word( alphas+"_", alphanums+"_" )
+    # variable name
+    name = Word(alphas + "_", alphanums + "_")
 
-    #array_access
-    array_access = name + OneOrMore(
-        larray + integer + rarray)
+    # array_access
+    array_access = name + OneOrMore(larray + integer + rarray)
 
-    #variable atom TODO: find better expression
+    # variable atom TODO: find better expression
     variable_atom = array_access | name
 
-    variable = variable_atom + ZeroOrMore( 
-        dot + variable_atom)
+    variable = variable_atom + ZeroOrMore(dot + variable_atom)
     variable.leaveWhitespace()
-    variable.setParseAction(lambda s,l,t: Variable(t))
+    variable.setParseAction(lambda s, l, t: Variable(t))
 
     upper_lower_exp = (string | variable) + bar + (string_lower | string_upper)
     upper_lower_exp.addParseAction(convert_upper_lower)
 
-    split_strip_exp = (string | variable) + bar + (string_split | string_strip) + lbracket + Optional(string) + rbracket
+    split_strip_exp = (
+        (string | variable)
+        + bar
+        + (string_split | string_strip)
+        + lbracket
+        + Optional(string)
+        + rbracket
+    )
     split_strip_exp.addParseAction(convert_split_strip)
 
     operand = split_strip_exp | upper_lower_exp | constant | variable | array
@@ -370,9 +369,9 @@ class Grammar(object):
     comparsion_exp << addsub_exp + Optional(operator + comparsion_exp)
     comparsion_exp.addParseAction(convert_expression)
 
-    operator = Literal('not')
+    operator = Literal("not")
     not_exp = Forward()
-    not_exp <<  Optional(operator) + comparsion_exp
+    not_exp << Optional(operator) + comparsion_exp
     not_exp.addParseAction(convert_not_expression)
 
     operator = oneOf("and or")
@@ -390,16 +389,13 @@ class Grammar(object):
 
 
 class Expression(object):
-
     grammar = Grammar()
 
     def __init__(self, exp):
         self.expression = exp
 
-    def evaluate(self, context = {}):
+    def evaluate(self, context={}):
         self.context = context
         expression_root = self.grammar.parse(self.expression)
-        value =  expression_root.get_value(context)
+        value = expression_root.get_value(context)
         return value
-
-

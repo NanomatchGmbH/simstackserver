@@ -15,7 +15,7 @@ coulomb_binding_shift: {{wano["TABS"]["physics"]["coulomb_binding_shift"]}}
 ct_rate_memory_multiplier: {{wano["TABS"]["physics"]["ct_rate_memory_multiplier"]}}
 epsilon_material: {{wano["TABS"]["physics"]["epsilon_material"]}}
 distance_epsilon: {{wano["TABS"]["physics"]["distance_epsilon"]}}
-screening_length: {{wano["TABS"]["physics"]["screening_length"]}} 
+screening_length: {{wano["TABS"]["physics"]["screening_length"]}}
 doping: {{wano["TABS"]["physics"]["doping"]}}
 doping_regeneration_steps: {{wano["TABS"]["physics"]["doping_regeneration_steps"]}}
 electrode_stack_distance: {{wano["TABS"]["physics"]["electrode_stack_distance"]}}
@@ -44,7 +44,7 @@ pair_input: {{wano["TABS"]["topology"]["pair parameters"]}}
 
 transfer_integral_file: {{wano["TABS"]["topology"]["transfer_integral_file"]}}
 
-experiments: 
+experiments:
 - simulations: {{wano["TABS"]["operation"]["simulations"]}}
   measurement: {{wano["TABS"]["operation"]["measurement"]}}
   Temperature: {{wano["TABS"]["operation"]["temperature [K]"]}}

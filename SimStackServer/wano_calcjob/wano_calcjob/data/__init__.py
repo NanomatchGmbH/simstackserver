@@ -12,11 +12,11 @@ from voluptuous import Schema, Optional
 
 # A subset of diff's command line options
 cmdline_options = {
-    Optional('ignore-case'): bool,
-    Optional('ignore-file-name-case'): bool,
-    Optional('ignore-tab-expansion'): bool,
-    Optional('ignore-space-change'): bool,
-    Optional('ignore-all-space'): bool,
+    Optional("ignore-case"): bool,
+    Optional("ignore-file-name-case"): bool,
+    Optional("ignore-tab-expansion"): bool,
+    Optional("ignore-space-change"): bool,
+    Optional("ignore-all-space"): bool,
 }
 
 
@@ -24,7 +24,7 @@ class WaNoParameters(Dict):
     """
     Command line options for diff.
 
-    This class represents a python dictionary used to 
+    This class represents a python dictionary used to
     pass command line options to the executable.
     """
 
@@ -74,7 +74,7 @@ class WaNoParameters(Dict):
         pm_dict = self.get_dict()
         for k in pm_dict.keys():
             if pm_dict[k]:
-                parameters += ['--' + k]
+                parameters += ["--" + k]
 
         parameters += [file1_name, file2_name]
 

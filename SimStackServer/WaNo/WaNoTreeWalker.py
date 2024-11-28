@@ -14,7 +14,7 @@ class PathCollector:
     def path_to_value(self):
         return self._path_to_value
 
-    def assemble_paths(self,twpath):
+    def assemble_paths(self, twpath):
         if twpath is None:
             return twpath
         mypath = ".".join([str(p) for p in twpath])
@@ -43,18 +43,24 @@ class WaNoTreeWalker(NestDictMod):
     def _isdict(myobject) -> bool:
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
         from SimStackServer.WaNo.WaNoModels import WaNoModelDictLike, MultipleOfModel
+
         if hasattr(myobject, "dictlike"):
             return myobject.dictlike
-        return isinstance(myobject, WaNoModelDictLike) or \
-               isinstance(myobject, OrderedDictIterHelper) or \
-               isinstance(myobject, MultipleOfModel)
+        return (
+            isinstance(myobject, WaNoModelDictLike)
+            or isinstance(myobject, OrderedDictIterHelper)
+            or isinstance(myobject, MultipleOfModel)
+        )
 
     @staticmethod
     def _islist(myobject) -> bool:
         from SimStackServer.WaNo.WaNoModels import MultipleOfModel, WaNoModelListLike
+
         if hasattr(myobject, "listlike"):
             return myobject.listlike
-        return isinstance(myobject, WaNoModelListLike) or isinstance(myobject, MultipleOfModel)
+        return isinstance(myobject, WaNoModelListLike) or isinstance(
+            myobject, MultipleOfModel
+        )
 
 
 class ViewCollector:
@@ -108,10 +114,11 @@ class ViewCollector:
 
     def assemble_views(self, subdict, call_info):
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
+
         if isinstance(subdict, OrderedDictIterHelper):
             return None
 
-        mypath,tw = self._get_mypath_treewalker(call_info)
+        mypath, tw = self._get_mypath_treewalker(call_info)
 
         ViewClass = subdict.get_view_class()
 
@@ -123,6 +130,7 @@ class ViewCollector:
 
     def _skip_level(self, myobject):
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
+
         skipmodels = [OrderedDictIterHelper]
         for mt in skipmodels:
             if isinstance(myobject, mt):
@@ -132,24 +140,24 @@ class ViewCollector:
     def assemble_views_parenter(self, subdict, call_info):
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
 
-
         if isinstance(subdict, OrderedDictIterHelper):
             return None
 
-        mypath,tw = self._get_mypath_treewalker(call_info)
+        mypath, tw = self._get_mypath_treewalker(call_info)
         vc = subdict.view
         cutnum = 1
         if mypath != tuple():
             parent = tw.resolve(mypath[:-cutnum])
             while self._skip_level(parent):
-                cutnum+=1
+                cutnum += 1
                 parent = tw.resolve(mypath[:-cutnum])
-            #print(mypath)
+            # print(mypath)
             vc.set_parent(parent.view)
         return None
 
     def data_visitor_view_assembler(self, data, call_info):
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
+
         if isinstance(data, OrderedDictIterHelper):
             return data
         mypath, tw = self._get_mypath_treewalker(call_info)
@@ -179,7 +187,6 @@ class ViewCollector:
             vc.set_parent(parent.view)
         return data
 
-
     def data_visitor_model_parenter(self, data, call_info):
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
 
@@ -199,32 +206,30 @@ class ViewCollector:
     def assemble_model_parenter(self, subdict, call_info):
         from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
 
-
         if isinstance(subdict, OrderedDictIterHelper):
             return None
 
-        mypath,tw = self._get_mypath_treewalker(call_info)
+        mypath, tw = self._get_mypath_treewalker(call_info)
         cutnum = 1
         if mypath != tuple():
             parent = tw.resolve(mypath[:-cutnum])
             while self._skip_level(parent):
-                cutnum+=1
+                cutnum += 1
                 parent = tw.resolve(mypath[:-cutnum])
-            #print(mypath)
+            # print(mypath)
             subdict.set_parent(parent)
         return None
 
 
-def subdict_skiplevel(subdict,
-                      call_info):
+def subdict_skiplevel(subdict, call_info):
     newsubdict = None
     try:
         newsubdict = subdict["content"]
-    except (TypeError,KeyError) as e:
+    except (TypeError, KeyError):
         pass
     try:
         newsubdict = subdict["TABS"]
-    except (TypeError, KeyError) as e:
+    except (TypeError, KeyError):
         pass
 
     if newsubdict is not None:
@@ -232,22 +237,24 @@ def subdict_skiplevel(subdict,
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
         tw = NestDictMod(newsubdict)
-        return tw.walker(capture = True, path_visitor_function=pvf,
-                  subdict_visitor_function=svf,
-                  data_visitor_function=dvf
+        return tw.walker(
+            capture=True,
+            path_visitor_function=pvf,
+            subdict_visitor_function=svf,
+            data_visitor_function=dvf,
         )
     return None
 
-def subdict_skiplevel_to_type(subdict,
-                      call_info):
+
+def subdict_skiplevel_to_type(subdict, call_info):
     newsubdict = None
     try:
         newsubdict = subdict["content"]
-    except (TypeError,KeyError) as e:
+    except (TypeError, KeyError):
         pass
     try:
         newsubdict = subdict["TABS"]
-    except (TypeError, KeyError) as e:
+    except (TypeError, KeyError):
         pass
 
     if "Type" in subdict:
@@ -261,41 +268,44 @@ def subdict_skiplevel_to_type(subdict,
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
         tw = NestDictMod(newsubdict)
-        return tw.walker(capture = True, path_visitor_function=pvf,
-                  subdict_visitor_function=svf,
-                  data_visitor_function=dvf
+        return tw.walker(
+            capture=True,
+            path_visitor_function=pvf,
+            subdict_visitor_function=svf,
+            data_visitor_function=dvf,
         )
     return None
+
 
 def subdict_skiplevel_path_version(inpath):
     if inpath.startswith("TABS."):
         inpath = inpath[5:]
-    inpath = inpath.replace(".content.","")
+    inpath = inpath.replace(".content.", "")
     return inpath
 
-def subdict_skiplevel_to_aiida_type(subdict,
-                      call_info, aiida_files_by_relpath):
+
+def subdict_skiplevel_to_aiida_type(subdict, call_info, aiida_files_by_relpath):
     newsubdict = None
     try:
         newsubdict = subdict["content"]
-    except (TypeError,KeyError) as e:
+    except (TypeError, KeyError):
         pass
     try:
         newsubdict = subdict["TABS"]
-    except (TypeError, KeyError) as e:
+    except (TypeError, KeyError):
         pass
-
 
     if "Type" in subdict:
         mytype = subdict["Type"]
         from aiida import orm
+
         basetypes = {
             "Float": orm.Float,
             "Boolean": orm.Bool,
             "String": orm.Str,
-            "FString" : orm.Str,
+            "FString": orm.Str,
             "Int": orm.Int,
-            "File": orm.SinglefileData
+            "File": orm.SinglefileData,
         }
         if mytype in basetypes:
             if mytype not in ["File"]:
@@ -305,14 +315,15 @@ def subdict_skiplevel_to_aiida_type(subdict,
                 myfileobj = aiida_files_by_relpath[relfilename]
                 newsubdict = myfileobj
 
-
     if newsubdict is not None:
         pvf = call_info["path_visitor_function"]
         svf = call_info["subdict_visitor_function"]
         dvf = call_info["data_visitor_function"]
         tw = NestDictMod(newsubdict)
-        return tw.walker(capture = True, path_visitor_function=pvf,
-                  subdict_visitor_function=svf,
-                  data_visitor_function=dvf
+        return tw.walker(
+            capture=True,
+            path_visitor_function=pvf,
+            subdict_visitor_function=svf,
+            data_visitor_function=dvf,
         )
     return None
