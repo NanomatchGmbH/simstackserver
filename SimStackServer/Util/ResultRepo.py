@@ -8,7 +8,7 @@ import shutil
 
 
 hash_algorithm = hashlib.md5
-hash_sql_type = String(32) # should equal `len(hash_algorithm().hexdigest())`
+hash_sql_type = String(32)  # should equal `len(hash_algorithm().hexdigest())`
 block_size = 8192  # number of bytes to read at a time during file hashing
 
 
@@ -19,8 +19,7 @@ class Base(DeclarativeBase):
 class Result(Base):
     __tablename__ = "result"
     id: Mapped[int] = mapped_column(primary_key=True)
-    input_hash: Mapped[str] = mapped_column(
-        hash_sql_type, unique=True, index=True)
+    input_hash: Mapped[str] = mapped_column(hash_sql_type, unique=True, index=True)
     output_hash: Mapped[str] = mapped_column(hash_sql_type)
     output_directory: Mapped[str] = mapped_column(Text())
 
@@ -47,7 +46,7 @@ def compute_files_hash(files: Iterable[Path], base_dir: Path):
                     hash.update(chunk)
 
             rel_path = path.relative_to(base_dir)
-            hash.update(bytes(str(rel_path), 'utf-8'))
+            hash.update(bytes(str(rel_path), "utf-8"))
     return hash
 
 
@@ -61,7 +60,7 @@ def compute_dir_hash(dir: Path):
 
 class ResultRepo:
     """
-    Keeps track of the location of WaNo outputs in the filesytem 
+    Keeps track of the location of WaNo outputs in the filesytem
     and allows them to be retrieved to avoid repeated computation of the same result.
     """
 
@@ -76,8 +75,7 @@ class ResultRepo:
         else:
             absolute_basepath = Path.home() / basepath
             sql_path = f"sqlite:///{absolute_basepath}/result_repo.sqlite"
-            self._logger.info(
-                f"[REPO] Creating new engine to connect to '{sql_path}'")
+            self._logger.info(f"[REPO] Creating new engine to connect to '{sql_path}'")
             engine = create_engine(sql_path, echo=True)
             Base.metadata.create_all(engine)
             self._engines[basepath] = engine
@@ -102,7 +100,7 @@ class ResultRepo:
         runtime_directory = Path(wfem.runtime_directory)
 
         hash = compute_dir_hash(runtime_directory)
-        hash.update(bytes(wfem.outputpath, 'utf-8'))
+        hash.update(bytes(wfem.outputpath, "utf-8"))
 
         return hash.hexdigest()
 
@@ -112,10 +110,10 @@ class ResultRepo:
 
         Args:
             input_hash (str): the initial hash of the WFEM before it has done any computations
-            wfem (WorkflowExecModule) 
+            wfem (WorkflowExecModule)
 
         Returns:
-            bool: True if a suitable result was found. False if no result was found in the database, 
+            bool: True if a suitable result was found. False if no result was found in the database,
                 the files no longer exist in the filesystem or the files no longer match the output_hash saved in the database.
             str: The path from which the files were copied in case a suitable result was found
         """
@@ -123,33 +121,46 @@ class ResultRepo:
 
         with Session(engine) as session:
             existing_solution = session.scalar(
-                select(Result).where(Result.input_hash == input_hash))
+                select(Result).where(Result.input_hash == input_hash)
+            )
 
         if existing_solution is None:
-            self._logger.info(f"[REPO] Did not find existing solution for {get_wfem_repr(wfem)} with hash {input_hash}. \
-                              Results will be re-computed.")
+            self._logger.info(
+                f"[REPO] Did not find existing solution for {get_wfem_repr(wfem)} with hash {input_hash}. \
+                              Results will be re-computed."
+            )
             return False, None
 
-        source_dir = Path.home() / wfem.resources.basepath / Path(existing_solution.output_directory)
+        source_dir = (
+            Path.home()
+            / wfem.resources.basepath
+            / Path(existing_solution.output_directory)
+        )
         target_dir = Path(wfem.runtime_directory)
 
         if not source_dir.exists():
             self._logger.warning(
-                f"[REPO] Result directory {source_dir} could not be found. Results will be re-computed.")
+                f"[REPO] Result directory {source_dir} could not be found. Results will be re-computed."
+            )
             return False, None
 
         self._logger.info(
-            f"[REPO] Found existing solution for {get_wfem_repr(wfem)} with hash {input_hash} in {source_dir}")
+            f"[REPO] Found existing solution for {get_wfem_repr(wfem)} with hash {input_hash} in {source_dir}"
+        )
 
         # Ensure the files have not changed after the result was stored in the database
         source_hash = compute_dir_hash(source_dir).hexdigest()
 
         if source_hash != existing_solution.output_hash:
-            self._logger.warning(f"[REPO] One or multiple files in {source_dir} appear to have changed. \
-                                 Results will be re-computed.")
+            self._logger.warning(
+                f"[REPO] One or multiple files in {source_dir} appear to have changed. \
+                                 Results will be re-computed."
+            )
             return False, None
 
-        self._logger.info(f"[REPO] Files will be copied from {source_dir} to {target_dir}")
+        self._logger.info(
+            f"[REPO] Files will be copied from {source_dir} to {target_dir}"
+        )
         shutil.copytree(source_dir, target_dir, dirs_exist_ok=True)
         return True, str(source_dir)
 
@@ -180,10 +191,13 @@ class ResultRepo:
         with Session(engine) as session:
             # overwrite existing result
             existing_result = session.scalar(
-                select(Result).where(Result.input_hash == input_hash))
+                select(Result).where(Result.input_hash == input_hash)
+            )
             if existing_result is not None:
                 result.id = existing_result.id
 
             session.merge(result)
             session.commit()
-        self._logger.info(f"[REPO] Stored results of {get_wfem_repr(wfem)} with hash {input_hash}.")
+        self._logger.info(
+            f"[REPO] Stored results of {get_wfem_repr(wfem)} with hash {input_hash}."
+        )

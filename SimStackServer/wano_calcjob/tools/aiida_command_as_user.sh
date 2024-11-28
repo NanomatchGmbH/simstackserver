@@ -30,4 +30,3 @@ fi
 sudo -u $username bash -c "cd ; source $NANOMATCH/$NANOVER/local_anaconda/etc/profile.d/conda.sh; conda activate aiida;\
 $MYCOM ;\
 "
-

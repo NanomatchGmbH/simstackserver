@@ -15,17 +15,15 @@ if __name__ == "__main__":
         engine_name = engine["Engine"]
         name = engine["Name"]
         engine_settings = engine["%s Settings" % engine_name]
-        engines.append({"Name": name,
-                        "DFT Engine": engine_name,
-                        "Settings": engine_settings})
+        engines.append(
+            {"Name": name, "DFT Engine": engine_name, "Settings": engine_settings}
+        )
     tmp = wano["Tabs"]["General"]["General Settings"]
-    molecule = {"Path": tmp["Morphology"],
-                "Charge": 0,
-                "Multiplicity": 0
-                }
-    settings = {"Molecule": molecule,
-                "Engines": engines,
-                "LambdaEAIP": wano["Tabs"]["LambdaEAIP"]
-                }
+    molecule = {"Path": tmp["Morphology"], "Charge": 0, "Multiplicity": 0}
+    settings = {
+        "Molecule": molecule,
+        "Engines": engines,
+        "LambdaEAIP": wano["Tabs"]["LambdaEAIP"],
+    }
     with open("LambdaEAIP_settings.yml", "w") as wanoout:
         yaml.dump(settings, wanoout, default_flow_style=False)

@@ -1,15 +1,9 @@
 import abc
-import errno
 import logging
 import os
 import pathlib
 import shutil
-import stat
-import string
 import time
-from contextlib import contextmanager
-from datetime import datetime
-import random
 
 from os import path
 import posixpath
@@ -18,10 +12,7 @@ from pathlib import Path
 import sshtunnel
 
 from SimStackServer.BaseClusterManager import BaseClusterManager
-from SimStackServer.MessageTypes import Message, ErrorCodes
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.SimStackServerMain import WorkflowManager
-from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories, filewalker
 from SimStackServer.WorkflowModel import Workflow
 
 
@@ -30,17 +21,18 @@ class NotImplementedForFilegeneratorClusterManager(Exception):
 
 
 class FilegeneratorClusterManager(BaseClusterManager):
-    def __init__(self,
-                 url,
-                 port,
-                 calculation_basepath,
-                 user,
-                 sshprivatekey,
-                 extra_config,
-                 queueing_system,
-                 default_queue,
-                 software_directory=None
-                 ):
+    def __init__(
+        self,
+        url,
+        port,
+        calculation_basepath,
+        user,
+        sshprivatekey,
+        extra_config,
+        queueing_system,
+        default_queue,
+        software_directory=None,
+    ):
         """
 
         :param default_queue:
@@ -55,7 +47,7 @@ class FilegeneratorClusterManager(BaseClusterManager):
         self._url = url
         try:
             self._port = int(port)
-        except ValueError as e:
+        except ValueError:
             print(f"Port was set to >{port}<. Using default port of 22")
             self._port = 22
         self._calculation_basepath = calculation_basepath
@@ -98,7 +90,6 @@ class FilegeneratorClusterManager(BaseClusterManager):
         """
         return
 
-
     def save_hostkeyfile(self, filename):
         """
         Save the read hostkeys, plus eventual new ones back to disk.
@@ -135,17 +126,15 @@ class FilegeneratorClusterManager(BaseClusterManager):
         """
         return True
 
-
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
             basepath_override = self._calculation_basepath
 
-        target_filename = basepath_override + '/' + filename
-        if not target_filename.startswith('/'):
-            target_filename = str(Path.home()/target_filename)
+        target_filename = basepath_override + "/" + filename
+        if not target_filename.startswith("/"):
+            target_filename = str(Path.home() / target_filename)
         print(target_filename)
         return target_filename
-
 
     def delete_file(self, filename, basepath_override=None):
         resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
@@ -155,15 +144,23 @@ class FilegeneratorClusterManager(BaseClusterManager):
         abspath = self.resolve_file_in_basepath(dirname, basepath_override)
         shutil.rmtree(abspath)
 
-
     def exists_remote(self, path):
         return os.path.exists(path)
 
-    def get_directory(self, from_directory_on_server: str, to_directory: str, optional_callback=None,
-                      basepath_override=None):
-        raise NotImplementedForFilegeneratorClusterManager("Not implemented for Filegenerator")
+    def get_directory(
+        self,
+        from_directory_on_server: str,
+        to_directory: str,
+        optional_callback=None,
+        basepath_override=None,
+    ):
+        raise NotImplementedForFilegeneratorClusterManager(
+            "Not implemented for Filegenerator"
+        )
 
-    def put_file(self, from_file, to_file, optional_callback=None, basepath_override=None):
+    def put_file(
+        self, from_file, to_file, optional_callback=None, basepath_override=None
+    ):
         """
         Transfer a file from_file (local) to to_file(remote)
 
@@ -176,17 +173,20 @@ class FilegeneratorClusterManager(BaseClusterManager):
         :return: Nothing
         """
         if not path.isfile(from_file):
-            raise FileNotFoundError("File %s was not found during ssh put file on local host"%(from_file))
+            raise FileNotFoundError(
+                "File %s was not found during ssh put file on local host" % (from_file)
+            )
         if basepath_override is None:
             basepath_override = self._calculation_basepath
         abstofile = basepath_override + "/" + to_file
-        if not abstofile.startswith('/'):
-            abstofile = str(Path.home()/abstofile)
+        if not abstofile.startswith("/"):
+            abstofile = str(Path.home() / abstofile)
         # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
         if self.exists_as_directory(abstofile):
             abstofile += "/" + posixpath.basename(from_file)
 
         shutil.copyfile(from_file, abstofile)
+
     def remote_open(self, filename, mode, basepath_override=None):
         abspath = self.resolve_file_in_basepath(filename, basepath_override)
         return open(abspath, mode)
@@ -194,19 +194,14 @@ class FilegeneratorClusterManager(BaseClusterManager):
     @abc.abstractmethod
     def list_dir(self, path, basepath_override=None):
         files = []
-        abspath = self.resolve_file_in_basepath(path, basepath_override=basepath_override)
+        abspath = self.resolve_file_in_basepath(
+            path, basepath_override=basepath_override
+        )
 
         for file_entry in os.scandir(abspath):
-
-            file_char = 'd' if file_entry.is_dir() else 'f'
-            fname  = file_entry.name
-            files.append(
-                {
-                    'name': fname,
-                    'path': abspath,
-                    'type': file_char
-                }
-            )
+            file_char = "d" if file_entry.is_dir() else "f"
+            fname = file_entry.name
+            files.append({"name": fname, "path": abspath, "type": file_char})
         return files
 
     def get_default_queue(self):
@@ -215,10 +210,11 @@ class FilegeneratorClusterManager(BaseClusterManager):
         """
         return self._default_queue
 
-
     def mkdir_random_singlejob_exec_directory(self, given_name, num_retries=10):
         for i in range(0, num_retries):
-            trialdirectory = Path("singlejob_exec_directories") / self._get_job_directory_path(given_name)
+            trialdirectory = Path(
+                "singlejob_exec_directories"
+            ) / self._get_job_directory_path(given_name)
             if self.exists(Path(self._calculation_basepath) / trialdirectory):
                 time.sleep(1.05)
             else:
@@ -227,8 +223,9 @@ class FilegeneratorClusterManager(BaseClusterManager):
 
         raise FileExistsError("Could not generate new directory in time.")
 
-
-    def get_file(self, from_file, to_file, basepath_override=None, optional_callback=None):
+    def get_file(
+        self, from_file, to_file, basepath_override=None, optional_callback=None
+    ):
         """
         Transfer a file from_file (remote) to to_file(local)
 
@@ -243,15 +240,15 @@ class FilegeneratorClusterManager(BaseClusterManager):
         if basepath_override is None:
             basepath_override = self._calculation_basepath
 
-        getpath = basepath_override + '/' + from_file
+        getpath = basepath_override + "/" + from_file
         shutil.copyfile(getpath, to_file)
 
     def exec_command(self, command):
         """
-            Executes a command.
+        Executes a command.
 
-            :param command (str): Command to execute remotely.
-            :return: Nothing (currently)
+        :param command (str): Command to execute remotely.
+        :return: Nothing (currently)
         """
         raise NotImplementedError("Not implemented in FilegeneratorClusterManager")
 
@@ -260,15 +257,15 @@ class FilegeneratorClusterManager(BaseClusterManager):
 
     def get_url_for_workflow(self, workflow):
         if not workflow.startswith("/"):
-            workflow = "/%s"%workflow
+            workflow = "/%s" % workflow
         return self._calculation_basepath + workflow
 
     def submit_wf(self, filename, basepath_override=None):
         resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
         workflow = Workflow.new_instance_from_xml(resolved_filename)
         wf_storage = workflow.get_field_value("storage")
-        if not wf_storage.startswith('/'):
-            workflow.set_field_value("storage",str(Path.home()/wf_storage))
+        if not wf_storage.startswith("/"):
+            workflow.set_field_value("storage", str(Path.home() / wf_storage))
         wm = WorkflowManager()
         wm.restore()
         wm.add_finished_workflow(resolved_filename)
@@ -317,9 +314,11 @@ class FilegeneratorClusterManager(BaseClusterManager):
 
     def get_newest_version_directory(self, path):
         return "V6"
+
     def is_directory(self, path, basepath_override=None):
         resolved = self.resolve_file_in_basepath(path, basepath_override)
         return os.path.isdir(resolved)
+
     def get_http_server_address(self):
         """
         Function, which communicates with the server asking for the server port and setting up the
@@ -352,14 +351,12 @@ class FilegeneratorClusterManager(BaseClusterManager):
 
         absdir = self.resolve_file_in_basepath(directory, basepath_override)
 
-
         os.makedirs(absdir, exist_ok=True)
 
         return absdir
+
     def get_calculation_basepath(self):
         return self._calculation_basepath
 
     def get_queueing_system(self):
         return self._queueing_system
-
-

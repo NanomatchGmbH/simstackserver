@@ -32,7 +32,7 @@ class AiiDAJob:
         delete_nodes([self._mynode.pk], force=True)
 
     def listdir(self):
-        wdir = self._mynode.get_remote_workdir()
+        return self._mynode.get_remote_workdir()
 
     def get_outputs(self):
         return self._mynode.outputs

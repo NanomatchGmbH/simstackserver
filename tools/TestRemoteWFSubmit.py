@@ -34,10 +34,13 @@ def wf_submit(folder: Path, wf_xml_loc: Path) -> None:
         print(f"jobloop number {counter}")
     print("Finished workflow. Exiting.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     argv = sys.argv
     if len(argv) < 2:
-        print("Please call this script using TestRemoteWFSubmit.py your_wf_xml_file.xml")
+        print(
+            "Please call this script using TestRemoteWFSubmit.py your_wf_xml_file.xml"
+        )
     wf_xml = Path(sys.argv[1])
     wf_dir = wf_xml.parent
 

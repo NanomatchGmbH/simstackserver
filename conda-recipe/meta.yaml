@@ -1,21 +1,20 @@
 package:
-  name: simstackserver 
+  name: simstackserver
   version: "1.5.2"
 about:
-  home: https://github.com/not_yet_existings
+  home: https://github.com/NanomatchGmbH/simstackserver
   license: proprietary
-  summary: 
+  summary:
 source:
-  path: ../
+  git_url: ../
 build:
-  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed -vv .
+  script: "{{ PYTHON }} -m pip install --no-deps --ignore-installed -vv ."
   noarch: python
 requirements:
   build:
     - python >=3.10
     - python-build
-    - flit
-    - flit-core
+    - setuptools
   run:
     - python >=3.10
     - appdirs >=1.4.4
@@ -40,6 +39,8 @@ requirements:
     - threadfarm ==2.0.0
     - SQLAlchemy ==2.0.*
     - micromamba >=1.5.6
+    - python-build
+    - setuptools
 test:
   source_files:
     - tests

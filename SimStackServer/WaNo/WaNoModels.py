@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-#from pyura.pyura.helpers import trace_to_logger
+# from pyura.pyura.helpers import trace_to_logger
 import json
 import logging
 import pathlib
@@ -18,14 +18,26 @@ import numpy as np
 from SimStackServer.Reporting.ReportRenderer import ReportRenderer
 from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.Util.XMLUtils import is_regular_element
-from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path, WaNoListEntry_from_folder_or_zip
+from SimStackServer.WaNo.MiscWaNoTypes import (
+    WaNoListEntry,
+    get_wano_xml_path,
+    WaNoListEntry_from_folder_or_zip,
+)
 from SimStackServer.WaNo.WaNoDelta import WaNoDelta
-from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, WorkflowElementList, Resources
+from SimStackServer.WorkflowModel import (
+    WorkflowExecModule,
+    StringList,
+    WorkflowElementList,
+    Resources,
+)
 
 import collections
 
 from nestdictmod.nestdictmod import NestDictMod, EraseEntryError
-from SimStackServer.WaNo.AbstractWaNoModel import AbstractWanoModel, OrderedDictIterHelper
+from SimStackServer.WaNo.AbstractWaNoModel import (
+    AbstractWanoModel,
+    OrderedDictIterHelper,
+)
 import SimStackServer.WaNo.WaNoFactory
 from lxml import etree
 import xmltodict
@@ -42,17 +54,24 @@ from jinja2 import Template
 from SimStackServer.WaNo.WaNoExceptions import WorkflowSubmitError
 
 
-class FileNotFoundErrorSimStack(FileNotFoundError):
-    pass
-
-from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type, \
-    subdict_skiplevel_to_aiida_type, WaNoTreeWalker
+from SimStackServer.WaNo.WaNoTreeWalker import (
+    PathCollector,
+    subdict_skiplevel,
+    subdict_skiplevel_to_type,
+    subdict_skiplevel_to_aiida_type,
+    WaNoTreeWalker,
+)
 from nestdictmod.flatten_dict import flatten_dict
 from nestdictmod.tree_list_to_dict import tree_list_to_dict, tree_list_to_dict_multiply
 
 
+class FileNotFoundErrorSimStack(FileNotFoundError):
+    pass
+
+
 class WaNoParseError(Exception):
     pass
+
 
 def mkdir_p(path):
     import errno
@@ -76,9 +95,13 @@ class WaNoModelDictLike(AbstractWanoModel):
         for child in self.xml:
             if not is_regular_element(child):
                 continue
-            name = child.attrib['name']
-            ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(child.tag)
-            ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(child.tag)
+            name = child.attrib["name"]
+            ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(
+                child.tag
+            )
+            ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(
+                child.tag
+            )
             model = ModelClass()
             model.set_view_class(ViewClass)
             model.set_name(name)
@@ -123,7 +146,9 @@ class WaNoModelDictLike(AbstractWanoModel):
             if isinstance(wano_element, WaNoSwitchModel):
                 number_of_switches += 1
                 if number_of_switches == 2:
-                    raise NotImplementedError("Only a single switch supported per DictBox")
+                    raise NotImplementedError(
+                        "Only a single switch supported per DictBox"
+                    )
                 oneOf_properties_dict = wano_element.get_secure_schema()
                 continue
 
@@ -132,7 +157,9 @@ class WaNoModelDictLike(AbstractWanoModel):
             if secure_schema:
                 child_properties_dict.update(secure_schema)
             else:
-                raise NotImplementedError(f"missing_{wano_element.__class__} secure schema generator")
+                raise NotImplementedError(
+                    f"missing_{wano_element.__class__} secure schema generator"
+                )
 
         properties_dict = {
             self.name: {
@@ -163,7 +190,7 @@ class WaNoModelDictLike(AbstractWanoModel):
     def get_type_str(self):
         return "Dict"
 
-    #def __repr__(self):
+    # def __repr__(self):
     #    return repr(self.wano_dict)
 
     def update_xml(self):
@@ -175,13 +202,13 @@ class WaNoModelDictLike(AbstractWanoModel):
             wano.decommission()
         super().decommission()
 
+
 class WaNoChoiceModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
-        super(WaNoChoiceModel,self).__init__(*args,**kwargs)
+        super(WaNoChoiceModel, self).__init__(*args, **kwargs)
         self.choices = []
-        self.chosen=0
+        self.chosen = 0
         self._default = 0
-
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
@@ -191,7 +218,7 @@ class WaNoChoiceModel(AbstractWanoModel):
                 continue
             myid = int(child.attrib["id"])
             self.choices.append(child.text)
-            assert(len(self.choices) == myid + 1)
+            assert len(self.choices) == myid + 1
             if "chosen" in child.attrib:
                 if child.attrib["chosen"].lower() == "true":
                     self.chosen = myid
@@ -206,8 +233,8 @@ class WaNoChoiceModel(AbstractWanoModel):
     def get_data(self):
         try:
             return self.choices[self.chosen]
-        except IndexError as e:
-            print("Invalid choice in %s. Returning choice 0"%self.name)
+        except IndexError:
+            print("Invalid choice in %s. Returning choice 0" % self.name)
             return self.choices[0]
 
     def changed_from_default(self) -> bool:
@@ -246,7 +273,7 @@ class WaNoChoiceModel(AbstractWanoModel):
 
 class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def __init__(self, *args, **kwargs):
-        super(WaNoDynamicChoiceModel,self).__init__(*args,**kwargs)
+        super(WaNoDynamicChoiceModel, self).__init__(*args, **kwargs)
         self._collection_path = ""
         self._subpath = ""
         self.choices = ["uninitialized"]
@@ -271,14 +298,21 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         super().set_root(root)
         self._connected = True
         if not self._registered:
-            #print(f"I am registering with {root} {self.path}")
-            root.register_callback(self._collection_path, self._update_choices, self._collection_path.count("."))
+            # print(f"I am registering with {root} {self.path}")
+            root.register_callback(
+                self._collection_path,
+                self._update_choices,
+                self._collection_path.count("."),
+            )
             self._registered = True
 
     def _update_choices(self, changed_path):
         if not self._connected:
-            return 
-        if not changed_path.startswith(self._collection_path) and not changed_path == "force":
+            return
+        if (
+            not changed_path.startswith(self._collection_path)
+            and not changed_path == "force"
+        ):
             return
 
         self._updating = True
@@ -286,15 +320,17 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         self.choices = []
         numchoices = len(wano_listlike)
         register_paths = []
-        for myid in range(0,numchoices):
-            query_string = "%s.%d.%s"% (self._collection_path,myid,self._subpath)
+        for myid in range(0, numchoices):
+            query_string = "%s.%d.%s" % (self._collection_path, myid, self._subpath)
             register_paths.append(query_string)
             self.choices.append(self._root.get_value(query_string).get_data())
 
         delete_later = []
         for path in self._registered_paths:
             if path not in register_paths:
-                self._root.unregister_callback(path, self._update_choices, self.path_depth())
+                self._root.unregister_callback(
+                    path, self._update_choices, self.path_depth()
+                )
                 delete_later.append(path)
         for path in delete_later:
             self._registered_paths.remove(path)
@@ -317,21 +353,19 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
             super().apply_delta(self._delayed_delta_apply)
             self._delayed_delta_apply = None
 
-        if not self.view is None:
+        if self.view is not None:
             self.view.init_from_model()
-
-
 
     def apply_delta(self, delta):
         self._delayed_delta_apply = delta
 
-    def set_chosen(self,choice):
+    def set_chosen(self, choice):
         if not self._connected:
             return
         if self._updating:
             return
         self.chosen = int(choice)
-        if len (self.choices) > self.chosen:
+        if len(self.choices) > self.chosen:
             self.set_data(self.choices[self.chosen])
 
     def update_xml(self):
@@ -339,22 +373,23 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
 
     def decommission(self):
         if self._registered:
-            self.get_root().unregister_callback(self._collection_path, self._update_choices, self._collection_path.count("."))
+            self.get_root().unregister_callback(
+                self._collection_path,
+                self._update_choices,
+                self._collection_path.count("."),
+            )
             self._registered = False
         for path in self._registered_paths:
-            self._root.unregister_callback(path, self._update_choices, self.path_depth())
+            self._root.unregister_callback(
+                path, self._update_choices, self.path_depth()
+            )
         self._registered_paths.clear()
 
         super().decommission()
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {
-            self.name: {
-                "type": "string"
-            }
-        }
+        schema = {self.name: {"type": "string"}}
         return schema
-
 
 
 class WaNoMatrixModel(AbstractWanoModel):
@@ -408,9 +443,8 @@ class WaNoMatrixModel(AbstractWanoModel):
         try:
             a = float(value)
             return a
-        except ValueError as e:
+        except ValueError:
             return f'"{value}"'
-
 
     def get_delta_to_default(self):
         return self._tostring(self.storage)
@@ -425,22 +459,22 @@ class WaNoMatrixModel(AbstractWanoModel):
         try:
             a = float(value)
             return a
-        except ValueError as e:
+        except ValueError:
             return str(value)
 
-    def set_data(self,i,j,data):
+    def set_data(self, i, j, data):
         self.storage[i][j] = self._cast_to_correct_type(data)
 
-    def _fromstring(self,stri):
+    def _fromstring(self, stri):
         list_of_lists = ast.literal_eval(stri)
-        if not isinstance(list_of_lists,list):
+        if not isinstance(list_of_lists, list):
             raise SyntaxError("Expected list of lists")
         for i in range(len(list_of_lists)):
             for j in range(len(list_of_lists[i])):
                 list_of_lists[i][j] = self._cast_to_correct_type(list_of_lists[i][j])
         return list_of_lists
 
-    def __getitem__(self,item):
+    def __getitem__(self, item):
         return self._tostring(self.storage)
 
     def get_type_str(self):
@@ -453,12 +487,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         self.xml.text = self._tostring(self.storage)
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {
-            self.name: {
-                "type": "string",
-                "pattern": r"\[\s*\[.+\]\s*\]"
-            }
-        }
+        schema = {self.name: {"type": "string", "pattern": r"\[\s*\[.+\]\s*\]"}}
         # schema = {
         #     self.name : {
         #         "type": "array",
@@ -477,6 +506,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         # }
         return schema
 
+
 class WaNoModelListLike(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoModelListLike, self).__init__(*args, **kwargs)
@@ -493,12 +523,15 @@ class WaNoModelListLike(AbstractWanoModel):
         for current_id, child in enumerate(self.xml):
             if not is_regular_element(child):
                 continue
-            ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(child.tag)
-            ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(child.tag)
+            ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(
+                child.tag
+            )
+            ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(
+                child.tag
+            )
             model = ModelClass()
             model.set_view_class(ViewClass)
             model.parse_from_xml(child)
-            start_path = [*self.path.split(".")] + [str(current_id)]
             self.wano_list.append(model)
 
     @property
@@ -545,7 +578,9 @@ class WaNoModelListLike(AbstractWanoModel):
         super().decommission()
 
     def get_secure_schema(self) -> Optional[str]:
-        raise NotImplementedError("WaNo Secure Schema not supported on pure WaNoModelListLike")
+        raise NotImplementedError(
+            "WaNo Secure Schema not supported on pure WaNoModelListLike"
+        )
 
 
 class WaNoNoneModel(AbstractWanoModel):
@@ -595,7 +630,7 @@ class WaNoSwitchModel(WaNoModelListLike):
         self._switch_path = None
         self._visible_thing = -1
         self._registered = False
-        #self._name = "unset"
+        # self._name = "unset"
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
@@ -619,7 +654,7 @@ class WaNoSwitchModel(WaNoModelListLike):
     def dictlike(self):
         return False
 
-    #def __getitem__(self, item):
+    # def __getitem__(self, item):
     #    return self.wano_list[self._visible_thing].__getitem__(item)
 
     def __iter__(self):
@@ -650,10 +685,10 @@ class WaNoSwitchModel(WaNoModelListLike):
         else:
             return 0
 
-    def _evaluate_switch_condition(self,changed_path):
+    def _evaluate_switch_condition(self, changed_path):
         if changed_path != self._switch_path and not changed_path == "force":
             return
-        #print("Evaluating mypath %s for changed_path %s"%(self._switch_path, changed_path))
+        # print("Evaluating mypath %s for changed_path %s"%(self._switch_path, changed_path))
         visible_thing_string = self._root.get_value(self._switch_path).get_data()
         try:
             visible_thing = self._switch_name_list.index(visible_thing_string)
@@ -662,12 +697,12 @@ class WaNoSwitchModel(WaNoModelListLike):
             if self._view is not None:
                 self._view.init_from_model()
         except (IndexError, KeyError) as e:
-            print("This will throw!",e)
+            print("This will throw!", e)
             pass
 
     def get_type_str(self):
         if self._visible_thing >= 0:
-            #print(self._visible_thing, self.wano_list, self._name, self.path)
+            # print(self._visible_thing, self.wano_list, self._name, self.path)
             return self.wano_list[self._visible_thing].get_type_str()
         return "unset"
 
@@ -678,9 +713,13 @@ class WaNoSwitchModel(WaNoModelListLike):
 
     def set_path(self, path):
         super().set_path(path)
-        self._switch_path = Template(self._switch_path).render(path = self._path.split("."))
+        self._switch_path = Template(self._switch_path).render(
+            path=self._path.split(".")
+        )
         if not self._registered:
-            self._root.register_callback(self._switch_path, self._evaluate_switch_condition, self.path_depth())
+            self._root.register_callback(
+                self._switch_path, self._evaluate_switch_condition, self.path_depth()
+            )
             self._registered = True
 
     def get_parent(self):
@@ -693,10 +732,12 @@ class WaNoSwitchModel(WaNoModelListLike):
         super().set_root(root)
 
     def _parse_switch_conditions(self, xml):
-        self._switch_path  = xml.attrib["switch_path"]
+        self._switch_path = xml.attrib["switch_path"]
 
     def decommission(self):
-        self._root.unregister_callback(self._switch_path, self._evaluate_switch_condition, self.path_depth())
+        self._root.unregister_callback(
+            self._switch_path, self._evaluate_switch_condition, self.path_depth()
+        )
         self._registered = False
         for wano in self.wano_list:
             wano.decommission()
@@ -706,7 +747,9 @@ class WaNoSwitchModel(WaNoModelListLike):
         child_schemata = []
         for child in self.wano_list:
             if isinstance(child, WaNoSwitchModel):
-                raise NotImplementedError("A switch model cannot be directly inside a switch model.")
+                raise NotImplementedError(
+                    "A switch model cannot be directly inside a switch model."
+                )
             child_schemata.append(child.get_secure_schema())
         schema = {
             "oneOf": child_schemata,
@@ -721,7 +764,6 @@ class MultipleOfModel(AbstractWanoModel):
         self.first_xml_child = None
         self.list_of_dicts = []
         self._default_len = -1
-
 
     def parse_from_xml(self, xml):
         self.xml = xml
@@ -756,9 +798,11 @@ class MultipleOfModel(AbstractWanoModel):
         number_of_switches = 0
         for item_name, item_dict in first_item.items():
             if isinstance(item_dict, WaNoSwitchModel):
-                number_of_switches+=1
+                number_of_switches += 1
                 if number_of_switches == 2:
-                    raise NotImplementedError("Only one WaNoSwitch allowed per MultipleOf")
+                    raise NotImplementedError(
+                        "Only one WaNoSwitch allowed per MultipleOf"
+                    )
                 oneOf_property_dict = item_dict.get_secure_schema()
                 continue
             required_list.append(item_name)
@@ -767,7 +811,7 @@ class MultipleOfModel(AbstractWanoModel):
             "type": "array",
             "items": {
                 "type": "object",
-                "properties":  child_properties_dict,
+                "properties": child_properties_dict,
                 "additionalProperties": False,
             },
             "required": required_list,
@@ -775,7 +819,7 @@ class MultipleOfModel(AbstractWanoModel):
         if oneOf_property_dict is not None:
             schema["items"].update(oneOf_property_dict)
 
-        return {self.name : schema}
+        return {self.name: schema}
 
     def number_of_multiples(self):
         return len(self.list_of_dicts)
@@ -783,20 +827,24 @@ class MultipleOfModel(AbstractWanoModel):
     def last_item_check(self):
         return len(self.list_of_dicts) == 1
 
-    def parse_one_child(self, child, build_view = False):
-        #A bug still exists, which allows visibility conditions to be fired prior to the existence of the model
-        #but this is transient.
+    def parse_one_child(self, child, build_view=False):
+        # A bug still exists, which allows visibility conditions to be fired prior to the existence of the model
+        # but this is transient.
         wano_temp_dict = OrderedDictIterHelper()
         current_id = len(self.list_of_dicts)
-        #fp = "%s.%d"%(self.full_path,current_id)
+        # fp = "%s.%d"%(self.full_path,current_id)
         for cchild in child:
-            ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(cchild.tag)
-            ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(cchild.tag)
+            ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(
+                cchild.tag
+            )
+            ViewClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_qt_view_class(
+                cchild.tag
+            )
             model = ModelClass()
             model.set_view_class(ViewClass)
             model.parse_from_xml(cchild)
-            name = cchild.attrib['name']
-            start_path = [*self.path.split(".")] + [str(current_id),model.name ]
+            name = cchild.attrib["name"]
+            start_path = [*self.path.split(".")] + [str(current_id), model.name]
 
             model.set_name(name)
             rootview = None
@@ -804,7 +852,12 @@ class MultipleOfModel(AbstractWanoModel):
                 self.get_root()
                 model.set_root(self.get_root())
 
-                model, rootview = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(model, start_path = start_path, parent_view = self.view)
+                (
+                    model,
+                    rootview,
+                ) = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(
+                    model, start_path=start_path, parent_view=self.view
+                )
                 rootview.set_parent(self.view)
 
             model.set_parent(self)
@@ -854,7 +907,7 @@ class MultipleOfModel(AbstractWanoModel):
             return True
         return False
 
-    def add_item(self, build_view = True):
+    def add_item(self, build_view=True):
         before = self._root.block_signals(True)
         my_xml = copy.copy(self.first_xml_child)
         my_xml.attrib["id"] = str(len(self.list_of_dicts))
@@ -872,9 +925,9 @@ class MultipleOfModel(AbstractWanoModel):
     def apply_delta(self, delta):
         while len(self.list_of_dicts) < delta:
             if self.view is not None:
-                self.add_item(build_view = True)
+                self.add_item(build_view=True)
             else:
-                self.add_item(build_view = False)
+                self.add_item(build_view=False)
         while len(self.list_of_dicts) > delta:
             self.delete_item()
 
@@ -914,7 +967,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             object.load(pathobj)
         else:
             object.make_default_list()
-            #object.save(pathobj)
+            # object.save(pathobj)
 
     def set_parent_wf(self, parent_wf):
         self._parent_wf = parent_wf
@@ -927,7 +980,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def __init__(self, *args, **kwargs):
         super(WaNoModelRoot, self).__init__(*args, **kwargs)
-        self._explicit_xml = kwargs.get("explicit_xml","unset")
+        self._explicit_xml = kwargs.get("explicit_xml", "unset")
         self._logger = logging.getLogger("WaNoModelRoot")
         self._datachanged_callbacks = {}
         self._outputfile_callbacks = []
@@ -946,7 +999,10 @@ class WaNoModelRoot(WaNoModelDictLike):
             self.import_model = None
             self.export_model = None
         else:
-            from simstack.view.PropertyListView import ImportTableModel, ExportTableModel
+            from simstack.view.PropertyListView import (
+                ImportTableModel,
+                ExportTableModel,
+            )
 
             self.import_model = ImportTableModel(parent=None, wano_parent=self)
             self.import_model.make_default_list()
@@ -990,7 +1046,7 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_new_resource_model(self) -> Resources:
         return self._new_resource_model
 
-    def block_signals(self,true_or_false):
+    def block_signals(self, true_or_false):
         before = self._block_signals
         self._block_signals = true_or_false
         return before
@@ -1009,7 +1065,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         if resources_fn.is_file():
             try:
                 self._new_resource_model.from_json(resources_fn)
-            except JSONDecodeError as e:
+            except JSONDecodeError:
                 resources_fn.unlink()
 
     def _read_output_schema(self, directory: pathlib.Path):
@@ -1019,7 +1075,9 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def verify_output_against_schema(self, content: Dict[str, Any]):
         if not self._output_schema:
-            raise ValueError("Could not verify content, because no output schema was found")
+            raise ValueError(
+                "Could not verify content, because no output schema was found"
+            )
         jsonschema.validate(content, self._output_schema)
 
     @staticmethod
@@ -1033,7 +1091,9 @@ class WaNoModelRoot(WaNoModelDictLike):
             xmlpath = Path(self._explicit_xml)
         else:
             wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
-            xmlpath = get_wano_xml_path(self._wano_dir_root, wano_name_override=wle.name)
+            xmlpath = get_wano_xml_path(
+                self._wano_dir_root, wano_name_override=wle.name
+            )
         xml = self._parse_xml(xmlpath)
         self._parse_from_xml(xml)
 
@@ -1062,28 +1122,28 @@ class WaNoModelRoot(WaNoModelDictLike):
             self._my_export_paths = [*flatten_dict(my_exports).keys()]
 
         for child in self.full_xml.findall("./WaNoInputFiles/WaNoInputFile"):
-            self.input_files.append((child.attrib["logical_filename"],child.text))
+            self.input_files.append((child.attrib["logical_filename"], child.text))
 
         el = self.full_xml.find("./WaNoMeta")
-        if not el is None:
+        if el is not None:
             self.metas = xmltodict.parse(etree.tostring(el))
-
 
         self.exec_command = self.full_xml.find("WaNoExecCommand").text
         for child in self.full_xml.find("WaNoExecCommand"):
-            raise WaNoParseError("Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse.")
+            raise WaNoParseError(
+                "Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse."
+            )
 
         super().parse_from_xml(xml=subxml)
 
     def _tidy_lists(self):
         while len(self._unregister_list) > 0:
             key, func, depth = self._unregister_list.pop()
-            self.unregister_callback(key,func, depth)
+            self.unregister_callback(key, func, depth)
 
         while len(self._register_list) > 0:
             key, func, depth = self._register_list.pop()
             self.register_callback(key, func, depth)
-
 
     def notify_datachanged(self, path):
         if self._block_signals:
@@ -1093,9 +1153,9 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         self._tidy_lists()
 
-        #print("Checking changed path %s"%path)
+        # print("Checking changed path %s"%path)
         if "unset" in path:
-            print("Found unset in path %s"%path)
+            print("Found unset in path %s" % path)
         self._notifying = True
         if path == "force":
             toeval_by_prio = {}
@@ -1105,7 +1165,7 @@ class WaNoModelRoot(WaNoModelDictLike):
                         toeval_by_prio[callback_prio] = []
                     for callback in callback_prio_dict[callback_prio]:
                         toeval_by_prio[callback_prio].append(callback)
-                        #callback(path)
+                        # callback(path)
             for callback_prio in reversed(toeval_by_prio):
                 for callback in toeval_by_prio[callback_prio]:
                     callback(path)
@@ -1122,7 +1182,7 @@ class WaNoModelRoot(WaNoModelDictLike):
     def register_callback(self, path, callback_function, depth):
         if self._notifying:
             toregister = (path, callback_function, depth)
-            if not toregister in self._register_list:
+            if toregister not in self._register_list:
                 self._register_list.append(toregister)
         else:
             if path not in self._datachanged_callbacks:
@@ -1131,14 +1191,18 @@ class WaNoModelRoot(WaNoModelDictLike):
                 self._datachanged_callbacks[path][depth] = []
 
             if callback_function not in self._datachanged_callbacks[path][depth]:
-                #print(f"Registering callback for {path} with {depth}, function was: {callback_function.__self__.path}.")
+                # print(f"Registering callback for {path} with {depth}, function was: {callback_function.__self__.path}.")
                 self._datachanged_callbacks[path][depth].append(callback_function)
 
     def unregister_callback(self, path, callback_function, depth):
-        assert path in self._datachanged_callbacks, "When unregistering a function, it has to exist in datachanged_callbacks."
-        #print(f"Unregistering callback for {path} with {depth}. function was: {callback_function.__self__.path}.")
-        assert callback_function in self._datachanged_callbacks[path][depth], f"Unregistering callback for {path} with {depth} failed, function was: {callback_function.__self__.path}. Function not found in callbacks."
-        #print("Removing %s for %s"%(path, callback_function))
+        assert (
+            path in self._datachanged_callbacks
+        ), "When unregistering a function, it has to exist in datachanged_callbacks."
+        # print(f"Unregistering callback for {path} with {depth}. function was: {callback_function.__self__.path}.")
+        assert (
+            callback_function in self._datachanged_callbacks[path][depth]
+        ), f"Unregistering callback for {path} with {depth} failed, function was: {callback_function.__self__.path}. Function not found in callbacks."
+        # print("Removing %s for %s"%(path, callback_function))
         if self._notifying:
             self._unregister_list.append((path, callback_function, depth))
         else:
@@ -1153,10 +1217,10 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_export_model(self):
         return self.export_model
 
-    def register_outputfile_callback(self,function):
+    def register_outputfile_callback(self, function):
         self._outputfile_callbacks.append(function)
 
-    def get_output_files(self, only_static = False):
+    def get_output_files(self, only_static=False):
         return_files = []
 
         rendered_wano = None
@@ -1164,7 +1228,9 @@ class WaNoModelRoot(WaNoModelDictLike):
             if "{{" in outputfile and "}}" in outputfile:
                 if rendered_wano is None:
                     rendered_wano = self.wano_walker()
-                outfile = Template(outputfile,newline_sequence='\n').render(wano = rendered_wano)
+                outfile = Template(outputfile, newline_sequence="\n").render(
+                    wano=rendered_wano
+                )
                 return_files.append(outfile)
             else:
                 return_files.append(outputfile)
@@ -1172,7 +1238,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         if only_static:
             return return_files
 
-        return_files = return_files + [ a[0] for a in self.export_model.get_contents() ]
+        return_files = return_files + [a[0] for a in self.export_model.get_contents()]
         for callback in self._outputfile_callbacks:
             return_files += callback()
         return return_files
@@ -1180,40 +1246,52 @@ class WaNoModelRoot(WaNoModelDictLike):
     def datachanged_force(self):
         self.notify_datachanged("force")
 
-    def save_xml(self, wano : WaNoListEntry):
+    def save_xml(self, wano: WaNoListEntry):
         raise NotImplementedError("Saving the XML is not supported anymore.")
 
     def get_changed_command_paths(self):
-        """ These are paths, which require a WaNoElement to be changed, which is dynamic, such as multipleof or switch
-
-        """
+        """These are paths, which require a WaNoElement to be changed, which is dynamic, such as multipleof or switch"""
         tw = WaNoTreeWalker(self)
 
         changed_paths = {}
+
         def dict_change_detector(subdict, call_info):
             twp = call_info["nestdictmod_paths"].abspath
-            if hasattr(subdict,  "changed_from_default") and subdict.changed_from_default():
-                changed_paths[".".join(str(e) for e in twp)] = subdict.get_delta_to_default()
+            if (
+                hasattr(subdict, "changed_from_default")
+                and subdict.changed_from_default()
+            ):
+                changed_paths[
+                    ".".join(str(e) for e in twp)
+                ] = subdict.get_delta_to_default()
             return None
 
-        tw.walker(capture = False, path_visitor_function=None, subdict_visitor_function=dict_change_detector, data_visitor_function=None)
+        tw.walker(
+            capture=False,
+            path_visitor_function=None,
+            subdict_visitor_function=dict_change_detector,
+            data_visitor_function=None,
+        )
         return changed_paths
 
     def get_changed_paths(self):
-
         tw = WaNoTreeWalker(self)
-        def leafnode_change_detector(leaf_node : AbstractWanoModel, call_info):
-            twp = call_info["nestdictmod_paths"].abspath
+
+        def leafnode_change_detector(leaf_node: AbstractWanoModel, call_info):
             if leaf_node.changed_from_default():
                 return leaf_node.get_delta_to_default()
             else:
                 # We only wanto to collect changed paths
                 raise EraseEntryError()
 
-        changed_paths_no_dict = tw.walker(capture = True, path_visitor_function=None, subdict_visitor_function=None, data_visitor_function=leafnode_change_detector)
+        changed_paths_no_dict = tw.walker(
+            capture=True,
+            path_visitor_function=None,
+            subdict_visitor_function=None,
+            data_visitor_function=leafnode_change_detector,
+        )
 
         def empty_dict_remover(subdict, call_info):
-            twp = call_info["nestdictmod_paths"].abspath
             relpath = call_info["nestdictmod_paths"].relpath
 
             # We should not do anything which entries which were lists before to protect multipleof:
@@ -1227,20 +1305,24 @@ class WaNoModelRoot(WaNoModelDictLike):
                 raise EraseEntryError()
 
             return None
+
         # We clean up this dictionary five times. A smarter way would be to implement a subdict_visitor_function
         # in WaNoTreeWalker, which runs subdict_visitorafter collecting
         try:
-            for i in range(0,5):
+            for i in range(0, 5):
                 dict_remove_tw = NestDictMod(changed_paths_no_dict)
-                changed_paths_no_dict = dict_remove_tw.walker(capture = True, path_visitor_function = None,
-                                                   subdict_visitor_function = empty_dict_remover,
-                                                   data_visitor_function = None)
+                changed_paths_no_dict = dict_remove_tw.walker(
+                    capture=True,
+                    path_visitor_function=None,
+                    subdict_visitor_function=empty_dict_remover,
+                    data_visitor_function=None,
+                )
         except EraseEntryError:
             # In case an EraseEntryError was thrown on the highest level (i.e no changes at all)
             changed_paths_no_dict = {}
         return changed_paths_no_dict
 
-    def save_resources_and_imports(self, outfolder : Path):
+    def save_resources_and_imports(self, outfolder: Path):
         resources_fn = outfolder / "resources.yml"
         self._new_resource_model.to_json(resources_fn)
 
@@ -1278,15 +1360,14 @@ class WaNoModelRoot(WaNoModelDictLike):
         outdict = {
             "commands": self.get_changed_command_paths(),
             "values": self.get_changed_paths(),
-            "metadata": self.get_metadata_dict()
+            "metadata": self.get_metadata_dict(),
         }
         with savepath.open("wt") as outfile:
             json.dump(outdict, outfile, indent=4)
         return True
 
-
-    def wano_walker_paths(self,parent = None, path = "" , output = []):
-        if (parent == None):
+    def wano_walker_paths(self, parent=None, path="", output=[]):
+        if parent is None:
             parent = self
 
         if isinstance(parent, WaNoSwitchModel):
@@ -1294,38 +1375,37 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         listlike, dictlike = self._listlike_dictlike(parent)
         if listlike:
-            my_list = []
             for key, wano in parent.items():
                 mypath = copy.copy(path)
                 if mypath == "":
                     mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                self.wano_walker_paths(parent=wano, path=mypath,output=output)
+                self.wano_walker_paths(parent=wano, path=mypath, output=output)
 
         elif dictlike:
-            for key,wano in parent.items():
+            for key, wano in parent.items():
                 mypath = copy.copy(path)
-                if hasattr(wano,"name"):
-                    #Actual dict
+                if hasattr(wano, "name"):
+                    # Actual dict
                     key = wano.name
-                #else list
+                # else list
                 if mypath == "":
-                    mypath="%s" %(key)
+                    mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                self.wano_walker_paths(parent=wano,path=mypath,output=output)
+                self.wano_walker_paths(parent=wano, path=mypath, output=output)
         else:
-            output.append((path,parent.get_type_str()))
+            output.append((path, parent.get_type_str()))
         return output
 
-    def wano_walker(self, parent = None, path = ""):
-        if (parent == None):
+    def wano_walker(self, parent=None, path=""):
+        if parent is None:
             parent = self
 
         if isinstance(parent, WaNoSwitchModel):
             parent = parent[parent.get_selected_id()]
-        #print(type(parent))
+        # print(type(parent))
         listlike, dictlike = self._listlike_dictlike(parent)
         if listlike:
             my_list = []
@@ -1339,33 +1419,33 @@ class WaNoModelRoot(WaNoModelDictLike):
             return my_list
         elif dictlike:
             my_dict = {}
-            for key,wano in parent.items():
+            for key, wano in parent.items():
                 mypath = copy.copy(path)
-                if hasattr(wano,"name"):
-                    #Actual dict
+                if hasattr(wano, "name"):
+                    # Actual dict
                     key = wano.name
-                #else list
+                # else list
                 if mypath == "":
-                    mypath="%s" %(key)
+                    mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_dict[key] = self.wano_walker(parent=wano,path=mypath)
+                my_dict[key] = self.wano_walker(parent=wano, path=mypath)
             return my_dict
         else:
-            #print("%s %s" % (path, parent.get_data()))
+            # print("%s %s" % (path, parent.get_data()))
             return parent.get_rendered_wano_data()
 
-    def _listlike_dictlike(self,myobject):
+    def _listlike_dictlike(self, myobject):
         listlike = False
         dictlike = False
-        if isinstance(myobject,collections.OrderedDict) or isinstance(myobject,dict):
+        if isinstance(myobject, collections.OrderedDict) or isinstance(myobject, dict):
             listlike = False
             dictlike = True
-        elif isinstance(myobject,list):
+        elif isinstance(myobject, list):
             listlike = True
             dictlike = False
 
-        if hasattr(myobject,"listlike"):
+        if hasattr(myobject, "listlike"):
             listlike = myobject.listlike
         if hasattr(myobject, "dictlike"):
             dictlike = myobject.dictlike
@@ -1374,21 +1454,27 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     @classmethod
     def _filename_is_global_var(cls, filename):
-        if not re.match(r"^\$\{.*\}$",filename) is None:
+        if re.match(r"^\$\{.*\}$", filename) is not None:
             return True
         return False
 
-    def wano_walker_render_pass(self, rendered_wano, parent = None, path = "",submitdir="",
-                                flat_variable_list = None,
-                                input_var_db = None,
-                                output_var_db = None,
-                                runtime_variables = None):
-        if (parent == None):
+    def wano_walker_render_pass(
+        self,
+        rendered_wano,
+        parent=None,
+        path="",
+        submitdir="",
+        flat_variable_list=None,
+        input_var_db=None,
+        output_var_db=None,
+        runtime_variables=None,
+    ):
+        if parent is None:
             parent = self
 
         if isinstance(parent, WaNoSwitchModel):
             parent = parent[parent.get_selected_id()]
-        #print(type(parent))
+        # print(type(parent))
         """
         import traceback
         parent_type_string = None
@@ -1400,7 +1486,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             print("In path",path,"depth:",path.count(".")+2,parent_type_string)
         """
 
-        listlike,dictlike = self._listlike_dictlike(parent)
+        listlike, dictlike = self._listlike_dictlike(parent)
         if listlike:
             my_list = []
             for key, wano in parent.items():
@@ -1409,34 +1495,63 @@ class WaNoModelRoot(WaNoModelDictLike):
                     mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_list.append(self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath,submitdir=submitdir,flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db, runtime_variables = runtime_variables))
+                my_list.append(
+                    self.wano_walker_render_pass(
+                        rendered_wano,
+                        parent=wano,
+                        path=mypath,
+                        submitdir=submitdir,
+                        flat_variable_list=flat_variable_list,
+                        input_var_db=input_var_db,
+                        output_var_db=output_var_db,
+                        runtime_variables=runtime_variables,
+                    )
+                )
             return my_list
         elif dictlike:
             my_dict = {}
-            for key,wano in parent.items():
+            for key, wano in parent.items():
                 mypath = copy.copy(path)
-                if hasattr(wano,"name"):
-                    #Actual dict
+                if hasattr(wano, "name"):
+                    # Actual dict
                     key = wano.name
-                #else list
+                # else list
                 if mypath == "":
-                    mypath="%s" %(key)
+                    mypath = "%s" % (key)
                 else:
                     mypath = "%s.%s" % (mypath, key)
-                my_dict[key] = self.wano_walker_render_pass(rendered_wano,parent=wano, path=mypath, submitdir=submitdir, flat_variable_list=flat_variable_list, input_var_db = input_var_db, output_var_db = output_var_db, runtime_variables = runtime_variables)
+                my_dict[key] = self.wano_walker_render_pass(
+                    rendered_wano,
+                    parent=wano,
+                    path=mypath,
+                    submitdir=submitdir,
+                    flat_variable_list=flat_variable_list,
+                    input_var_db=input_var_db,
+                    output_var_db=output_var_db,
+                    runtime_variables=runtime_variables,
+                )
             return my_dict
         else:
             # We should avoid merging and splitting. It's useless, we only need splitpath anyways
             splitpath = path.split(".")
-            #path is complete here, return path
-            rendered_parent =  parent.render(rendered_wano,splitpath, submitdir=submitdir)
-            if isinstance(rendered_parent,str) and input_var_db is not None and output_var_db is not None:
+            # path is complete here, return path
+            rendered_parent = parent.render(
+                rendered_wano, splitpath, submitdir=submitdir
+            )
+            if (
+                isinstance(rendered_parent, str)
+                and input_var_db is not None
+                and output_var_db is not None
+            ):
                 if rendered_parent.startswith("${") and rendered_parent.endswith("}"):
                     varname = rendered_parent[2:-1]
 
                     if runtime_variables is not None:
-                        for runtime_varname, runtime_varvalue in runtime_variables.items():
-                            varname = varname.replace(runtime_varname,runtime_varvalue)
+                        for (
+                            runtime_varname,
+                            runtime_varvalue,
+                        ) in runtime_variables.items():
+                            varname = varname.replace(runtime_varname, runtime_varvalue)
                             rendered_parent = varname
 
                     if varname in input_var_db:
@@ -1452,14 +1567,14 @@ class WaNoModelRoot(WaNoModelDictLike):
                     filename = parent.get_data()
                     if parent.get_local():
                         pass
-                        #to_upload = os.path.join(submitdir, "workflow_data")
-                        #cp = os.path.commonprefix([to_upload, filename])
-                        #relpath = os.path.relpath(filename, cp)
-                        #print("relpath was: %s"%relpath)
-                        #filename= "c9m:${WORKFLOW_ID}/%s" % relpath
-                        #filename = "BFT:${STORAGE_ID}/%s" % relpath
-                        #filename = os.path.join("inputs",relpath)
-                        #Absolute filenames will be replace with BFT:STORAGEID etc. below.
+                        # to_upload = os.path.join(submitdir, "workflow_data")
+                        # cp = os.path.commonprefix([to_upload, filename])
+                        # relpath = os.path.relpath(filename, cp)
+                        # print("relpath was: %s"%relpath)
+                        # filename= "c9m:${WORKFLOW_ID}/%s" % relpath
+                        # filename = "BFT:${STORAGE_ID}/%s" % relpath
+                        # filename = os.path.join("inputs",relpath)
+                        # Absolute filenames will be replace with BFT:STORAGEID etc. below.
                     elif not self._filename_is_global_var(filename):
                         if "outputs/" in filename:
                             # Newer handling, not rewriting filename, because it's already taken care of
@@ -1467,82 +1582,101 @@ class WaNoModelRoot(WaNoModelDictLike):
                         else:
                             last_slash = filename.rfind("/")
                             first_part = filename[0:last_slash]
-                            second_part = filename[last_slash+1:]
+                            second_part = filename[last_slash + 1 :]
                             # We cut this here to add the outputs folder. This is a bit hacky - we should differentiate between display name and
                             # name on cluster
-                            filename = "c9m:${STORAGE}/workflow_data/%s/outputs/%s"%(first_part,second_part)
+                            filename = "c9m:${STORAGE}/workflow_data/%s/outputs/%s" % (
+                                first_part,
+                                second_part,
+                            )
 
-                    rendered_parent_jsdl = (rendered_parent,filename)
+                    rendered_parent_jsdl = (rendered_parent, filename)
 
-                flat_variable_list.append((path,parent.get_type_str(),rendered_parent_jsdl))
+                flat_variable_list.append(
+                    (path, parent.get_type_str(), rendered_parent_jsdl)
+                )
             return rendered_parent
 
-
-    def prepare_files_submission(self,rendered_wano, basefolder):
-        basefolder = os.path.join(basefolder,"inputs")
+    def prepare_files_submission(self, rendered_wano, basefolder):
+        basefolder = os.path.join(basefolder, "inputs")
         mkdir_p(basefolder)
         raw_xml = os.path.join(basefolder, self._name + ".xml")
-        with open(raw_xml, 'wt') as outfile:
+        with open(raw_xml, "wt") as outfile:
             outfile.write(etree.tounicode(self.full_xml, pretty_print=True))
 
         self.save(Path(basefolder))
 
-        for remote_file,local_file in self.input_files:
-            comp_filename = os.path.join(self._wano_dir_root,local_file)
+        for remote_file, local_file in self.input_files:
+            comp_filename = os.path.join(self._wano_dir_root, local_file)
             comp_filename = os.path.abspath(comp_filename)
             comp_dir = os.path.dirname(comp_filename)
             comp_basename = os.path.basename(comp_filename)
 
-            joined_filename = os.path.join(comp_dir,comp_basename)
+            joined_filename = os.path.join(comp_dir, comp_basename)
 
             if not os.path.exists(os.path.join(joined_filename)):
-                print("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
-                raise FileNotFoundErrorSimStack("File <%s> not found on disk, please check for spaces before or after the filename."%comp_filename)
+                print(
+                    "File <%s> not found on disk, please check for spaces before or after the filename."
+                    % comp_filename
+                )
+                raise FileNotFoundErrorSimStack(
+                    "File <%s> not found on disk, please check for spaces before or after the filename."
+                    % comp_filename
+                )
 
-            outfile = os.path.join(basefolder,local_file)
-            dirn=os.path.dirname(outfile)
+            outfile = os.path.join(basefolder, local_file)
+            dirn = os.path.dirname(outfile)
             mkdir_p(dirn)
-            print(f"Copying from {comp_filename} to {dirn}. Remote filename was {remote_file}")
+            print(
+                f"Copying from {comp_filename} to {dirn}. Remote filename was {remote_file}"
+            )
             shutil.copy(comp_filename, dirn)
 
-    def flat_variable_list_to_jsdl(self,fvl,basedir,stageout_basedir):
-        files = []
-
+    def flat_variable_list_to_jsdl(self, fvl, basedir, stageout_basedir):
         local_stagein_files = []
         runtime_stagein_files = []
         runtime_stageout_files = []
 
+        for myid, (logical_filename, source) in enumerate(self.input_files):
+            fvl.append(("IFILE%d" % (myid), "File", (logical_filename, source)))
+            # local_stagein_files.append([logical_filename,source])
 
-        for myid,(logical_filename, source) in enumerate(self.input_files):
-            fvl.append(("IFILE%d"%(myid),"File",(logical_filename,source)))
-            #local_stagein_files.append([logical_filename,source])
-
-        for (varname,type,var) in fvl:
+        for varname, type, var in fvl:
             if type == "File":
-                log_path_on_cluster = var[1].replace('\\','/')
+                log_path_on_cluster = var[1].replace("\\", "/")
                 if var[1].startswith("c9m:"):
-                    runtime_stagein_files.append([var[0],log_path_on_cluster])
+                    runtime_stagein_files.append([var[0], log_path_on_cluster])
                 elif self._filename_is_global_var(var[1]):
-
                     runtime_stagein_files.append([var[0], log_path_on_cluster])
                 else:
                     if isabs(var[1]):
-                        #In this case this will be a local import.
+                        # In this case this will be a local import.
                         runtime_stagein_files.append(
-                            [var[0], "${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, var[0])])
+                            [
+                                var[0],
+                                "${STORAGE}/workflow_data/%s/inputs/%s"
+                                % (stageout_basedir, var[0]),
+                            ]
+                        )
                     else:
-                        runtime_stagein_files.append([var[0], "${STORAGE}/workflow_data/%s/inputs/%s"% (stageout_basedir, var[1])])
-                    #print(runtime_stagein_files,var)
+                        runtime_stagein_files.append(
+                            [
+                                var[0],
+                                "${STORAGE}/workflow_data/%s/inputs/%s"
+                                % (stageout_basedir, var[1]),
+                            ]
+                        )
+                    # print(runtime_stagein_files,var)
             else:
-                #These should be NON posix arguments in the end
-                varname.replace(".","_")
-        #xmlfile = self._name + ".xml"
-        #runtime_stagein_files.append([self._name + ".xml","${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, "rendered_wano.yml)])
+                # These should be NON posix arguments in the end
+                varname.replace(".", "_")
+        # xmlfile = self._name + ".xml"
+        # runtime_stagein_files.append([self._name + ".xml","${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, "rendered_wano.yml)])
 
         for otherfiles in self.get_import_model().get_contents():
-            name,importloc,tostage = otherfiles[0],otherfiles[1],otherfiles[2]
+            name, importloc, tostage = otherfiles[0], otherfiles[1], otherfiles[2]
             if self._filename_is_global_var(importloc):
-                runtime_stagein_files.append([name,importloc])
+                runtime_stagein_files.append([name, importloc])
             else:
                 if "outputs/" in importloc:
                     # New handling, explicit outputs in filename
@@ -1554,26 +1688,28 @@ class WaNoModelRoot(WaNoModelDictLike):
                     # name on cluster
                     last_slash = importloc.rfind("/")
                     first_part = importloc[0:last_slash]
-                    second_part = importloc[last_slash + 1:]
-                    filename = "${STORAGE}/workflow_data/%s/outputs/%s" % (first_part, second_part)
+                    second_part = importloc[last_slash + 1 :]
+                    filename = "${STORAGE}/workflow_data/%s/outputs/%s" % (
+                        first_part,
+                        second_part,
+                    )
 
-                #print("In runtime stagein %s"%filename)
+                # print("In runtime stagein %s"%filename)
                 runtime_stagein_files.append([tostage, filename])
 
-
-        #for filename in self.output_files + [ a[0] for a in self.export_model.get_contents() ]:
+        # for filename in self.output_files + [ a[0] for a in self.export_model.get_contents() ]:
         for filename in self.get_output_files(only_static=False):
-            #runtime_stageout_files.append([filename,"${STORAGE}/workflow_data/%s/outputs/%s"%(stageout_basedir,filename)])
+            # runtime_stageout_files.append([filename,"${STORAGE}/workflow_data/%s/outputs/%s"%(stageout_basedir,filename)])
             runtime_stageout_files.append([filename, filename])
 
         _runtime_stagein_files = []
         for ft in runtime_stagein_files:
-            _runtime_stagein_files.append(["StringList",StringList(ft)])
+            _runtime_stagein_files.append(["StringList", StringList(ft)])
         runtime_stagein_files = _runtime_stagein_files
 
         _runtime_stageout_files = []
         for ft in runtime_stageout_files:
-            _runtime_stageout_files.append(["StringList",StringList(ft)])
+            _runtime_stageout_files.append(["StringList", StringList(ft)])
         runtime_stageout_files = _runtime_stageout_files
 
         """
@@ -1583,106 +1719,137 @@ class WaNoModelRoot(WaNoModelDictLike):
         local_stagein_files = _local_stagein_files
         """
 
-        
-        wem = WorkflowExecModule(given_name = self.name, resources = self.get_new_resource_model(),
-                           inputs = WorkflowElementList(runtime_stagein_files),# + local_stagein_files),
-                           outputs = WorkflowElementList(runtime_stageout_files),
-                           exec_command = self.rendered_exec_command
-                           )
+        wem = WorkflowExecModule(
+            given_name=self.name,
+            resources=self.get_new_resource_model(),
+            inputs=WorkflowElementList(
+                runtime_stagein_files
+            ),  # + local_stagein_files),
+            outputs=WorkflowElementList(runtime_stageout_files),
+            exec_command=self.rendered_exec_command,
+        )
 
-        return None , wem, local_stagein_files
-        #print(etree.tostring(job_desc, pretty_print=True).decode("utf-8"))
+        return None, wem, local_stagein_files
+        # print(etree.tostring(job_desc, pretty_print=True).decode("utf-8"))
 
-    def render_wano(self,submitdir,stageout_basedir=""):
-        #We do two render passes in case values depend on each other
+    def render_wano(self, submitdir, stageout_basedir=""):
+        # We do two render passes in case values depend on each other
         rendered_wano = self.wano_walker()
         # We do two render passes, in case the rendering reset some values:
         fvl = []
-        rendered_wano = self.wano_walker_render_pass(rendered_wano,submitdir=submitdir,flat_variable_list=fvl)
-        #self.rendered_exec_command = Template(self.exec_command,newline_sequence='\n').render(wano = rendered_wano)
-        #self.rendered_exec_command = self.rendered_exec_command.strip(' \t\n\r')
+        rendered_wano = self.wano_walker_render_pass(
+            rendered_wano, submitdir=submitdir, flat_variable_list=fvl
+        )
+        # self.rendered_exec_command = Template(self.exec_command,newline_sequence='\n').render(wano = rendered_wano)
+        # self.rendered_exec_command = self.rendered_exec_command.strip(' \t\n\r')
         self.rendered_exec_command = self.exec_command
-        jsdl, wem, local_stagein_files = self.flat_variable_list_to_jsdl(fvl, submitdir,stageout_basedir)
-        return rendered_wano,jsdl, wem, local_stagein_files
-    
-    def render_exec_command(self, rendered_wano):
-        rendered_exec_command = Template(self.exec_command,newline_sequence='\n').render(wano = rendered_wano)
-        rendered_exec_command = rendered_exec_command.strip(' \t\n\r')
-        return rendered_exec_command + '\n'
+        jsdl, wem, local_stagein_files = self.flat_variable_list_to_jsdl(
+            fvl, submitdir, stageout_basedir
+        )
+        return rendered_wano, jsdl, wem, local_stagein_files
 
-    #@trace_to_logger
-    def render_and_write_input_files(self,basefolder,stageout_basedir = ""):
-        rendered_wano,jsdl, wem = self.render_wano(basefolder,stageout_basedir)
+    def render_exec_command(self, rendered_wano):
+        rendered_exec_command = Template(
+            self.exec_command, newline_sequence="\n"
+        ).render(wano=rendered_wano)
+        rendered_exec_command = rendered_exec_command.strip(" \t\n\r")
+        return rendered_exec_command + "\n"
+
+    # @trace_to_logger
+    def render_and_write_input_files(self, basefolder, stageout_basedir=""):
+        rendered_wano, jsdl, wem = self.render_wano(basefolder, stageout_basedir)
         self.prepare_files_submission(rendered_wano, basefolder)
         return jsdl
 
-    def render_and_write_input_files_newmodel(self,basefolder,stageout_basedir = ""):
-        rendered_wano, jsdl, wem, local_stagein_files = self.render_wano(basefolder, stageout_basedir)
-        #pprint(local_stagein_files)
+    def render_and_write_input_files_newmodel(self, basefolder, stageout_basedir=""):
+        rendered_wano, jsdl, wem, local_stagein_files = self.render_wano(
+            basefolder, stageout_basedir
+        )
+        # pprint(local_stagein_files)
         self.prepare_files_submission(rendered_wano, basefolder)
         return jsdl, wem
 
-    def get_value(self,uri):
+    def get_value(self, uri):
         split_uri = uri.split(".")
         current = self.__getitem__(split_uri[0])
         for item in split_uri[1:]:
             current = current[item]
         return current
 
-    def get_all_variable_paths(self, export = True):
+    def get_all_variable_paths(self, export=True):
         outdict = {}
         self.model_to_dict(outdict)
         tw = NestDictMod(outdict)
-        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel,
-                             data_visitor_function=None)
+        skipdict = tw.walker(
+            capture=True,
+            path_visitor_function=None,
+            subdict_visitor_function=subdict_skiplevel,
+            data_visitor_function=None,
+        )
         tw = NestDictMod(skipdict)
         pc = PathCollector()
-        tw.walker(capture=False, path_visitor_function=pc.assemble_paths,
-                  subdict_visitor_function=None,
-                  data_visitor_function=None)
+        tw.walker(
+            capture=False,
+            path_visitor_function=pc.assemble_paths,
+            subdict_visitor_function=None,
+            data_visitor_function=None,
+        )
 
         if export:
             return pc.paths + self._my_export_paths
         else:
             return pc.paths
 
-    def _get_paths_and_something_helper(self, subdict_visitor, deref_functor_path_collector):
+    def _get_paths_and_something_helper(
+        self, subdict_visitor, deref_functor_path_collector
+    ):
         outdict = {}
         self.model_to_dict(outdict)
         tw = NestDictMod(outdict)
-        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_visitor,
-                             data_visitor_function=None)
+        skipdict = tw.walker(
+            capture=True,
+            path_visitor_function=None,
+            subdict_visitor_function=subdict_visitor,
+            data_visitor_function=None,
+        )
         tw = NestDictMod(skipdict)
         pc = PathCollector()
-        tw.walker(capture=False, path_visitor_function=None,
-                  subdict_visitor_function=subdict_visitor,
-                  data_visitor_function=deref_functor_path_collector(pc)
+        tw.walker(
+            capture=False,
+            path_visitor_function=None,
+            subdict_visitor_function=subdict_visitor,
+            data_visitor_function=deref_functor_path_collector(pc),
         )
         return pc.path_to_value
 
     def update_views_from_models(self):
         tw = WaNoTreeWalker(self)
+
         def init_from_model_visitor(value):
-            if hasattr(value,"view"):
+            if hasattr(value, "view"):
                 if value.view is not None:
                     value.view.init_from_model()
             return value
+
         def init_from_model_visitor_subdict(subdict):
             # Subdicts dont require their view rebuilt
-            #init_from_model_visitor(subdict)
+            # init_from_model_visitor(subdict)
             return None
 
-        tw.walker(capture=False,
-                  path_visitor_function=None,
-                  data_visitor_function=init_from_model_visitor,
-                  subdict_visitor_function=init_from_model_visitor_subdict
+        tw.walker(
+            capture=False,
+            path_visitor_function=None,
+            data_visitor_function=init_from_model_visitor,
+            subdict_visitor_function=init_from_model_visitor_subdict,
         )
 
     def get_paths_and_data_dict(self):
-        return self._get_paths_and_something_helper(subdict_skiplevel, lambda x : x.assemble_paths_and_values)
+        return self._get_paths_and_something_helper(
+            subdict_skiplevel, lambda x: x.assemble_paths_and_values
+        )
 
     def get_extra_inputs_aiida(self):
-        outfiles = [ ftuple[0] for ftuple in self.input_files ]
+        outfiles = [ftuple[0] for ftuple in self.input_files]
         return outfiles
 
     def get_paths_and_type_dict_aiida(self):
@@ -1690,26 +1857,41 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.model_to_dict(outdict)
         outdict = tree_list_to_dict_multiply(outdict)
         tw = NestDictMod(outdict)
-        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel_to_type,
-                             data_visitor_function=None)
+        skipdict = tw.walker(
+            capture=True,
+            path_visitor_function=None,
+            subdict_visitor_function=subdict_skiplevel_to_type,
+            data_visitor_function=None,
+        )
         tw = NestDictMod(skipdict)
         pc = PathCollector()
-        tw.walker(capture=False, path_visitor_function=None,
-                  subdict_visitor_function=subdict_skiplevel_to_type,
-                  data_visitor_function= pc.assemble_paths_and_values
-                  )
+        tw.walker(
+            capture=False,
+            path_visitor_function=None,
+            subdict_visitor_function=subdict_skiplevel_to_type,
+            data_visitor_function=pc.assemble_paths_and_values,
+        )
         return pc.path_to_value
 
-    def get_valuedict_with_aiida_types(self, aiida_files_by_relpath = None, aiida_vars_by_relpath = None):
+    def get_valuedict_with_aiida_types(
+        self, aiida_files_by_relpath=None, aiida_vars_by_relpath=None
+    ):
         if aiida_files_by_relpath is None:
             aiida_files_by_relpath = {}
         outdict = {}
         self.model_to_dict(outdict)
         outdict = tree_list_to_dict(outdict)
         tw = NestDictMod(outdict)
-        svf = partial(subdict_skiplevel_to_aiida_type, aiida_files_by_relpath = aiida_files_by_relpath)
-        skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=svf,
-                             data_visitor_function=None)
+        svf = partial(
+            subdict_skiplevel_to_aiida_type,
+            aiida_files_by_relpath=aiida_files_by_relpath,
+        )
+        skipdict = tw.walker(
+            capture=True,
+            path_visitor_function=None,
+            subdict_visitor_function=svf,
+            data_visitor_function=None,
+        )
         return skipdict
 
     def get_dir_root(self):
@@ -1718,9 +1900,8 @@ class WaNoModelRoot(WaNoModelDictLike):
     def apply_delta_dict(self, delta_dict):
         flat_delta_dict = flatten_dict(delta_dict)
         for key, value in flat_delta_dict.items():
-            wano_sub : AbstractWanoModel = self.get_value(key)
+            wano_sub: AbstractWanoModel = self.get_value(key)
             wano_sub.apply_delta(value)
-
 
 
 class WaNoItemFloatModel(AbstractWanoModel):
@@ -1750,11 +1931,7 @@ class WaNoItemFloatModel(AbstractWanoModel):
         return self.get_data()
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {
-            self.name: {
-                "type": "number"
-            }
-        }
+        schema = {self.name: {"type": "number"}}
         return schema
 
     def apply_delta(self, delta):
@@ -1805,16 +1982,12 @@ class WaNoItemIntModel(AbstractWanoModel):
         return int(self.myint)
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {
-            self.name: {
-                "type": "int"
-            }
-        }
+        schema = {self.name: {"type": "int"}}
         return schema
 
     def set_data(self, data):
         self.myint = int(data)
-        super(WaNoItemIntModel,self).set_data(data)
+        super(WaNoItemIntModel, self).set_data(data)
 
     def __getitem__(self, item):
         return None
@@ -1868,7 +2041,7 @@ class WaNoItemBoolModel(AbstractWanoModel):
 
     def set_data(self, data):
         self.mybool = data
-        super(WaNoItemBoolModel,self).set_data(data)
+        super(WaNoItemBoolModel, self).set_data(data)
 
     def get_type_str(self):
         return "Boolean"
@@ -1880,11 +2053,7 @@ class WaNoItemBoolModel(AbstractWanoModel):
         return self.mybool
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {
-            self.name: {
-                "type": "boolean"
-            }
-        }
+        schema = {self.name: {"type": "boolean"}}
         return schema
 
     def apply_delta(self, delta):
@@ -1932,15 +2101,11 @@ class WaNoItemFileModel(AbstractWanoModel):
 
     def set_data(self, data):
         self.mystring = str(data)
-        super(WaNoItemFileModel,self).set_data(data)
+        super(WaNoItemFileModel, self).set_data(data)
 
     def get_secure_schema(self) -> Optional[str]:
         raise SecurityError("WaNoFile not allowed in Secure Mode. Aborting.")
-        schema = {
-            self.name: {
-                "type": "string"
-            }
-        }
+        schema = {self.name: {"type": "string"}}
         return schema
 
     def __getitem__(self, item):
@@ -1958,14 +2123,16 @@ class WaNoItemFileModel(AbstractWanoModel):
             startat = 8
             self.is_local_file = True
         else:
-            assert uri.startswith("global://"), "URI needs to either start with local or global"
+            assert uri.startswith(
+                "global://"
+            ), "URI needs to either start with local or global"
             startat = 9
             self.is_local_file = False
-            if not self.view is None:
+            if self.view is not None:
                 self.view.set_disable(True)
         self.mystring = uri[startat:]
 
-    def set_local(self,is_local):
+    def set_local(self, is_local):
         self.is_local_file = is_local
         if self.is_local_file:
             self.xml.attrib["local"] = "True"
@@ -1993,7 +2160,9 @@ class WaNoItemFileModel(AbstractWanoModel):
     def render(self, rendered_wano, path, submitdir):
         if self.view is not None:
             self.view.line_edited()
-        rendered_logical_name = Template(self.logical_name,newline_sequence='\n').render(wano=rendered_wano, path=path)
+        rendered_logical_name = Template(
+            self.logical_name, newline_sequence="\n"
+        ).render(wano=rendered_wano, path=path)
         outfile = None
         if not self.visible():
             if sys.version_info >= (3, 0):
@@ -2003,18 +2172,21 @@ class WaNoItemFileModel(AbstractWanoModel):
         if outfile is not None:
             self._cached_logical_name = outfile
             return outfile
-        #Upload and copy
-        #print(submitdir)
+        # Upload and copy
+        # print(submitdir)
         if submitdir is not None and self.is_local_file:
-            destdir = os.path.join(submitdir,"inputs")
+            destdir = os.path.join(submitdir, "inputs")
             mkdir_p(destdir)
             destfile = os.path.join(destdir, rendered_logical_name)
-            #print("Copying",self._root.wano_dir_root,rendered_logical_name,destdir)
+            # print("Copying",self._root.wano_dir_root,rendered_logical_name,destdir)
             try:
-                shutil.copy(self.mystring,destfile)
+                shutil.copy(self.mystring, destfile)
             except IsADirectoryError as e:
-                raise WorkflowSubmitError("%s points to a directory, but a filename was expected in %s"%(e.filename,self.path))
-        if sys.version_info >= (3,0):
+                raise WorkflowSubmitError(
+                    "%s points to a directory, but a filename was expected in %s"
+                    % (e.filename, self.path)
+                )
+        if sys.version_info >= (3, 0):
             outfile = rendered_logical_name
         else:
             outfile = rendered_logical_name.encode("utf-8")
@@ -2035,13 +2207,15 @@ class WaNoItemFileModel(AbstractWanoModel):
         self._uri_to_class(delta)
 
     def changed_from_default(self) -> bool:
-        return self._local_file_default != self.is_local_file or  self.mystring != self._default
-
+        return (
+            self._local_file_default != self.is_local_file
+            or self.mystring != self._default
+        )
 
 
 class WaNoItemScriptFileModel(WaNoItemFileModel):
-    def __init__(self,*args,**kwargs):
-        super(WaNoItemScriptFileModel,self).__init__(*args,**kwargs)
+    def __init__(self, *args, **kwargs):
+        super(WaNoItemScriptFileModel, self).__init__(*args, **kwargs)
         self.xml = None
         self.mystring = ""
         self.logical_name = self.mystring
@@ -2053,13 +2227,13 @@ class WaNoItemScriptFileModel(WaNoItemFileModel):
         super().parse_from_xml(xml)
 
     def get_path(self):
-        root_dir = os.path.join(self._root.get_dir_root(),"inputs")
+        root_dir = os.path.join(self._root.get_dir_root(), "inputs")
         return os.path.join(root_dir, self.mystring)
 
-    def save_text(self,text):
+    def save_text(self, text):
         root_dir = os.path.join(self._root.get_dir_root(), "inputs")
         mkdir_p(root_dir)
-        with open(self.get_path(),'w',newline='\n') as outfile:
+        with open(self.get_path(), "w", newline="\n") as outfile:
             outfile.write(text)
 
     def get_type_str(self):
@@ -2069,21 +2243,23 @@ class WaNoItemScriptFileModel(WaNoItemFileModel):
         fullpath = self.get_path()
         content = ""
         try:
-            #print("Reading script from ",fullpath)
-            with open(fullpath,'r',newline='\n') as infile:
+            # print("Reading script from ",fullpath)
+            with open(fullpath, "r", newline="\n") as infile:
                 content = infile.read()
-            #print("Contents were",content)
+            # print("Contents were",content)
             return content
         except FileNotFoundError:
             return ""
 
     def render(self, rendered_wano, path, submitdir):
-        rendered_logical_name = Template(self.logical_name,newline_sequence='\n').render(wano=rendered_wano, path=path)
+        rendered_logical_name = Template(
+            self.logical_name, newline_sequence="\n"
+        ).render(wano=rendered_wano, path=path)
         if submitdir is not None:
             destdir = os.path.join(submitdir, "inputs")
             mkdir_p(destdir)
             destfile = os.path.join(destdir, rendered_logical_name)
-            with open(destfile,'wt',newline='\n') as out:
+            with open(destfile, "wt", newline="\n") as out:
                 out.write(self.get_as_text())
         self._cached_logical_name = rendered_logical_name
         return rendered_logical_name
@@ -2101,7 +2277,7 @@ class WaNoItemStringModel(AbstractWanoModel):
         self.xml = xml
         self.mystring = self.xml.text
         self._default = self.mystring
-        if 'dynamic_output' in self.xml.attrib:
+        if "dynamic_output" in self.xml.attrib:
             self._output_filestring = self.xml.attrib["dynamic_output"]
             self._root.register_outputfile_callback(self.get_extra_output_files)
         super().parse_from_xml(xml)
@@ -2109,7 +2285,7 @@ class WaNoItemStringModel(AbstractWanoModel):
     def get_extra_output_files(self):
         extra_output_files = []
         if self._output_filestring != "":
-            extra_output_files.append(self._output_filestring%self.mystring)
+            extra_output_files.append(self._output_filestring % self.mystring)
         return extra_output_files
 
     def get_data(self):
@@ -2117,7 +2293,7 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def set_data(self, data):
         self.mystring = str(data)
-        super(WaNoItemStringModel,self).set_data(data)
+        super(WaNoItemStringModel, self).set_data(data)
 
     def __getitem__(self, item):
         return None
@@ -2148,12 +2324,9 @@ class WaNoItemStringModel(AbstractWanoModel):
         return repr(self.mystring)
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {
-            self.name: {
-                "type": "string"
-            }
-        }
+        schema = {self.name: {"type": "string"}}
         return schema
+
 
 class WaNoThreeRandomLetters(WaNoItemStringModel):
     def __init__(self, *args, **kwargs):
@@ -2177,18 +2350,25 @@ class WaNoThreeRandomLetters(WaNoItemStringModel):
     def _generate_default_string(self):
         from random import choice
         import string
+
         only_letters = string.ascii_uppercase
         letters_and_numbers = string.ascii_uppercase + string.digits
-        return "".join([choice(only_letters),choice(letters_and_numbers),choice(letters_and_numbers)])
+        return "".join(
+            [
+                choice(only_letters),
+                choice(letters_and_numbers),
+                choice(letters_and_numbers),
+            ]
+        )
 
     def set_data(self, data):
         self.mystring = str(data)
         if len(self.mystring) > 3:
             self.mystring = self.mystring[0:3]
-            if self.view != None:
+            if self.view is not None:
                 self.view.init_from_model()
 
-        super(WaNoThreeRandomLetters,self).set_data(self.mystring)
+        super(WaNoThreeRandomLetters, self).set_data(self.mystring)
 
     def __repr__(self):
         return repr(self.mystring)
@@ -2196,11 +2376,14 @@ class WaNoThreeRandomLetters(WaNoItemStringModel):
 
 _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
 
+
 def dict_representer(dumper, data):
     return dumper.represent_dict(data.items())
 
+
 def dict_constructor(loader, node):
     return collections.OrderedDict(loader.construct_pairs(node))
+
 
 yaml.add_representer(collections.OrderedDict, dict_representer)
 yaml.add_constructor(_mapping_tag, dict_constructor)

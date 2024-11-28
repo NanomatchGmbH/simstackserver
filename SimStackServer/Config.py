@@ -1,11 +1,11 @@
-import os
 from collections import namedtuple
 
 from appdirs import AppDirs
 from os import path
 import json
 import psutil
-#from crontab import CronTab
+
+# from crontab import CronTab
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -18,17 +18,21 @@ Server entry, self explanatorty
     calculation_basepath is the path on the server, where calculations are carried out and stored.
     queueing_system: torque, lsf, slurm
 """
-ServerEntry = namedtuple('ServerEntry',["name", "username", "url", "port", "calculation_basepath", "queueing_system"])
+ServerEntry = namedtuple(
+    "ServerEntry",
+    ["name", "username", "url", "port", "calculation_basepath", "queueing_system"],
+)
+
 
 class Config(object):
     """
     Config handles config serialization for all server entries
     """
-    _dirs = AppDirs(appname = "SimStackServer",
-                               appauthor="Nanomatch",
-                               roaming = False)
+
+    _dirs = AppDirs(appname="SimStackServer", appauthor="Nanomatch", roaming=False)
     _config_filename = "config.json"
     _logger_setup = False
+
     def __init__(self):
         self._setup_root_logger()
         self._servertag = "SimStackServer"
@@ -48,13 +52,11 @@ class Config(object):
     def _setup_root_logger(cls):
         if not Config._logger_setup:
             mkdir_p(cls._dirs.user_log_dir)
-            mypath = path.join(cls._dirs.user_log_dir,"simstack_server.log")
-            rotate_size = 1024*1024 # 1M
-            handler = RotatingFileHandler(mypath, maxBytes=rotate_size,
-                                  backupCount=5)
-            logging.basicConfig(format='%(asctime)s %(message)s',
-                                level=logging.INFO,
-                                handlers=[handler]
+            mypath = path.join(cls._dirs.user_log_dir, "simstack_server.log")
+            rotate_size = 1024 * 1024  # 1M
+            handler = RotatingFileHandler(mypath, maxBytes=rotate_size, backupCount=5)
+            logging.basicConfig(
+                format="%(asctime)s %(message)s", level=logging.INFO, handlers=[handler]
             )
             return handler
 
@@ -66,7 +68,8 @@ class Config(object):
         """
         pidfilename = cls.get_pid_file()
         from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
-        return NoEnterPIDLockFile(pidfilename, timeout = 0.0)
+
+        return NoEnterPIDLockFile(pidfilename, timeout=0.0)
 
     @classmethod
     def get_pid_file(cls):
@@ -76,7 +79,6 @@ class Config(object):
         """
         pidfilename = cls._get_config_file("SimStackServer.pid")
         return pidfilename
-
 
     @classmethod
     def is_running(cls):
@@ -91,30 +93,35 @@ class Config(object):
             return False
         pid = pidfile.read_pid()
 
-        cls._get_cls_logger().debug("PID was %d"%pid)
+        cls._get_cls_logger().debug("PID was %d" % pid)
         if not psutil.pid_exists(pid):
             try:
-                cls._get_cls_logger().warning("Process was locked, but process did not exist anymore. Restarting server")
+                cls._get_cls_logger().warning(
+                    "Process was locked, but process did not exist anymore. Restarting server"
+                )
                 pidfile.break_lock()
-                cls._get_cls_logger().debug("Breaking lock %d"%pid)
-            except FileNotFoundError as e:
-                #This exception might occur if a server was just in the process of shutting down.
+                cls._get_cls_logger().debug("Breaking lock %d" % pid)
+            except FileNotFoundError:
+                # This exception might occur if a server was just in the process of shutting down.
                 pass
             return False
         else:
-            cls._get_cls_logger().debug("PID existed already %d"%pid)
+            cls._get_cls_logger().debug("PID existed already %d" % pid)
             proc = psutil.Process(pid)
-            if not "SimStackServer" in "".join(proc.cmdline()):
+            if "SimStackServer" not in "".join(proc.cmdline()):
                 try:
-                    cls._get_cls_logger().warning("Process was locked, but process name %s was different."%proc.name())
+                    cls._get_cls_logger().warning(
+                        "Process was locked, but process name %s was different."
+                        % proc.name()
+                    )
                     pidfile.break_lock()
-                except FileNotFoundError as e:
+                except FileNotFoundError:
                     # This exception might occur if a server was just in the process of shutting down.
                     pass
                 return False
         return True
 
-    def register_crontab(self,name_of_process):
+    def register_crontab(self, name_of_process):
         """
         Registers this process to restart every 10 minutes in the crontab.
         :param name_of_process (str): This process will be restarted in the crontab. Has to be absolute.
@@ -158,7 +165,8 @@ class Config(object):
         bakfile = cls.filename() + ".bak"
         if path.isfile(cls.filename()):
             from shutil import move
-            move(cls.filename(),bakfile)
+
+            move(cls.filename(), bakfile)
 
     @classmethod
     def restore_config(cls):
@@ -169,6 +177,7 @@ class Config(object):
         bakfile = cls.filename() + ".bak"
         if path.isfile(bakfile):
             from shutil import move
+
             move(bakfile, cls.filename())
 
     @classmethod
@@ -194,7 +203,7 @@ class Config(object):
         Deserializes the Config object from file
         :return:
         """
-        with open(self.filename(), 'rt') as infile:
+        with open(self.filename(), "rt") as infile:
             config_data = json.load(infile)
             for key, value in config_data.items():
                 se = ServerEntry(**value)
@@ -209,10 +218,12 @@ class Config(object):
         for se in self._servers.values():
             outdict[se.name] = se._asdict()
 
-        with open(self.filename(),'wt') as outfile:
-            json.dump(outdict,outfile)
+        with open(self.filename(), "wt") as outfile:
+            json.dump(outdict, outfile)
 
-    def add_server(self, name, username, url, port, calculation_basepath, queueing_system):
+    def add_server(
+        self, name, username, url, port, calculation_basepath, queueing_system
+    ):
         """
         Adds a server to the config. If it already exists, overwrites the existing entry.
         :param name (str): Given name of the server, e.g. NMC
@@ -223,12 +234,12 @@ class Config(object):
         :param queueing_system (str): torque, slurm, lsf, Name of the queueing system
         :return:
         """
-        se = ServerEntry(name=name,
-                    username=username,
-                    url=url,
-                    port=port,
-                    calculation_basepath=calculation_basepath,
-                    queueing_system=queueing_system
+        se = ServerEntry(
+            name=name,
+            username=username,
+            url=url,
+            port=port,
+            calculation_basepath=calculation_basepath,
+            queueing_system=queueing_system,
         )
         self._servers[name] = se
-

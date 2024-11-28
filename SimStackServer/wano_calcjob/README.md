@@ -119,9 +119,3 @@ See the [developer guide](http://wano_calcjob.readthedocs.io/en/latest/developer
 ## License
 
 MIT
-
-
-## Contact
-
-timo.strunk@nanomatch.com
-

@@ -15,15 +15,22 @@ class TestConfig(unittest.TestCase):
 
     def test_ConfigObject(self):
         config = Config()
-        config.add_server("NMC","strunk","int-nanomatchcluster.int.kit.edu", 22, "/home/strunk", "torque")
+        config.add_server(
+            "NMC",
+            "strunk",
+            "int-nanomatchcluster.int.kit.edu",
+            22,
+            "/home/strunk",
+            "torque",
+        )
         config.write()
         otherconfig = Config()
-        self.assertDictEqual(config._servers,otherconfig._servers)
+        self.assertDictEqual(config._servers, otherconfig._servers)
 
     def test_is_running_and_pid(self):
         config = Config()
-        assert config.is_running() == False
+        assert config.is_running() is False
         config.register_pid()
-        assert config.is_running() == True
+        assert config.is_running() is True
         config.teardown_pid()
-        assert config.is_running() == False
+        assert config.is_running() is False

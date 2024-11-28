@@ -14,12 +14,12 @@ from aiida.cmdline.params.types import DataParamType
 
 
 # See aiida.cmdline.data entry point in setup.json
-@verdi_data.group('wano')
+@verdi_data.group("wano")
 def data_cli():
     """Command line interface for wano_calcjob"""
 
 
-@data_cli.command('list')
+@data_cli.command("list")
 @decorators.with_dbenv()
 def list_():  # pylint: disable=redefined-builtin
     """
@@ -27,7 +27,8 @@ def list_():  # pylint: disable=redefined-builtin
     """
     from aiida.orm import QueryBuilder
     from aiida.plugins import DataFactory
-    DiffParameters = DataFactory('wano')
+
+    DiffParameters = DataFactory("wano")
 
     qb = QueryBuilder()
     qb.append(DiffParameters)
@@ -40,19 +41,21 @@ def list_():  # pylint: disable=redefined-builtin
     sys.stdout.write(s)
 
 
-@data_cli.command('export')
-@click.argument('node', metavar='IDENTIFIER', type=DataParamType())
-@click.option('--outfile',
-              '-o',
-              type=click.Path(dir_okay=False),
-              help='Write output to file (default: print to stdout).')
+@data_cli.command("export")
+@click.argument("node", metavar="IDENTIFIER", type=DataParamType())
+@click.option(
+    "--outfile",
+    "-o",
+    type=click.Path(dir_okay=False),
+    help="Write output to file (default: print to stdout).",
+)
 @decorators.with_dbenv()
 def export(node, outfile):
     """Export a DiffParameters node (identified by PK, UUID or label) to plain text."""
     string = str(node)
 
     if outfile:
-        with open(outfile, 'w') as f:
+        with open(outfile, "w") as f:
             f.write(string)
     else:
         click.echo(string)

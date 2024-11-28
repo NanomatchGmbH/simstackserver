@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import os
 import subprocess
-import time
+
+
 def main():
     pid = os.fork()
     script = """
@@ -10,7 +11,7 @@ if [ $(id -u) -eq 0 ]; then
     for PID in $(pgrep -f "python .*SimStackServer"); do
         echo "Killing SimStackServer process $PID of user $(ps -o user= -p $PID). Please wait 20 seconds for it to shutdown."
         kill $PID
-        if  [ $? -ne 0 ]; then 
+        if  [ $? -ne 0 ]; then
             sleep 20 && kill -KILL $PID 2> /dev/null &
         fi
     done
@@ -26,11 +27,14 @@ then
 else
     echo "Did not find running SimStackServer process for user $USER"
     exit 0
-fi 
+fi
 sleep 20 && kill -KILL $PID 2> /dev/null
     """
     if pid == 0:
-        subprocess.Popen(['bash'], stdin=subprocess.PIPE, start_new_session=True).communicate(script.encode("utf8"))
+        subprocess.Popen(
+            ["bash"], stdin=subprocess.PIPE, start_new_session=True
+        ).communicate(script.encode("utf8"))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

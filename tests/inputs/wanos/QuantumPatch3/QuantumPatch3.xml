@@ -437,7 +437,7 @@
                             <Entry id="0">Turbomole</Entry>
                             <Entry id="1">Psi4</Entry>
                             <Entry id="2"  chosen="true" >DFTB+</Entry>
-                            <Entry id="3" >XTBEngine</Entry>                  
+                            <Entry id="3" >XTBEngine</Entry>
                         </WaNoDropDown>
                         <WaNoBool name="Fallback">False</WaNoBool>
                         <WaNoDynamicDropDown visibility_var_path="Tabs.Engines.DFT Engines.{{ path[3] }}.Fallback" visibility_condition="'%s' == 'True'" name="Fallback Engine" collection_path="Tabs.Engines.DFT Engines" subpath="Name" chosen="0" />
@@ -634,7 +634,7 @@
                             <Entry id="0">Turbomole</Entry>
                             <Entry id="1">Psi4</Entry>
                             <Entry id="2">DFTB+</Entry>
-                            <Entry id="3" chosen="true"  >XTBEngine</Entry>                  
+                            <Entry id="3" chosen="true"  >XTBEngine</Entry>
                         </WaNoDropDown>
                         <WaNoBool name="Fallback">False</WaNoBool>
                         <WaNoDynamicDropDown visibility_var_path="Tabs.Engines.DFT Engines.{{ path[3] }}.Fallback" visibility_condition="'%s' == 'True'" name="Fallback Engine" collection_path="Tabs.Engines.DFT Engines" subpath="Name" chosen="0" />
@@ -824,7 +824,7 @@
                             <WaNoInt name="Threads">1</WaNoInt>
                             <WaNoInt name="Memory (MB)">1500</WaNoInt>
                         </WaNoDictBox>
-                    </Entry>              
+                    </Entry>
                 </WaNoMultipleOf>
             </WaNoGroup>
             <WaNoGroup name="Shells">

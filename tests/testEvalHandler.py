@@ -1,12 +1,5 @@
-import logging
 import unittest
-from os import path
-from os.path import join
-from shutil import rmtree
 
-from io import StringIO
-
-from lxml import etree
 
 from SimStackServer.EvalHandler import eval_numpyexpression
 
@@ -15,7 +8,6 @@ class TestEvalHandler(unittest.TestCase):
     def setUp(self):
         pass
 
-
     def tearDown(self):
         pass
 
@@ -23,5 +15,5 @@ class TestEvalHandler(unittest.TestCase):
         b = 4
         for a in eval_numpyexpression("np.arange(4,7)"):
             assert a == b
-            b+=1
+            b += 1
         assert b == 7

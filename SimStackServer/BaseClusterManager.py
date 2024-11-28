@@ -1,8 +1,6 @@
 import abc
-import errno
 import logging
 import os
-import pathlib
 import stat
 import string
 import time
@@ -12,19 +10,18 @@ import random
 
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
-with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
-    import paramiko
+
 
 from os import path
-import posixpath
 from pathlib import Path
 
 import sshtunnel
 import zmq
 
-from SimStackServer.MessageTypes import Message, ErrorCodes
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
-from SimStackServer.Util.FileUtilities import split_directory_in_subdirectories, filewalker
+from SimStackServer.Util.FileUtilities import filewalker
+
+with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
+    import paramiko
 
 
 class SSHExpectedDirectoryError(Exception):
@@ -32,17 +29,18 @@ class SSHExpectedDirectoryError(Exception):
 
 
 class BaseClusterManager:
-    def __init__(self,
-                 url,
-                 port,
-                 calculation_basepath,
-                 user,
-                 sshprivatekey,
-                 extra_config,
-                 queueing_system,
-                 default_queue,
-                 software_directory=None
-                 ):
+    def __init__(
+        self,
+        url,
+        port,
+        calculation_basepath,
+        user,
+        sshprivatekey,
+        extra_config,
+        queueing_system,
+        default_queue,
+        software_directory=None,
+    ):
         """
 
         :param default_queue:
@@ -57,7 +55,7 @@ class BaseClusterManager:
         self._url = url
         try:
             self._port = int(port)
-        except ValueError as e:
+        except ValueError:
             print(f"Port was set to >{port}<. Using default port of 22")
             self._port = 22
         self._calculation_basepath = calculation_basepath
@@ -131,7 +129,6 @@ class BaseClusterManager:
         """
         raise NotImplementedError("Implement in child class")
 
-
     @contextmanager
     def connection_context(self):
         raise NotImplementedError("Implement in child class")
@@ -152,39 +149,52 @@ class BaseClusterManager:
         if basepath_override is None:
             basepath_override = self._calculation_basepath
 
-        return basepath_override + '/' + filename
+        return basepath_override + "/" + filename
 
     @abc.abstractmethod
     def delete_file(self, filename, basepath_override=None):
         raise NotImplementedError("Implement in child class")
 
-
-
     @abc.abstractmethod
     def rmtree(self, dirname, basepath_override=None):
         raise NotImplementedError("Implement in child class")
 
-    def put_directory(self, from_directory : str, to_directory: str, optional_callback = None, basepath_override = None):
+    def put_directory(
+        self,
+        from_directory: str,
+        to_directory: str,
+        optional_callback=None,
+        basepath_override=None,
+    ):
         for filename in filewalker(from_directory):
             cp = os.path.commonprefix([from_directory, filename])
             relpath = os.path.relpath(filename, cp)
             submitpath = path.join(to_directory, relpath)
             mydir = path.dirname(submitpath)
             self.mkdir_p(mydir)
-            self.put_file(filename,submitpath, optional_callback, basepath_override)
-        return self.resolve_file_in_basepath(str(to_directory), basepath_override=basepath_override)
+            self.put_file(filename, submitpath, optional_callback, basepath_override)
+        return self.resolve_file_in_basepath(
+            str(to_directory), basepath_override=basepath_override
+        )
 
     @abc.abstractmethod
     def exists_remote(self, path):
         raise NotImplementedError("Implement in child class")
 
     @abc.abstractmethod
-    def get_directory(self, from_directory_on_server: str, to_directory: str, optional_callback=None,
-                      basepath_override=None):
+    def get_directory(
+        self,
+        from_directory_on_server: str,
+        to_directory: str,
+        optional_callback=None,
+        basepath_override=None,
+    ):
         raise NotImplementedError("Implement in child class")
 
     @abc.abstractmethod
-    def put_file(self, from_file, to_file, optional_callback=None, basepath_override=None):
+    def put_file(
+        self, from_file, to_file, optional_callback=None, basepath_override=None
+    ):
         """
         Transfer a file from_file (local) to to_file(remote)
 
@@ -214,14 +224,18 @@ class BaseClusterManager:
 
     def _get_job_directory_path(self, given_name):
         now = datetime.now()
-        random_string = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        random_string = "".join(
+            random.choices(string.ascii_uppercase + string.digits, k=5)
+        )
         nowstr = now.strftime("%Y-%m-%d-%Hh%Mm%Ss")
         submitname = "%s-%s-%s" % (nowstr, given_name, random_string)
         return submitname
 
     def mkdir_random_singlejob_exec_directory(self, given_name, num_retries=10):
         for i in range(0, num_retries):
-            trialdirectory = Path("singlejob_exec_directories") / self._get_job_directory_path(given_name)
+            trialdirectory = Path(
+                "singlejob_exec_directories"
+            ) / self._get_job_directory_path(given_name)
             if self.exists(Path(self._calculation_basepath) / trialdirectory):
                 time.sleep(1.05)
             else:
@@ -231,7 +245,9 @@ class BaseClusterManager:
         raise FileExistsError("Could not generate new directory in time.")
 
     @abc.abstractmethod
-    def get_file(self, from_file, to_file, basepath_override=None, optional_callback=None):
+    def get_file(
+        self, from_file, to_file, basepath_override=None, optional_callback=None
+    ):
         """
         Transfer a file from_file (remote) to to_file(local)
 
@@ -248,10 +264,10 @@ class BaseClusterManager:
     @abc.abstractmethod
     def exec_command(self, command):
         """
-            Executes a command.
+        Executes a command.
 
-            :param command (str): Command to execute remotely.
-            :return: Nothing (currently)
+        :param command (str): Command to execute remotely.
+        :return: Nothing (currently)
         """
         raise NotImplementedError("Implement in child class")
 
@@ -329,7 +345,9 @@ class BaseClusterManager:
                 if entry.filename == "envs":
                     largest_version = 6
         except FileNotFoundError as e:
-            newfilenotfounderror = FileNotFoundError(e.errno, "No such file %s on remote %s" % (path, self._url), path)
+            newfilenotfounderror = FileNotFoundError(
+                e.errno, "No such file %s on remote %s" % (path, self._url), path
+            )
             raise newfilenotfounderror from e
 
         return "V%d" % largest_version
@@ -370,5 +388,3 @@ class BaseClusterManager:
 
     def get_queueing_system(self):
         return self._queueing_system
-
-

@@ -33,5 +33,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.1] - 2023-02-06
 
 - Added automatic sourcing of simstack\_environment\_config.sh in /etc/simstack and BASEFOLDER
-
-

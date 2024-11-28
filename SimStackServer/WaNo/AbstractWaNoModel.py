@@ -11,11 +11,14 @@ from SimStackServer.third_party.boolexp import Expression
 import abc
 import ast
 
+
 class WaNoNotImplementedError(Exception):
     pass
 
+
 class WaNoInstantiationError(Exception):
     pass
+
 
 class OrderedDictIterHelper(OrderedDict):
     def model_to_dict(self, outdict):
@@ -25,7 +28,7 @@ class OrderedDictIterHelper(OrderedDict):
             outdict[name] = suboutdict
 
 
-def bool_from_string(mystring : str):
+def bool_from_string(mystring: str):
     return ast.literal_eval(mystring.title())
 
 
@@ -35,7 +38,6 @@ class InvalidNameError(Exception):
 
 class AbstractWanoModel:
     def __init__(self, *args, **kwargs):
-
         self._logger = logging.getLogger("AbstractWaNoModel")
         self._parent_set = False
         self._path = ""
@@ -135,20 +137,27 @@ class AbstractWanoModel:
     def set_path(self, path):
         self._path = path
         if self._visibility_condition is not None:
-            self._visibility_var_path = Template(self._visibility_var_path).render(path = self._path.split("."))
-            self._root.register_callback(self._visibility_var_path, self.evaluate_visibility_condition, self.path_depth())
+            self._visibility_var_path = Template(self._visibility_var_path).render(
+                path=self._path.split(".")
+            )
+            self._root.register_callback(
+                self._visibility_var_path,
+                self.evaluate_visibility_condition,
+                self.path_depth(),
+            )
 
     def _check_name(self, name: str):
         regex = "[.#´]"
         if re.search(regex, name):
             raise InvalidNameError(
-                f"WaNo Element names are not allowed to contain anything not in [a-z][A-Z]. Name was {name}")
+                f"WaNo Element names are not allowed to contain anything not in [a-z][A-Z]. Name was {name}"
+            )
 
     def parse_from_xml(self, xml):
         self.set_name(xml.attrib["name"])
         if "visibility_condition" in xml.attrib:
             self._visibility_condition = xml.attrib["visibility_condition"]
-            self._visibility_var_path  = xml.attrib["visibility_var_path"]
+            self._visibility_var_path = xml.attrib["visibility_var_path"]
 
         if "import_from" in xml.attrib:
             self._do_import = True
@@ -184,16 +193,18 @@ class AbstractWanoModel:
         self._check_name(new_name)
         self._name = new_name
 
-    def evaluate_visibility_condition(self,changed_path):
+    def evaluate_visibility_condition(self, changed_path):
         if changed_path != self._visibility_var_path:
             if changed_path != "force":
                 return
         try:
             value = self._root.get_value(self._visibility_var_path).get_data()
-        except (IndexError, KeyError) as e:
-            print("Could not resolve %s. Ignoring callback."%self._visibility_var_path)
+        except (IndexError, KeyError):
+            print(
+                "Could not resolve %s. Ignoring callback." % self._visibility_var_path
+            )
             return
-        truefalse = Expression(self._visibility_condition%value).evaluate()
+        truefalse = Expression(self._visibility_condition % value).evaluate()
         if self._view is not None:
             self._view.set_visible(truefalse)
         self.set_visible(truefalse)
@@ -213,8 +224,8 @@ class AbstractWanoModel:
         The problem arises, if Person is invisible, even though Room is not.
         Room will update Person to be visible, therefore: If Person has a visibility condition and we are
         currently invisible, we should ignore this call
-        :param is_visible: 
-        :return: 
+        :param is_visible:
+        :return:
         """
         self._parent_visible = is_visible
 
@@ -282,7 +293,7 @@ class AbstractWanoModel:
     # By default however get_rendered_wano_data == get_data
     def get_rendered_wano_data(self):
         if self._do_import:
-            return "${%s}"%self._import_from
+            return "${%s}" % self._import_from
         return self.get_data()
 
     def set_view(self, view):
@@ -297,7 +308,7 @@ class AbstractWanoModel:
         pass
 
     @abc.abstractmethod
-    def set_data(self,data):
+    def set_data(self, data):
         if self._root is not None:
             self._root.notify_datachanged(self._path)
 
@@ -310,8 +321,7 @@ class AbstractWanoModel:
 
     @abc.abstractmethod
     def update_xml(self):
-
-        if not hasattr(self,"xml"):
+        if not hasattr(self, "xml"):
             return
 
         if self.xml is None:
@@ -324,15 +334,22 @@ class AbstractWanoModel:
                 del self.xml.attrib["import_from"]
 
     def decommission(self):
-        if self._view != None:
+        if self._view is not None:
             self._view.decommission()
 
         if self._root is not None:
             if self._visibility_condition is not None:
                 try:
-                    self._root.unregister_callback(self._visibility_var_path, self.evaluate_visibility_condition, self.path_depth())
-                except AssertionError as e:
-                    print("Path for callback function was not registered. Path was: %s"%self._visibility_var_path)
+                    self._root.unregister_callback(
+                        self._visibility_var_path,
+                        self.evaluate_visibility_condition,
+                        self.path_depth(),
+                    )
+                except AssertionError:
+                    print(
+                        "Path for callback function was not registered. Path was: %s"
+                        % self._visibility_var_path
+                    )
 
     def construct_children(self):
         pass

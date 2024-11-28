@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import signal
-import sys, os
+import sys
+import os
 import time
 import lockfile
 import logging
@@ -17,36 +18,44 @@ from SimStackServer.SimStackServerMain import SimStackServer, AlreadyRunningExce
 from SimStackServer.Config import Config
 import daemon
 
+
 class InputFileError(Exception):
     pass
 
+
 def get_my_runtime():
-    #me = os.path.abspath(os.path.realpath(__file__))
+    # me = os.path.abspath(os.path.realpath(__file__))
     me = sys.executable + " " + sys.argv[0]
     return me
 
+
 def setup_pid():
     from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
-    return NoEnterPIDLockFile(Config._get_config_file("SimStackServer_setup.pid"), timeout = 0.0)
 
-def flush_port_and_password_to_stdout(appdirs, other_process_setup = False):
-    myfile = join(appdirs.user_config_dir,"portconfig.txt")
+    return NoEnterPIDLockFile(
+        Config._get_config_file("SimStackServer_setup.pid"), timeout=0.0
+    )
+
+
+def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
+    myfile = join(appdirs.user_config_dir, "portconfig.txt")
     if other_process_setup and not os.path.exists(myfile):
         # In this case another process might just be in the process of writing this file.
         # We have to wait 5 seconds for it to appear
         time.sleep(5.0)
-    with open(myfile, 'rt') as infile:
+    with open(myfile, "rt") as infile:
         line = infile.read()
         splitline = line.split()
         if not len(splitline) == 5:
-            raise InputFileError("Input of portconfig was expected to be four fields, got <%s>"%line)
+            raise InputFileError(
+                "Input of portconfig was expected to be four fields, got <%s>" % line
+            )
         port = int(splitline[2])
         mypass = splitline[3].strip()
-        print("Port Pass %d %s %s"%(port, mypass, zmq.zmq_version()))
+        print("Port Pass %d %s %s" % (port, mypass, zmq.zmq_version()))
         return
-    raise InputFileError("Inputfile %s did not contain lines."%myfile)
-       
-    
+    raise InputFileError("Inputfile %s did not contain lines." % myfile)
+
 
 def main():
     ### Startup works like this:
@@ -63,16 +72,18 @@ def main():
     appdirs = SimStackServer.get_appdirs()
     setup_pidfile = setup_pid()
     try:
-        setup_pidfile.acquire(timeout = 0.0)
-    except lockfile.AlreadyLocked as e:
+        setup_pidfile.acquire(timeout=0.0)
+    except lockfile.AlreadyLocked:
         try:
             flush_port_and_password_to_stdout(appdirs, True)
         except FileNotFoundError as e:
             if "portconfig.txt" in str(e):
-                print("App Lock was found, but no portconfig. Most probably SimStackServer start process was interupted.")
+                print(
+                    "App Lock was found, but no portconfig. Most probably SimStackServer start process was interupted."
+                )
                 print(f"Please check logs and remove {setup_pidfile}")
                 sys.exit(1)
-            raised
+            raise
     logfilehandler = Config._setup_root_logger()
     my_runtime = get_my_runtime()
     try:
@@ -80,14 +91,14 @@ def main():
         ss = SimStackServer(my_runtime)
         try:
             mypidfile = ss.register_pidfile()
-            mypidfile.acquire(timeout = 0.0)
+            mypidfile.acquire(timeout=0.0)
         except lockfile.AlreadyLocked as e:
             raise AlreadyRunningException("Second stage locking did not work.") from e
-    except AlreadyRunningException as e:
+    except AlreadyRunningException:
         # print("Exiting, because lock exists.")
         # print("PID was",SimStackServer.register_pidfile().read_pid())
         # In case we are already running we silently discard and exit.
-        flush_port_and_password_to_stdout(appdirs,False)
+        flush_port_and_password_to_stdout(appdirs, False)
         setup_pidfile.release()
         sys.exit(0)
     try:
@@ -96,8 +107,9 @@ def main():
         mysecret = random_pass()
         myport = get_open_port()
 
-        with open(join(appdirs.user_config_dir,"portconfig.txt"),'wt') as outfile:
+        with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
             from SimStackServer import __version__ as server_version
+
             allversions = f"SERVER,{server_version},ZMQ,{zmq.zmq_version()}"
             towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
             outfile.write(towrite)
@@ -106,8 +118,8 @@ def main():
 
         mystd = join(appdirs.user_log_dir, "sss.stdout")
         mystderr = join(appdirs.user_log_dir, "sss.stderr")
-        mystdfileobj = open(mystd,'at')
-        mystderrfileobj = open(mystderr,'at')
+        mystdfileobj = open(mystd, "at")
+        mystderrfileobj = open(mystderr, "at")
     except Exception as e:
         setup_pidfile.release()
         raise e
@@ -115,17 +127,17 @@ def main():
         # Careful: We close all files here
         signal_map = {
             signal.SIGTERM: ss._signal_handler,
-            signal.SIGINT: ss._signal_handler
+            signal.SIGINT: ss._signal_handler,
         }
         if "-D" in sys.argv:
             cm = contextlib.nullcontext()
         else:
             cm = daemon.DaemonContext(
-                    stdout = mystdfileobj,
-                    stderr = mystderrfileobj,
-                    files_preserve = [logfilehandler.stream],
-                    pidfile = mypidfile,
-                    signal_map = signal_map
+                stdout=mystdfileobj,
+                stderr=mystderrfileobj,
+                files_preserve=[logfilehandler.stream],
+                pidfile=mypidfile,
+                signal_map=signal_map,
             )
         with cm:
             logger = logging.getLogger("Startup")
@@ -138,7 +150,7 @@ def main():
                 logger.info("SimStackServer Secure Daemon Startup")
             else:
                 logger.info("SimStackServer Daemon Startup")
-            mypidfile.update_pid_to_current_process() # "PIDFILE TAKEOVER
+            mypidfile.update_pid_to_current_process()  # "PIDFILE TAKEOVER
             logger.debug("PID written")
             ss.setup_zmq_port(myport, mysecret)
             logger.debug("ZMQ port setup finished")
@@ -149,18 +161,22 @@ def main():
 
             try:
                 import aiida
+
                 aiida.load_profile()
-            except Exception as e:
+            except Exception:
                 pass
             try:
-                if len(sys.argv) >= 2 and not "-D" in sys.argv and not "--secure_mode" in sys.argv:
+                if (
+                    len(sys.argv) >= 2
+                    and "-D" not in sys.argv
+                    and "--secure_mode" not in sys.argv
+                ):
                     wf_filename = sys.argv[1]
                     ss.main_loop(wf_filename)
                 else:
                     ss.main_loop()
-            except Exception as e:
+            except Exception:
                 logger.exception("Exception in main loop. Terminating.")
-                 
 
             ss.terminate()
             logger.debug("Releasing final PID")
@@ -169,6 +185,3 @@ def main():
         # This here happens, if in between the opening of the stdout and stderr another task took over and locked the file
         # It's rare, but I was able to reproduce it.
         pass
-
-
-

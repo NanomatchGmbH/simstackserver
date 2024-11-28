@@ -5,13 +5,18 @@ from SimStackServer.WorkflowModel import Resources
 
 ___clustersettings_file_ending = ".clustersettings"
 
-def get_clustersettings_filename_from_folder(folder: pathlib.Path, clustername: str) -> pathlib.Path:
+
+def get_clustersettings_filename_from_folder(
+    folder: pathlib.Path, clustername: str
+) -> pathlib.Path:
     global ___clustersettings_file_ending
-    return folder/ f"{clustername}{___clustersettings_file_ending}"
+    return folder / f"{clustername}{___clustersettings_file_ending}"
+
 
 def remove_clustersettings_from_folder(folder: pathlib.Path, clustername: str) -> None:
     filename = get_clustersettings_filename_from_folder(folder, clustername)
     filename.unlink(missing_ok=True)
+
 
 def get_cluster_settings_from_folder(folder: pathlib.Path):
     global ___clustersettings_file_ending
@@ -27,6 +32,7 @@ def get_cluster_settings_from_folder(folder: pathlib.Path):
             r.from_json(file)
             outdict[name] = r
     return outdict
+
 
 def save_cluster_settings_to_folder(folder: pathlib.Path, clustersettings: dict):
     global ___clustersettings_file_ending

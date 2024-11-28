@@ -6,12 +6,13 @@ from aiida.manage.tests.unittest_classes import PluginTestCase
 
 class TestDataCli(PluginTestCase):
     """Test verdi data cli plugin."""
+
     def setUp(self):
         from click.testing import CliRunner
         from aiida.plugins import DataFactory
 
-        DiffParameters = DataFactory('wano')
-        self.parameters = DiffParameters({'ignore-case': True})
+        DiffParameters = DataFactory("wano")
+        self.parameters = DiffParameters({"ignore-case": True})
         self.parameters.store()
         self.runner = CliRunner()
 
@@ -33,6 +34,7 @@ class TestDataCli(PluginTestCase):
         """
         from wano_calcjob.cli import export
 
-        result = self.runner.invoke(export, [str(self.parameters.pk)],
-                                    catch_exceptions=False)
-        self.assertIn('ignore-case', result.output)
+        result = self.runner.invoke(
+            export, [str(self.parameters.pk)], catch_exceptions=False
+        )
+        self.assertIn("ignore-case", result.output)

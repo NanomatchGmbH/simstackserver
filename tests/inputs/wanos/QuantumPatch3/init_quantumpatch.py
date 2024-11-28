@@ -24,12 +24,13 @@ if __name__ == "__main__":
     qp_run = wano_general["QuantumPatch Type"]
     max_iter = wano_core["Screened Iterations"]
     # Indirection arrays to translate settings from WaNo expression to input
-    qp_type = {"Polarized": "uncharged_equilibration",
-               "Polaron/Exciton": "charged_equilibration",
-               "Matrix EAIP": "matrix_eaip",
-               "Excitonic Preprocessing": "excitonic_preprocessing"}
-    shelltype = {"dynamic": "scf",
-                 "static": "static"}
+    qp_type = {
+        "Polarized": "uncharged_equilibration",
+        "Polaron/Exciton": "charged_equilibration",
+        "Matrix EAIP": "matrix_eaip",
+        "Excitonic Preprocessing": "excitonic_preprocessing",
+    }
+    shelltype = {"dynamic": "scf", "static": "static"}
     # settings_ng "QuantumPatch" Category
     cfg["QuantumPatch"]["type"] = qp_type[qp_run]
     cfg["QuantumPatch"]["number_of_equilibration_steps"] = max_iter
@@ -38,11 +39,23 @@ if __name__ == "__main__":
     cfg["Analysis"]["HigherOrder"] = {}
     cfg["Analysis"]["HigherOrder"]["ExtraJs"] = int(wano_general["Higher Order Js"])
     cfg["Analysis"]["homo_lumo_generator"] = {}
-    cfg["Analysis"]["homo_lumo_generator"]["enabled"] = wano_postproc["Predict site energy distribution"]
-    cfg["Analysis"]["homo_lumo_generator"]["periodic_copies"] = [int(wano_postproc["Site energy prediction settings"]["Periodic copies"]["x"]), int(wano_postproc["Site energy prediction settings"]["Periodic copies"]["y"]), int(wano_postproc["Site energy prediction settings"]["Periodic copies"]["z"])]
-    cfg["Analysis"]["homo_lumo_generator"]["non_PBC_morphology"] = wano_postproc["Site energy prediction settings"]["non PBC Structure"]
-    cfg["Analysis"]["homo_lumo_generator"]["coulomb_cutoff"] = wano_postproc["Site energy prediction settings"]["Coulomb cutoff"]
-    cfg["Analysis"]["homo_lumo_generator"]["swap_x_z_axis"] = wano_postproc["Site energy prediction settings"]["z Rotation"]
+    cfg["Analysis"]["homo_lumo_generator"]["enabled"] = wano_postproc[
+        "Predict site energy distribution"
+    ]
+    cfg["Analysis"]["homo_lumo_generator"]["periodic_copies"] = [
+        int(wano_postproc["Site energy prediction settings"]["Periodic copies"]["x"]),
+        int(wano_postproc["Site energy prediction settings"]["Periodic copies"]["y"]),
+        int(wano_postproc["Site energy prediction settings"]["Periodic copies"]["z"]),
+    ]
+    cfg["Analysis"]["homo_lumo_generator"]["non_PBC_morphology"] = wano_postproc[
+        "Site energy prediction settings"
+    ]["non PBC Structure"]
+    cfg["Analysis"]["homo_lumo_generator"]["coulomb_cutoff"] = wano_postproc[
+        "Site energy prediction settings"
+    ]["Coulomb cutoff"]
+    cfg["Analysis"]["homo_lumo_generator"]["swap_x_z_axis"] = wano_postproc[
+        "Site energy prediction settings"
+    ]["z Rotation"]
     # settings_ng "DFTEngine" Category
     cfg["DFTEngine"]["user"] = dict()
     for engine in wano["Tabs"]["Engines"]["DFT Engines"]:
@@ -95,7 +108,7 @@ if __name__ == "__main__":
         cfg["System"]["Core"]["distance"] = {
             "cutoff_x": wano_core["Inner Box Cutoff"]["Cutoff x direction"],
             "cutoff_y": wano_core["Inner Box Cutoff"]["Cutoff y direction"],
-            "cutoff_z": wano_core["Inner Box Cutoff"]["Cutoff z direction"]
+            "cutoff_z": wano_core["Inner Box Cutoff"]["Cutoff z direction"],
         }
     elif wano_core["Inner Part Method"] == "Number of Random Pairs":
         cfg["System"]["Core"]["type"] = "random_molstate_pairs"
@@ -121,7 +134,7 @@ if __name__ == "__main__":
         cfg["System"]["Shells"][str(i)] = {
             "cutoff": shell["Shell"]["Cutoff Radius"],
             "type": shelltype[shell["Shell"]["Shelltype"]],
-            "engine": shell["Shell"]["Used Engine"]
+            "engine": shell["Shell"]["Used Engine"],
         }
         by_iter = dict()  # Inserts engine_by_iter section
         if shell["Shell"]["Different Engine on Last Iteration"]:
@@ -137,7 +150,7 @@ if __name__ == "__main__":
             "charge": molstate["State"]["Charge"],
             "multiplicity": molstate["State"]["Multiplicity"],
             "excited_state_of_interest": molstate["State"]["Excited State of Interest"],
-            "roots": molstate["State"]["Roots"]
+            "roots": molstate["State"]["Roots"],
         }
         i += 1
     # Analysis section options
