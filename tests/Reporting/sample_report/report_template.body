@@ -1,4 +1,4 @@
 Test1={{ output_dict["Test1Key"]  }}
-Test2={{ output_config["Test2Key"] }}
+local1={{ output_config["local"]["local1key"] }}
+global1={{ output_config["global"]["global1key"] }}
 wano1={{ wano["wano1key"] }}
-

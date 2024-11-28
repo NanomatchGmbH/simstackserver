@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import configparser
 from os.path import join
 from typing import Any
@@ -61,7 +60,7 @@ class ReportRenderer:
             if filename.endswith(".ini"):
                 content = configparser.ConfigParser(strict=False)
                 with open(filename, "rt") as infile:
-                    content_string = "[DEFAULT]\n" + infile.read()
+                    content_string = "[global]\n" + infile.read()
                 content.read_string(content_string)
                 content = _config_as_dict(content)
             elif filename.endswith(".yml"):
@@ -70,13 +69,31 @@ class ReportRenderer:
             self._export_dictionaries[dict_name] = content
 
     def consolidate_export_dictionaries(self):
+        """
+        Consolidates all export dictionaries into a single dictionary.
+
+        Returns:
+            dict: A dictionary containing all key-value pairs from the export dictionaries.
+        """
         outdict = {}
         for indict in self._export_dictionaries.values():
             outdict.update(indict)
         return outdict
 
     @staticmethod
-    def _parse_html_parts(html_parts):
+    def _parse_html_parts(html_parts: dict[str, str]) -> tuple[str, str, str]:
+        """
+        Parses the HTML parts dictionary to extract the title, body, and style.
+
+        Args:
+            html_parts (dict[str, str]): A dictionary containing the HTML parts with keys:
+                - 'title': The title of the report.
+                - 'body': The filename of the body content.
+                - 'style': The filename of the CSS style (optional).
+
+        Returns:
+            tuple[str, str, str]: A tuple containing the title, body content, and style content.
+        """
         style = ""
         assert "body" in html_parts, "Every report requires a body"
         assert "title" in html_parts, "Every report requires a title"
@@ -92,7 +109,19 @@ class ReportRenderer:
                 style = infile.read()
         return title, body, style
 
-    def render(self, html_parts):
+    def render(self, html_parts: dict[str, str]) -> str:
+        """
+        Renders the report using the provided HTML parts.
+
+        Args:
+            html_parts (dict[str, str]): A dictionary containing the HTML parts with keys:
+                - 'title': The title of the report.
+                - 'body': The filename of the body content.
+                - 'style': The filename of the CSS style (optional).
+
+        Returns:
+            str: The rendered HTML report as a string.
+        """
         title, body, style = self._parse_html_parts(html_parts)
         torender = self.render_string % (title, style, body)
         tm = Template(torender)
@@ -102,11 +131,30 @@ class ReportRenderer:
         self._body_html = body_only_render
         return outstring
 
-    def get_body(self):
+    def get_body(self) -> str | None:
+        """
+        Returns the body part of the rendered report as a string.
+
+        Returns:
+            str | None: The body HTML as a string, or None if the report was not rendered yet.
+        """
         return self._body_html
 
     @staticmethod
-    def render_everything(basepath, do_render=True):
+    def render_everything(basepath: str, do_render: bool = True):
+        """
+        Renders the report using the provided basepath.
+
+        Args:
+            basepath (str): A string representing the base directory containing three optional files:
+                            - `output_config.ini`
+                            - `output_dict.yml`
+                            - `rendered_wano.yml`
+            do_render (bool): A flag to indicate whether to perform the rendering. Defaults to True.
+
+        Returns:
+            ReportRenderer: An instance of the ReportRenderer class.
+        """
         export_dictionaries = {}
         oci = join(basepath, "output_config.ini")
 
@@ -118,7 +166,7 @@ class ReportRenderer:
         wanof = join(basepath, "rendered_wano.yml")
         if os.path.isfile(wanof):
             export_dictionaries["wano"] = wanof
-        a = ReportRenderer(export_dictionaries)
+        report_renderer = ReportRenderer(export_dictionaries)
         if do_render:
             html_parts_dict = {}
             rtb = join(basepath, "report_template.body")
@@ -133,12 +181,8 @@ class ReportRenderer:
             if os.path.isfile(rsc):
                 html_parts_dict["style"] = rsc
 
-            report = a.render(html_parts_dict)
+            report = report_renderer.render(html_parts_dict)
 
             with open(join(basepath, "report.html"), "wt") as outfile:
                 outfile.write(report)
-        return a
-
-
-if __name__ == "__main__":
-    ReportRenderer.render_everything(".")
+        return report_renderer
