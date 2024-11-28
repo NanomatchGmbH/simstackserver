@@ -24,7 +24,7 @@ from SimStackServer.WorkflowModel import WorkflowExecModule, StringList, Workflo
 
 import collections
 
-from TreeWalker.TreeWalker import TreeWalker, EraseEntryError
+from nestdictmod.nestdictmod import NestDictMod, EraseEntryError
 from SimStackServer.WaNo.AbstractWaNoModel import AbstractWanoModel, OrderedDictIterHelper
 import SimStackServer.WaNo.WaNoFactory
 from lxml import etree
@@ -47,8 +47,8 @@ class FileNotFoundErrorSimStack(FileNotFoundError):
 
 from SimStackServer.WaNo.WaNoTreeWalker import PathCollector, subdict_skiplevel, subdict_skiplevel_to_type, \
     subdict_skiplevel_to_aiida_type, WaNoTreeWalker
-from TreeWalker.flatten_dict import flatten_dict
-from TreeWalker.tree_list_to_dict import tree_list_to_dict, tree_list_to_dict_multiply
+from nestdictmod.flatten_dict import flatten_dict
+from nestdictmod.tree_list_to_dict import tree_list_to_dict, tree_list_to_dict_multiply
 
 
 class WaNoParseError(Exception):
@@ -1191,7 +1191,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         changed_paths = {}
         def dict_change_detector(subdict, call_info):
-            twp = call_info["treewalker_paths"].abspath
+            twp = call_info["nestdictmod_paths"].abspath
             if hasattr(subdict,  "changed_from_default") and subdict.changed_from_default():
                 changed_paths[".".join(str(e) for e in twp)] = subdict.get_delta_to_default()
             return None
@@ -1203,7 +1203,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         tw = WaNoTreeWalker(self)
         def leafnode_change_detector(leaf_node : AbstractWanoModel, call_info):
-            twp = call_info["treewalker_paths"].abspath
+            twp = call_info["nestdictmod_paths"].abspath
             if leaf_node.changed_from_default():
                 return leaf_node.get_delta_to_default()
             else:
@@ -1213,8 +1213,8 @@ class WaNoModelRoot(WaNoModelDictLike):
         changed_paths_no_dict = tw.walker(capture = True, path_visitor_function=None, subdict_visitor_function=None, data_visitor_function=leafnode_change_detector)
 
         def empty_dict_remover(subdict, call_info):
-            twp = call_info["treewalker_paths"].abspath
-            relpath = call_info["treewalker_paths"].relpath
+            twp = call_info["nestdictmod_paths"].abspath
+            relpath = call_info["nestdictmod_paths"].relpath
 
             # We should not do anything which entries which were lists before to protect multipleof:
             if isinstance(relpath, int) or relpath.isdigit():
@@ -1231,7 +1231,7 @@ class WaNoModelRoot(WaNoModelDictLike):
         # in WaNoTreeWalker, which runs subdict_visitorafter collecting
         try:
             for i in range(0,5):
-                dict_remove_tw = TreeWalker(changed_paths_no_dict)
+                dict_remove_tw = NestDictMod(changed_paths_no_dict)
                 changed_paths_no_dict = dict_remove_tw.walker(capture = True, path_visitor_function = None,
                                                    subdict_visitor_function = empty_dict_remover,
                                                    data_visitor_function = None)
@@ -1632,10 +1632,10 @@ class WaNoModelRoot(WaNoModelDictLike):
     def get_all_variable_paths(self, export = True):
         outdict = {}
         self.model_to_dict(outdict)
-        tw = TreeWalker(outdict)
+        tw = NestDictMod(outdict)
         skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel,
                              data_visitor_function=None)
-        tw = TreeWalker(skipdict)
+        tw = NestDictMod(skipdict)
         pc = PathCollector()
         tw.walker(capture=False, path_visitor_function=pc.assemble_paths,
                   subdict_visitor_function=None,
@@ -1649,10 +1649,10 @@ class WaNoModelRoot(WaNoModelDictLike):
     def _get_paths_and_something_helper(self, subdict_visitor, deref_functor_path_collector):
         outdict = {}
         self.model_to_dict(outdict)
-        tw = TreeWalker(outdict)
+        tw = NestDictMod(outdict)
         skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_visitor,
                              data_visitor_function=None)
-        tw = TreeWalker(skipdict)
+        tw = NestDictMod(skipdict)
         pc = PathCollector()
         tw.walker(capture=False, path_visitor_function=None,
                   subdict_visitor_function=subdict_visitor,
@@ -1689,10 +1689,10 @@ class WaNoModelRoot(WaNoModelDictLike):
         outdict = {}
         self.model_to_dict(outdict)
         outdict = tree_list_to_dict_multiply(outdict)
-        tw = TreeWalker(outdict)
+        tw = NestDictMod(outdict)
         skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=subdict_skiplevel_to_type,
                              data_visitor_function=None)
-        tw = TreeWalker(skipdict)
+        tw = NestDictMod(skipdict)
         pc = PathCollector()
         tw.walker(capture=False, path_visitor_function=None,
                   subdict_visitor_function=subdict_skiplevel_to_type,
@@ -1706,29 +1706,11 @@ class WaNoModelRoot(WaNoModelDictLike):
         outdict = {}
         self.model_to_dict(outdict)
         outdict = tree_list_to_dict(outdict)
-        tw = TreeWalker(outdict)
+        tw = NestDictMod(outdict)
         svf = partial(subdict_skiplevel_to_aiida_type, aiida_files_by_relpath = aiida_files_by_relpath)
         skipdict = tw.walker(capture=True, path_visitor_function=None, subdict_visitor_function=svf,
                              data_visitor_function=None)
         return skipdict
-
-    """
-    def get_paths_and_type_dict_aiida(self):
-        outdict = {}
-        self.model_to_dict(outdict)
-        outdict = tree_list_to_dict(outdict)
-        tw = TreeWalker(outdict)
-        skipdict = tw.walker(capture=True, path_visitor_function=None,
-                             subdict_visitor_function=subdict_skiplevel_to_type,
-                             data_visitor_function=None)
-        tw = TreeWalker(skipdict)
-        pc = PathCollector()
-        tw.walker(capture=False, path_visitor_function=None,
-                  subdict_visitor_function=subdict_skiplevel_to_type,
-                  data_visitor_function=pc.assemble_paths_and_values
-                  )
-        return pc.path_to_value
-        """
 
     def get_dir_root(self):
         return self._wano_dir_root

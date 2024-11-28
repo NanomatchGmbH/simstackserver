@@ -9,34 +9,6 @@ import yaml
 from lxml import etree
 
 
-if __name__ == '__main__':
-    base_path = os.path.join((os.path.dirname(os.path.realpath(__file__))), os.pardir)
-    sys.path.append(base_path)
-    dir_path = join(base_path,"external","clusterjob")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","python-crontab")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","python-daemon")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","threadfarm")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","treewalker")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-    dir_path = join(base_path,"external","boolexp")
-    if not dir_path in sys.path:
-        sys.path.append(dir_path)
-
-
 from SimStackServer.WorkflowModel import WorkflowExecModule, Resources
 from pathlib import Path
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry_from_folder_or_zip, WaNoListEntry, get_wano_xml_path
