@@ -57,7 +57,7 @@ def test_report_renderer_instantiation(sample_reporting_input_dir: Path):
 <!DOCTYPE html>
 <html>
 <title>tmp</title>
-<style> type="text/css">
+<style type="text/css">
 TESTSTYLEHERE
 
 </style>
@@ -101,7 +101,7 @@ def test_report_renderer_render(sample_reporting_input_dir: Path):
 <!DOCTYPE html>
 <html>
 <title>Test Report</title>
-<style> type="text/css">
+<style type="text/css">
 TESTSTYLEHERE
 
 </style>
