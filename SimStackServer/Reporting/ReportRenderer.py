@@ -32,7 +32,7 @@ class ReportRenderer:
 <!DOCTYPE html>
 <html>
 <title>%s</title>
-<style> type="text/css">
+<style type="text/css">
 %s
 </style>
 <body>
