@@ -68,11 +68,20 @@ xmltodict = ">=0.12.0"
 clusterjob = ">=2.1.0,<2.2.0"
 threadfarm = ">=2.0.0"
 SQLAlchemy = ">2"
-micromamba = "1.5.6"
+micromamba = "==1.5.6"
+# End of your dependencies
+
+[tool.pixi.feature.dev.dependencies]
+# Cruft dependencies here:
+pixi-pycharm = "*"
+# End of cruft dependencies
+
+# Your dependencies come here:
+
 # End of your dependencies
 
 [tool.pixi.environments]
-test = ["test"]
+test = { features = ["test"], solve-group = "default" }
 mypy = ["mypy"]
 default = { features = ["dev"], solve-group = "main" }
 cruft = { features = ["cruft"], no-default-feature = true }
@@ -90,10 +99,6 @@ typos = ">=1.23.1,<2"
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run --all"
 lint = { depends-on = ["pre-commit-run"] }
-
-
-[tool.pixi.feature.dev.dependencies]
-pixi-pycharm = "*"
 
 [tool.pixi.feature.cruft.dependencies]
 cruft = "*"
