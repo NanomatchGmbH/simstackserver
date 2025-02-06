@@ -1,5 +1,30 @@
-from SimStackServer.WaNo.WaNoModels import WaNoItemStringModel, WaNoThreeRandomLetters
+from numpy.lib.recfunctions import apply_along_fields
+
+from SimStackServer.WaNo.WaNoModels import WaNoItemStringModel, WaNoThreeRandomLetters, WaNoItemIntModel
 from xml.etree.ElementTree import fromstring
+
+
+def test_WaNoItemIntModel():
+    wiim = WaNoItemIntModel()
+    xml = fromstring(
+        """
+                <WaNoInt name="key">2</WaNoInt>
+            """
+    )
+    wiim.parse_from_xml(xml)
+    assert wiim.get_data() == 2
+    wiim.set_data(3)
+    assert wiim.get_data() == 3
+    assert wiim.get_secure_schema() == {'key': {'type': 'int'}}
+    assert wiim.get_delta_to_default() == 3
+    wiim.apply_delta(4)
+    assert wiim.get_data() == 4
+    assert wiim.changed_from_default() == True
+    assert wiim.get_type_str() == 'Int'
+    wiim.set_data(13)
+    wiim.update_xml() # how to test?
+    assert wiim.xml.text == '13'
+    assert repr(wiim) == '13'
 
 
 def test_WaNoItemStringModel():
