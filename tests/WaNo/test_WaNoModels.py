@@ -148,8 +148,7 @@ def test_WaNoFileModel():
         "logical_name": "unset",
         "name": "molecule_pdb",
     }
-    # ToDo check if needed:
-    # wifm.render(rendered_wano, submitdir)
+    assert wifm.render({}, "./", "./") == "molecule_test.pdb"
 
 
 def test_WaNoThreeRandomLetters():
