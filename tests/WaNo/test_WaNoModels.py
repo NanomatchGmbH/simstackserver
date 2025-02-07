@@ -1,3 +1,5 @@
+import copy
+
 from SimStackServer.WaNo.WaNoModels import (
     WaNoItemStringModel,
     WaNoThreeRandomLetters,
@@ -63,6 +65,11 @@ def test_WaNoItemStringModel():
     wism.parse_from_xml(xml)
     assert wism.get_data() == "content"
     wism.set_data("newcontent")
+    old_xml = copy.deepcopy(wism.xml.text)
+    wism.update_xml()
+    new_xml = wism.xml.text
+    assert new_xml != old_xml
+    assert new_xml == "newcontent"
     assert wism.get_data() == "newcontent"
     assert wism.get_delta_to_default() == "newcontent"
     result = wism.get_secure_schema()
@@ -70,7 +77,6 @@ def test_WaNoItemStringModel():
     assert repr(wism) == "'newcontent'"
     assert wism.changed_from_default() is True
     assert wism.get_type_str() == "String"
-
 
 def test_WaNoThreeRandomLetters():
     wism = WaNoThreeRandomLetters()
