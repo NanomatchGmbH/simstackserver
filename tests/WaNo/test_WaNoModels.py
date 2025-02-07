@@ -169,6 +169,29 @@ def test_WaNoChoice():
         """
         )
     wm.parse_from_xml(xml)
+    assert wm.get_data() == "Bash"
+    assert wm.get_type_str() == "String"
+    wm.set_chosen(2)
+    wm.update_xml()
+    assert wm.get_data() == "Perl"
+    assert wm.changed_from_default() is True
+    assert wm.get_delta_to_default() == "Perl"
+    wm.apply_delta("Python")
+    assert wm.get_data() == "Python"
+    old_xml = copy.deepcopy(wm.xml)
+    wm.update_xml()
+    new_xml = wm.xml
+    for iter_id, child in enumerate(old_xml.iter("Entry")):
+        if "chosen" in child.attrib:
+            old_id = iter_id
+            break
+    for iter_id, child in enumerate(new_xml.iter("Entry")):
+        if "chosen" in child.attrib:
+            new_id = iter_id
+            break
+    assert old_id == 2
+    assert new_id == 1
+    assert wm.get_secure_schema() == {'Interpreter': {'enum': ['Bash', 'Python', 'Perl']}}
 
 
 def test_WaNoThreeRandomLetters():
