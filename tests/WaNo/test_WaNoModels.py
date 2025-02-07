@@ -1,4 +1,5 @@
 import copy
+import os
 
 from _pytest.python_api import raises
 
@@ -12,7 +13,6 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoItemFileModel,
 )
 from xml.etree.ElementTree import fromstring
-
 
 def test_WaNoItemIntModel():
     wiim = WaNoItemIntModel()
@@ -108,8 +108,7 @@ def test_WaNoItemStringModel():
     assert wism.changed_from_default() is True
     assert wism.get_type_str() == "String"
 
-
-def test_WaNoFileModel():
+def test_WaNoFileModel(tmpdir):
     wifm = WaNoItemFileModel()
     xml = fromstring(
         """
@@ -148,9 +147,14 @@ def test_WaNoFileModel():
         "logical_name": "unset",
         "name": "molecule_pdb",
     }
-    wifm.set_visible(False)
     wifm.set_local(True)
+    wifm.set_visible(False)
     assert wifm.render({}, "./", "./") == "molecule_test.pdb"
+    wifm.set_visible(True)
+    wifm.set_data("inputs/molecule.pdb")
+    dest_file = tmpdir + "/inputs/molecule_test.pdb"
+    assert wifm.render({}, "./", tmpdir) == "molecule_test.pdb"
+    assert os.path.exists(dest_file)
 
 
 def test_WaNoThreeRandomLetters():
