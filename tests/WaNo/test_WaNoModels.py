@@ -149,6 +149,7 @@ def test_WaNoFileModel():
         "name": "molecule_pdb",
     }
     wifm.set_visible(False)
+    wifm.set_local(True)
     assert wifm.render({}, "./", "./") == "molecule_test.pdb"
 
 
