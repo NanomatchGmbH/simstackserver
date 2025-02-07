@@ -4,7 +4,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoItemStringModel,
     WaNoThreeRandomLetters,
     WaNoItemIntModel,
-    WaNoItemBoolModel,
+    WaNoItemBoolModel, WaNoItemFloatModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -30,6 +30,31 @@ def test_WaNoItemIntModel():
     wiim.update_xml()
     assert wiim.xml.text == "13"
     assert repr(wiim) == "13"
+
+
+def test_WaNoItemFloatModel():
+    wifm = WaNoItemFloatModel()
+    xml = fromstring(
+        """
+                <WaNoFloat name="key">2.0</WaNoFloat>
+            """
+    )
+    wifm.parse_from_xml(xml)
+    assert wifm.get_data() == 2.0
+    wifm.set_data(3.0)
+    old_xml = wifm.xml.text
+    wifm.update_xml()
+    new_xml = wifm.xml.text
+    assert new_xml == "3.0"
+    assert old_xml != new_xml
+    assert wifm.get_data() == 3.0
+    assert wifm.get_secure_schema() == {"key": {"type": "number"}}
+    assert wifm.get_delta_to_default() == 3.0
+    wifm.apply_delta(4.0)
+    assert wifm.get_data() == 4.0
+    assert wifm.changed_from_default() is True
+    assert wifm.get_type_str() == "Float"
+    assert repr(wifm) == "4.0"
 
 
 def test_WaNoItemBoolModel():
