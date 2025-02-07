@@ -68,6 +68,8 @@ def test_WaNoItemStringModel():
     result = wism.get_secure_schema()
     assert result == {"key": {"type": "string"}}
     assert repr(wism) == "'newcontent'"
+    assert wism.changed_from_default() is True
+    assert wism.get_type_str() == "String"
 
 
 def test_WaNoThreeRandomLetters():
