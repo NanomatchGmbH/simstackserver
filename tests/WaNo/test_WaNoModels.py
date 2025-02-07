@@ -10,7 +10,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoItemIntModel,
     WaNoItemBoolModel,
     WaNoItemFloatModel,
-    WaNoItemFileModel,
+    WaNoItemFileModel, WaNoChoiceModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -155,6 +155,20 @@ def test_WaNoFileModel(tmpdir):
     dest_file = tmpdir + "/inputs/molecule_test.pdb"
     assert wifm.render({}, "./", tmpdir) == "molecule_test.pdb"
     assert os.path.exists(dest_file)
+
+
+def test_WaNoChoice():
+    wm = WaNoChoiceModel()
+    xml =  fromstring(
+        """ 
+        <WaNoChoice name="Interpreter">
+           <Entry id="0">Bash</Entry>
+           <Entry id="1">Python</Entry>
+           <Entry id="2">Perl</Entry>
+        </WaNoChoice>
+        """
+        )
+    wm.parse_from_xml(xml)
 
 
 def test_WaNoThreeRandomLetters():
