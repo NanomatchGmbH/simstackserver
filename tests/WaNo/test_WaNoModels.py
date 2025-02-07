@@ -1,10 +1,15 @@
 import copy
 
+from _pytest.python_api import raises
+
+from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.WaNo.WaNoModels import (
     WaNoItemStringModel,
     WaNoThreeRandomLetters,
     WaNoItemIntModel,
-    WaNoItemBoolModel, WaNoItemFloatModel,
+    WaNoItemBoolModel,
+    WaNoItemFloatModel,
+    WaNoItemFileModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -102,6 +107,50 @@ def test_WaNoItemStringModel():
     assert repr(wism) == "'newcontent'"
     assert wism.changed_from_default() is True
     assert wism.get_type_str() == "String"
+
+
+def test_WaNoFileModel():
+    wifm = WaNoItemFileModel()
+    xml = fromstring(
+        """
+        <WaNoFile logical_filename="molecule_test.pdb" name="molecule_pdb">molecule.pdb</WaNoFile>
+        """
+    )
+    wifm.parse_from_xml(xml)
+    assert wifm.get_data() == "molecule.pdb"
+    wifm.set_data("molecule_2.pdb")
+    assert wifm.get_data() == "molecule_2.pdb"
+    old_xml = copy.deepcopy(wifm.xml.text)
+    wifm.update_xml()
+    new_xml = wifm.xml.text
+    assert new_xml != old_xml
+    assert new_xml == "molecule_2.pdb"
+    with raises(SecurityError):
+        wifm.get_secure_schema()
+    assert wifm.get_local() is True
+    wifm.set_local(False)
+    assert wifm.get_local() is False
+    wifm.set_local(True)
+    assert wifm.get_type_str() == "File"
+    assert wifm.get_rendered_wano_data() == "molecule_test.pdb"
+    assert wifm.get_delta_to_default() == "local://molecule_2.pdb"
+    wifm.apply_delta("global://molecule_3.pdb")
+    assert wifm.get_data() == "molecule_3.pdb"
+    assert wifm.get_local() is False
+    assert wifm.changed_from_default() is True
+    assert repr(wifm) == "'molecule_3.pdb'"
+    assert wifm.cached_logical_name() == "unset"
+    my_outdict = {}
+    wifm.model_to_dict(my_outdict)
+    assert my_outdict == {
+        "Type": "File",
+        "content": "molecule_3.pdb",
+        "logical_name": "unset",
+        "name": "molecule_pdb",
+    }
+    # ToDo check if needed:
+    # wifm.render(rendered_wano, submitdir)
+
 
 def test_WaNoThreeRandomLetters():
     wism = WaNoThreeRandomLetters()
