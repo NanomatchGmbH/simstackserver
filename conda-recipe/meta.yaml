@@ -1,6 +1,6 @@
 package:
   name: simstackserver
-  version: "1.5.3"
+  version: "1.5.4"
 about:
   home: https://github.com/NanomatchGmbH/simstackserver
   license: proprietary
@@ -15,6 +15,7 @@ requirements:
     - python >=3.10
     - python-build
     - setuptools
+    - setuptools-scm
   run:
     - python >=3.10
     - appdirs >=1.4.4
