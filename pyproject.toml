@@ -22,7 +22,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = {"" = "."}
+package-dir = {"SimStackServer" = "SimStackServer"}
 include-package-data = true
 
 [tool.pixi.project]
