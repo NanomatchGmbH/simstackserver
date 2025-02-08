@@ -10,7 +10,6 @@ import io
 import urllib
 from functools import partial
 from http import HTTPStatus
-from urllib.parse import urlparse, parse_qs
 import string
 import random
 from threading import Thread
@@ -81,34 +80,10 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
         """ Present frontpage with user authentication. """
         if self.headers.get("Authorization") is None:
             self.do_AUTHHEAD()
-
             response = {"success": False, "error": "No auth header received"}
-
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
 
         elif self.headers.get("Authorization") == "Basic " + str(key):
-            """
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-
-
-            getvars = self._parse_GET()
-
-            response = {
-                'path': self.path,
-                'get_vars': str(getvars)
-            }
-            """
-            """
-            if base_path == '/path1':
-                # Do some work
-                pass
-            elif base_path == '/path2':
-                # Do some work
-                pass
-            """
-
             """Serve a GET request."""
             if self.path == "/favicon.ico":
                 ctype = self.guess_type(self.path)
@@ -136,68 +111,13 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
                     self.copyfile(f, self.wfile)
                 finally:
                     f.close()
-            # self.wfile.write(bytes(json.dumps(response), 'utf-8'))
         else:
             self.do_AUTHHEAD()
-
             response = {"success": False, "error": "Invalid credentials"}
-
             self.wfile.write(bytes(json.dumps(response), "utf-8"))
 
     def do_POST(self):
-        key = self.server.get_auth_key()
-
-        """ Present frontpage with user authentication. """
-        if self.headers.get("Authorization") is None:
-            self.do_AUTHHEAD()
-
-            response = {"success": False, "error": "No auth header received"}
-
-            self.wfile.write(bytes(json.dumps(response), "utf-8"))
-
-        elif self.headers.get("Authorization") == "Basic " + str(key):
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-
-            postvars = {}
-            getvars = self._parse_GET()
-
-            response = {
-                "path": self.path,
-                "get_vars": str(getvars),
-                "post_vars": str(postvars),
-            }
-
-            base_path = urlparse(self.path).path
-            print(base_path)
-            if base_path == "/path1":
-                # Do some work
-                pass
-            elif base_path == "/path2":
-                # Do some work
-                pass
-
-            self.wfile.write(bytes(json.dumps(response), "utf-8"))
-        else:
-            self.do_AUTHHEAD()
-
-            response = {"success": False, "error": "Invalid credentials"}
-
-            self.wfile.write(bytes(json.dumps(response), "utf-8"))
-
-        response = {
-            "path": self.path,
-            "get_vars": str(getvars),
-            "post_vars": str(postvars),
-        }
-
-        self.wfile.write(bytes(json.dumps(response), "utf-8"))
-
-    def _parse_GET(self):
-        getvars = parse_qs(urlparse(self.path).query)
-
-        return getvars
+        raise NotImplementedError("POST not supported")
 
     @staticmethod
     def human_readable_size(size, decimal_places=3):
@@ -226,7 +146,7 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
         try:
             displaypath = urllib.parse.unquote(self.path, errors="surrogatepass")
         except UnicodeDecodeError:
-            displaypath = urllib.parse.unquote(path)
+            displaypath = urllib.parse.unquote(self.path)
         displaypath = html.escape(displaypath, quote=False)
         enc = sys.getfilesystemencoding()
         title = "Directory listing for %s" % displaypath
@@ -296,10 +216,6 @@ class CustomServerHandler(http.server.SimpleHTTPRequestHandler):
         return f
 
 
-class GracefulShutdownHTTPServerException(Exception):
-    pass
-
-
 class CustomHTTPServer(http.server.HTTPServer):
     key = random_string(100)
 
@@ -325,16 +241,10 @@ class CustomHTTPServer(http.server.HTTPServer):
         return self.key
 
     def serve_for_duration(self):
-        try:
-            while True:
-                self.handle_request()
-                if self._do_shutdown:
-                    break
-        except GracefulShutdownHTTPServerException:
-            pass
-
-    def handle_timeout(self):
-        super().handle_timeout()
+        while True:
+            self.handle_request()
+            if self._do_shutdown:
+                break
 
 
 class CustomHTTPServerThread(Thread, CustomHTTPServer):
@@ -346,10 +256,3 @@ class CustomHTTPServerThread(Thread, CustomHTTPServer):
             kwargs["handlerClass"] if "handlerClass" in kwargs else CustomServerHandler
         )
         CustomHTTPServer.__init__(self, address, directory, handlerClass)
-
-
-if __name__ == "__main__":
-    server = CustomHTTPServerThread(("", 8888), ".")
-    server.set_auth("demo", "demo")
-    server.start()
-    server.join()

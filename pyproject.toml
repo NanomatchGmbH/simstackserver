@@ -6,7 +6,7 @@ dependencies = []
 readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = ["License :: Proprietary"]
-version="1.5.2"
+version="1.5.4"
 description="Server Component of the SimStack workflow system"
 
 [project.urls]
