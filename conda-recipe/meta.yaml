@@ -15,6 +15,7 @@ requirements:
     - python >=3.10
     - python-build
     - setuptools
+    - setuptools-scm
   run:
     - python >=3.10
     - appdirs >=1.4.4

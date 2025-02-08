@@ -7,6 +7,9 @@ __pycache__/
 *.so
 .idea/*
 
+# pytest output
+pytest-coverage.txt
+pytest.xml
 
 # Distribution / packaging
 .Python

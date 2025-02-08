@@ -18,11 +18,12 @@ KillSimStackServer = "SimStackServer.Tools.KillSimStackServer:main"
 SimStack_generate_json_schema = "SimStackServer.Tools.GenJsonEntrypoint:main"
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 package-dir = {"" = "."}
+include-package-data = true
 
 [tool.pixi.project]
 channels = ["https://mamba.nanomatch-distribution.de/mamba-repo", "conda-forge"]
