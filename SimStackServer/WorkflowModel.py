@@ -99,17 +99,13 @@ class XMLYMLInstantiationBase(object):
     """
     XMLYMLInstantiationBase provides XML and YML parsers and writers for more or less trivial data types.
 
-    To use it: Inherit from it and define the field property.
+    To use it: Inherit from it and define the _fields class variable as a list of tuples.
     An example would be:
-    @classmethod
-    @property
-    def fields(cls):
-        return cls._fields
 
-    with
-        fields = [("AnInteger",np.int64,0,"A sample integer", "a/m"),(...)]
-
+    _fields = [("AnInteger",np.int64,0,"A sample integer", "a/m"),(...)]
     """
+
+    _fields = []
 
     def __init__(self, *args, **kwargs):
         self._field_values = {}
@@ -147,20 +143,14 @@ class XMLYMLInstantiationBase(object):
         return self._field_values[fieldname]
 
     @classmethod
-    @abstractmethod
-    def fields(cls):
+    def fields(cls) -> list:
         """
         This function defines the fields, which the child class posesses.
         For each field, the field_values dict will be instantiated and the default will be written inside.
-        Note to future programmers:
-           Based on this information you could also define a __getattr__ function to obtain the property dynamically.
-           I did not do this to still allow for completion in the IDE.
         :return (List of Tuples of size 4) : A List of tuples, which contain:
             The name of the field, the type, the default, an explanation.
         """
-        raise NotImplementedError("This method has to be implemented in child methods.")
-        # Returns list so IDEs can infer the type.
-        return []
+        return cls._fields
 
     def _setup_empty_field_values(self):
         """
@@ -184,20 +174,6 @@ class XMLYMLInstantiationBase(object):
             assert hasattr(self, field), (
                 "Field %s not found as property function." % field
             )
-
-    def _set_resource_if_present(self, key, indict, default=None):
-        """
-        A parser helper function. If key is in indict, overwrite field_values, otherwise do nothing.
-        If default is set and key is not in indict, provide default.
-
-        :param key (str): Name of the thing to change in field_values
-        :param indict (dict): Dictionary of content
-        :return: Nothing
-        """
-        if key in indict:
-            self._field_values[key] = self._field_types[key](indict[key])
-        elif default is not None:
-            self._field_values[key] = self._field_types[key](default)
 
     def to_xml(self, parent_element):
         """
@@ -319,10 +295,6 @@ class XMLYMLInstantiationBase(object):
         pass
 
 
-# Tomorrow: Modify this factory to play nice with TreeWalker
-#   Override isdict and islist for ForEachGraph
-#   Suddenly everything has a URI
-#
 
 
 def workflow_element_factory(name):
@@ -672,10 +644,6 @@ class Resources(XMLYMLInstantiationBase):
             "reuse_results",
         ]
 
-    @classmethod
-    def fields(cls):
-        return cls._fields
-
     @property
     def resource_name(self):
         return self._field_values["resource_name"]
@@ -842,10 +810,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         envloc = conda_prefix.find("/envs/")
         conda_base_prefix = conda_prefix[0:envloc]
         return conda_base_prefix
-
-    @classmethod
-    def fields(cls):
-        return cls._fields
 
     def reset_resources_to_localhost(self):
         self.resources.set_field_value("base_URI", "localhost")
@@ -1744,9 +1708,6 @@ class SubGraph(XMLYMLInstantiationBase):
         self._name = "SubGraph"
         self._logger = logging.getLogger("SubGraph")
 
-    def fields(cls):
-        return cls._fields
-
     @property
     def elements(self) -> WorkflowElementList:
         return self._field_values["elements"]
@@ -1945,9 +1906,6 @@ class IfGraph(XMLYMLInstantiationBase):
     @property
     def condition(self) -> str:
         return self._field_values["condition"]
-
-    def fields(cls):
-        return cls._fields
 
 
 class ForEachGraph(XMLYMLInstantiationBase):
@@ -2223,9 +2181,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
     def subgraph(self) -> SubGraph:
         return self._field_values["subgraph"]
 
-    def fields(cls):
-        return cls._fields
-
 
 class WhileGraph(XMLYMLInstantiationBase):
     _fields = [
@@ -2406,9 +2361,6 @@ class WhileGraph(XMLYMLInstantiationBase):
     def condition(self) -> str:
         return self._field_values["condition"]
 
-    def fields(cls):
-        return cls._fields
-
 
 class VariableElement(XMLYMLInstantiationBase):
     _fields = [
@@ -2477,9 +2429,6 @@ class VariableElement(XMLYMLInstantiationBase):
     def uid(self):
         return self._field_values["uid"]
 
-    def fields(cls):
-        return cls._fields
-
 
 class WFPass(XMLYMLInstantiationBase):
     _fields = [("uid", str, None, "uid of this WorkflowExecModule.", "a")]
@@ -2489,9 +2438,6 @@ class WFPass(XMLYMLInstantiationBase):
         if "uid" not in kwargs:
             self._field_values["uid"] = str(uuid.uuid4())
         self.name = "WFPass"
-
-    def fields(cls):
-        return cls._fields
 
     @property
     def uid(self):
@@ -2566,9 +2512,6 @@ class WorkflowBase(XMLYMLInstantiationBase):
         if not self.storage.startswith("/"):
             home = str(Path.home())
             self._field_values["storage"] = home + "/" + self._field_values["storage"]
-
-    def fields(cls):
-        return cls._fields
 
     @staticmethod
     def _get_template_dir():
