@@ -304,7 +304,5 @@ def test_WaNoNoneModel():
     assert wm.get_data() == ""
     assert wm.get_type_str() == "String"
     assert wm.changed_from_default() is False
-    #assert wibm.get_data() is False
-    #wibm.set_data(True)
-    #assert wibm.get_data() is True
     assert wm.get_secure_schema() == {"key": {"type": "string"}}
+    assert repr(wm) == ""
