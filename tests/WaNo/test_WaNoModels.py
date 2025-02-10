@@ -291,3 +291,20 @@ def test_WaNoThreeRandomLetters():
     wism.parse_from_xml(xml)
     assert repr(wism) == "'FIXEDCONTENT'"
 
+def test_WaNoNoneModel():
+    wm = WaNoNoneModel()
+    xml = fromstring(
+        """
+                <WaNoNone name="key">False</WaNoNone>
+            """
+    )
+    wm.parse_from_xml(xml)
+    wm.set_data(None)
+    wm.update_xml()
+    assert wm.get_data() == ""
+    assert wm.get_type_str() == "String"
+    assert wm.changed_from_default() is False
+    #assert wibm.get_data() is False
+    #wibm.set_data(True)
+    #assert wibm.get_data() is True
+    assert wm.get_secure_schema() == {"key": {"type": "string"}}
