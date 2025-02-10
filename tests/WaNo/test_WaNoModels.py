@@ -9,6 +9,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoThreeRandomLetters,
     WaNoItemIntModel,
     WaNoItemBoolModel,
+    WaNoNoneModel,
     WaNoItemFloatModel,
     WaNoItemFileModel,
     WaNoChoiceModel,
@@ -221,11 +222,19 @@ def test_WaNoSwitch():
     )
     wm_parent = WaNoModelDictLike()
     wm_parent.parse_from_xml(parent_xml)
-
+    # Do some checks before assigning a delta to run into some options of the checks
+    assert wm.get_selected_id() == 0
+    assert wm.get_data() == "unset"
+    assert wm.get_type_str() == "unset"
+    # ToDo: set a view so we can check line 677. What object is wm._view ?
+    #wm.set_view(0)
 
     wano_list_data = [item.get_data() for item in wm.wano_list]
+    wano_list_reversed_data = [item.get_data() for item in wm.__reversed__()]
     wano_item_data = [item.get_data() for (i, item) in wm.items()]
+
     assert wano_list_data == ['"Hello"', 2.0]
+    assert wano_list_reversed_data == [2.0, '"Hello"']
     assert wano_item_data == ['"Hello"', 2.0]
     assert wm.listlike is True
     assert wm.dictlike is False
@@ -251,10 +260,10 @@ def test_WaNoSwitch():
             "type": "object",
         }
     }
-    # ToDo:
-    # wm.set_path(path)
-    # wm.set_root(root)
-    # wm.decommission
+    # ToDo: set root to enable set_path and decommission
+    # wm.set_root(res)
+    # wm.set_path("update.path")
+    #wm.decommission()
 
 
 def test_WaNoThreeRandomLetters():
@@ -281,3 +290,4 @@ def test_WaNoThreeRandomLetters():
     )
     wism.parse_from_xml(xml)
     assert repr(wism) == "'FIXEDCONTENT'"
+
