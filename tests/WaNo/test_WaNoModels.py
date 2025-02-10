@@ -15,6 +15,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoChoiceModel,
     WaNoSwitchModel,
     WaNoModelDictLike,
+    MultipleOfModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -227,7 +228,7 @@ def test_WaNoSwitch():
     assert wm.get_data() == "unset"
     assert wm.get_type_str() == "unset"
     # ToDo: set a view so we can check line 677. What object is wm._view ?
-    #wm.set_view(0)
+    # wm.set_view(0)
 
     wano_list_data = [item.get_data() for item in wm.wano_list]
     wano_list_reversed_data = [item.get_data() for item in wm.__reversed__()]
@@ -263,7 +264,7 @@ def test_WaNoSwitch():
     # ToDo: set root to enable set_path and decommission
     # wm.set_root(res)
     # wm.set_path("update.path")
-    #wm.decommission()
+    # wm.decommission()
 
 
 def test_WaNoThreeRandomLetters():
@@ -291,6 +292,7 @@ def test_WaNoThreeRandomLetters():
     wism.parse_from_xml(xml)
     assert repr(wism) == "'FIXEDCONTENT'"
 
+
 def test_WaNoNoneModel():
     wm = WaNoNoneModel()
     xml = fromstring(
@@ -306,3 +308,154 @@ def test_WaNoNoneModel():
     assert wm.changed_from_default() is False
     assert wm.get_secure_schema() == {"key": {"type": "string"}}
     assert repr(wm) == ""
+
+
+def test_MultipleOf():
+    wm_with_switches = MultipleOfModel()
+    xml_1_switch = fromstring(
+        """
+        <WaNoMultipleOf name="Molecules">
+            <Element id="0">
+               <WaNoString name="test_string">"Hello"</WaNoString>
+               <WaNoFloat name="test_float">1.0</WaNoFloat>
+               <WaNoSwitch switch_path="switch.path" name="MySwitch">
+                 <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                 <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+               </WaNoSwitch>
+            </Element>
+        </WaNoMultipleOf>
+        """
+    )
+    xml_2_switch = fromstring(
+        """
+        <WaNoMultipleOf name="Molecules">
+            <Element id="0">
+               <WaNoString name="test_string">"Hello"</WaNoString>
+               <WaNoFloat name="test_float">1.0</WaNoFloat>
+               <WaNoSwitch switch_path="switch.path" name="MySwitch">
+                 <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                 <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+               </WaNoSwitch>
+               <WaNoSwitch switch_path="switch2.path2" name="MySwitch2">
+                 <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                 <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+               </WaNoSwitch>
+            </Element>
+        </WaNoMultipleOf>
+        """
+    )
+    wm_with_switches.parse_from_xml(xml_1_switch)
+    assert wm_with_switches.get_secure_schema() == {
+        "Molecules": {
+            "items": {
+                "additionalProperties": False,
+                "oneOf": [
+                    {"test_var": {"type": "string"}},
+                    {"test_var": {"type": "number"}},
+                ],
+                "properties": {
+                    "test_float": {"type": "number"},
+                    "test_string": {"type": "string"},
+                },
+                "type": "object",
+            },
+            "required": ["test_string", "test_float"],
+            "type": "array",
+        }
+    }
+    wm_with_two_switches = MultipleOfModel()
+    wm_with_two_switches.parse_from_xml(xml_2_switch)
+    with raises(NotImplementedError):
+        wm_with_two_switches.get_secure_schema()
+
+    wm = MultipleOfModel()
+    xml = fromstring(
+        """
+        <WaNoMultipleOf name="Molecules">
+            <Element id="0">
+               <WaNoString name="test_string">"Hello"</WaNoString>
+               <WaNoFloat name="test_float">1.0</WaNoFloat>
+            </Element>
+        </WaNoMultipleOf>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+    parent_xml = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+        </WaNoDictBox>
+        """
+    )
+    wm_parent = WaNoModelDictLike()
+    wm_parent.parse_from_xml(parent_xml)
+
+    assert wm.numitems_per_add() == 2
+    assert wm.listlike is True
+    wm.set_parent(wm_parent)
+
+    assert wm.get_parent().get_secure_schema() == {
+        "ParentXML": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        }
+    }
+    assert wm.get_secure_schema() == {
+        "Molecules": {
+            "items": {
+                "additionalProperties": False,
+                "properties": {
+                    "test_float": {"type": "number"},
+                    "test_string": {"type": "string"},
+                },
+                "type": "object",
+            },
+            "required": ["test_string", "test_float"],
+            "type": "array",
+        }
+    }
+
+    assert wm.number_of_multiples() == 1
+    assert wm.last_item_check() is True
+    outdict = {}
+    for i, item in wm.items():
+        this_item = item.model_to_dict(outdict)
+    assert outdict == {
+        "test_float": {
+            "Type": "Float",
+            "content": "1.0",
+            "data": "1.0",
+            "name": "test_float",
+        },
+        "test_string": {"Type": "String", "content": '"Hello"', "name": "test_string"},
+    }
+    single_outdict = {}
+    wm.__getitem__(0).model_to_dict(single_outdict)
+    assert single_outdict == {
+        "test_float": {
+            "Type": "Float",
+            "content": "1.0",
+            "data": "1.0",
+            "name": "test_float",
+        },
+        "test_string": {"Type": "String", "content": '"Hello"', "name": "test_string"},
+    }
+    single_outdict = {}
+    wm.get_data()[0].model_to_dict(single_outdict)
+    assert single_outdict == {
+        "test_float": {
+            "Type": "Float",
+            "content": "1.0",
+            "data": "1.0",
+            "name": "test_float",
+        },
+        "test_string": {"Type": "String", "content": '"Hello"', "name": "test_string"},
+    }
+    # requires root
+    # wm.add_item()
+    # assert wm.number_of_multiples() == 2
+    wm.delete_item()
+    assert wm.number_of_multiples() == 1
+    print
