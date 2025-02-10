@@ -211,6 +211,8 @@ def test_WaNoSwitch():
         </WaNoSwitch>
         """
     )
+    wm.parse_from_xml(xml)
+
     parent_xml = fromstring(
         """
         <WaNoDictBox name="ParentXML">
@@ -220,9 +222,11 @@ def test_WaNoSwitch():
     wm_parent = WaNoModelDictLike()
     wm_parent.parse_from_xml(parent_xml)
 
-    wm.parse_from_xml(xml)
+
     wano_list_data = [item.get_data() for item in wm.wano_list]
+    wano_item_data = [item.get_data() for (i, item) in wm.items()]
     assert wano_list_data == ['"Hello"', 2.0]
+    assert wano_item_data == ['"Hello"', 2.0]
     assert wm.listlike is True
     assert wm.dictlike is False
     wm.apply_delta(0)
