@@ -10,9 +10,13 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoItemIntModel,
     WaNoItemBoolModel,
     WaNoItemFloatModel,
-    WaNoItemFileModel, WaNoChoiceModel,
+    WaNoItemFileModel,
+    WaNoChoiceModel,
+    WaNoSwitchModel,
+    WaNoModelDictLike,
 )
 from xml.etree.ElementTree import fromstring
+
 
 def test_WaNoItemIntModel():
     wiim = WaNoItemIntModel()
@@ -108,6 +112,7 @@ def test_WaNoItemStringModel():
     assert wism.changed_from_default() is True
     assert wism.get_type_str() == "String"
 
+
 def test_WaNoFileModel(tmpdir):
     wifm = WaNoItemFileModel()
     xml = fromstring(
@@ -159,15 +164,15 @@ def test_WaNoFileModel(tmpdir):
 
 def test_WaNoChoice():
     wm = WaNoChoiceModel()
-    xml =  fromstring(
-        """ 
+    xml = fromstring(
+        """
         <WaNoChoice name="Interpreter">
            <Entry id="0">Bash</Entry>
            <Entry id="1">Python</Entry>
            <Entry id="2">Perl</Entry>
         </WaNoChoice>
         """
-        )
+    )
     wm.parse_from_xml(xml)
     assert wm.get_data() == "Bash"
     assert wm.get_type_str() == "String"
@@ -191,7 +196,61 @@ def test_WaNoChoice():
             break
     assert old_id == 2
     assert new_id == 1
-    assert wm.get_secure_schema() == {'Interpreter': {'enum': ['Bash', 'Python', 'Perl']}}
+    assert wm.get_secure_schema() == {
+        "Interpreter": {"enum": ["Bash", "Python", "Perl"]}
+    }
+
+
+def test_WaNoSwitch():
+    wm = WaNoSwitchModel()
+    xml = fromstring(
+        """
+        <WaNoSwitch switch_path="switch.path" name="MySwitch">
+            <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+            <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+        </WaNoSwitch>
+        """
+    )
+    parent_xml = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+        </WaNoDictBox>
+        """
+    )
+    wm_parent = WaNoModelDictLike()
+    wm_parent.parse_from_xml(parent_xml)
+
+    wm.parse_from_xml(xml)
+    wano_list_data = [item.get_data() for item in wm.wano_list]
+    assert wano_list_data == ['"Hello"', 2.0]
+    assert wm.listlike is True
+    assert wm.dictlike is False
+    wm.apply_delta(0)
+    assert wm.changed_from_default() is True
+    assert wm.get_secure_schema() == {
+        "oneOf": [{"test_var": {"type": "string"}}, {"test_var": {"type": "number"}}]
+    }
+    assert wm.get_selected_id() == 0
+    assert wm.get_type_str() == "String"
+    wm.apply_delta(1)
+    assert wm.get_selected_id() == 1
+    assert wm.get_type_str() == "Float"
+    assert wm.get_data() == 2.0
+    assert wm.get_delta_to_default() == 1
+    wm.set_parent(wm_parent)
+    res = wm.get_parent()
+    assert res.get_secure_schema() == {
+        "ParentXML": {
+            "additionalProperties": False,
+            "properties": {},
+            "required": [],
+            "type": "object",
+        }
+    }
+    # ToDo:
+    # wm.set_path(path)
+    # wm.set_root(root)
+    # wm.decommission
 
 
 def test_WaNoThreeRandomLetters():
