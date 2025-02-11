@@ -16,6 +16,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoSwitchModel,
     WaNoModelDictLike,
     MultipleOfModel,
+    WaNoItemScriptFileModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -138,6 +139,21 @@ def test_WaNoItemStringModel():
     assert wism.get_type_str() == "String"
 
 
+def test_WaNoItemScriptFileModel():
+    wm = WaNoItemScriptFileModel()
+    xml = fromstring(
+        """
+            <WaNoScriptV2 name="Script" logical_filename="input.script">input.script</WaNoScriptV2>
+        """
+    )
+    wm.parse_from_xml(xml)
+    assert wm.get_type_str() == "File"
+    # assert wm.get_as_text()
+    # wm.render()
+    # wm.save_text()
+    # wm.get_path()
+
+
 def test_WaNoFileModel(tmpdir):
     wifm = WaNoItemFileModel()
     xml = fromstring(
@@ -193,13 +209,16 @@ def test_WaNoChoice():
         """
         <WaNoChoice name="Interpreter">
            <Entry id="0">Bash</Entry>
-           <Entry id="1">Python</Entry>
+           <Entry id="1" chosen="true">Python</Entry>
            <Entry id="2">Perl</Entry>
         </WaNoChoice>
         """
     )
     wm.parse_from_xml(xml)
+    assert wm.get_data() == "Python"
+    wm.chosen = 4
     assert wm.get_data() == "Bash"
+    wm.chosen = 1
     assert wm.get_type_str() == "String"
     wm.set_chosen(2)
     wm.update_xml()
