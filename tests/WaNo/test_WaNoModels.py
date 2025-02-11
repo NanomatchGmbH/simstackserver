@@ -4,6 +4,7 @@ import os
 from _pytest.python_api import raises
 
 from SimStackServer.Util.Exceptions import SecurityError
+from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
 from SimStackServer.WaNo.WaNoModels import (
     WaNoItemStringModel,
     WaNoThreeRandomLetters,
@@ -458,4 +459,12 @@ def test_MultipleOf():
     # assert wm.number_of_multiples() == 2
     wm.delete_item()
     assert wm.number_of_multiples() == 1
-    print
+    assert wm.get_type_str() == "MultipleOf"
+    all_data = wm.get_data()
+    all_data.append(all_data[0])
+    wm.set_data(all_data)
+    assert wm.number_of_multiples() == 2
+    assert wm.get_delta_to_default() == 2
+    assert wm.changed_from_default() is True
+    wm.set_parent_visible(True)
+    wm.set_visible(True)
