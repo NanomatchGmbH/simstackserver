@@ -4,7 +4,6 @@ import os
 from _pytest.python_api import raises
 
 from SimStackServer.Util.Exceptions import SecurityError
-from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
 from SimStackServer.WaNo.WaNoModels import (
     WaNoItemStringModel,
     WaNoThreeRandomLetters,
@@ -42,6 +41,8 @@ def test_WaNoItemIntModel():
     wiim.update_xml()
     assert wiim.xml.text == "13"
     assert repr(wiim) == "13"
+    wiim._do_import = True
+    assert wiim.changed_from_default() is True
 
 
 def test_WaNoItemFloatModel():
@@ -52,6 +53,7 @@ def test_WaNoItemFloatModel():
             """
     )
     wifm.parse_from_xml(xml)
+    assert wifm.changed_from_default() is False
     assert wifm.get_data() == 2.0
     wifm.set_data(3.0)
     old_xml = wifm.xml.text
@@ -67,6 +69,8 @@ def test_WaNoItemFloatModel():
     assert wifm.changed_from_default() is True
     assert wifm.get_type_str() == "Float"
     assert repr(wifm) == "4.0"
+    wifm._do_import = True
+    assert wifm.changed_from_default() is True
 
 
 def test_WaNoItemBoolModel():
@@ -74,6 +78,16 @@ def test_WaNoItemBoolModel():
     xml = fromstring(
         """
                 <WaNoBool name="key">False</WaNoBool>
+            """
+    )
+    xml_lower_true = fromstring(
+        """
+                <WaNoBool name="key">true</WaNoBool>
+            """
+    )
+    xml_lower_false = fromstring(
+        """
+                <WaNoBool name="key">false</WaNoBool>
             """
     )
     wibm.parse_from_xml(xml)
@@ -90,6 +104,14 @@ def test_WaNoItemBoolModel():
     wibm.set_data(False)
     wibm.update_xml()
     assert wibm.xml.text == "False"
+    wibm.set_data(True)
+    wibm.update_xml()
+    assert wibm.xml.text == "True"
+
+    wibm.parse_from_xml(xml_lower_true)
+    assert wibm.get_data() is True
+    wibm.parse_from_xml(xml_lower_false)
+    assert wibm.get_data() is False
 
 
 def test_WaNoItemStringModel():
@@ -469,3 +491,18 @@ def test_MultipleOf():
     wm.set_parent_visible(True)
     wm.set_visible(True)
     wm.update_xml()
+
+
+# def test_WaNoModelRoot():
+#    xml = fromstring(
+#        """
+#            <WaNoRoot name="DummyRoot">
+#                <WaNoInt name="dummy_int">0</WaNoInt>
+#            </WaNoRoot>
+#        """
+#    )
+#    wm = WaNoModelRoot(explicit_xml=xml)
+#    this_xml_return = wm.parse_from_xml()
+#    assert this_xml_return is None
+#    sec_schema = wm.get_secure_schema()
+#    print()
