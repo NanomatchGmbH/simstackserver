@@ -468,3 +468,4 @@ def test_MultipleOf():
     assert wm.changed_from_default() is True
     wm.set_parent_visible(True)
     wm.set_visible(True)
+    wm.update_xml()
