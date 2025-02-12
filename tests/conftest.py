@@ -38,6 +38,14 @@ def tmpWaNoRoot(tmpfileWaNoXml, tmpdir):
                 <WaNoInt name="dummy_int">0</WaNoInt>
             </WaNoRoot>
             <WaNoExecCommand>echo Hello</WaNoExecCommand>
+            <WaNoOutputFiles>
+                <WaNoOutputFile>output_config.ini</WaNoOutputFile>
+                <WaNoOutputFile>output_dict.yml</WaNoOutputFile>
+            </WaNoOutputFiles>
+            <WaNoInputFiles>
+               <WaNoInputFile logical_filename="deposit_init.sh">deposit_init.sh</WaNoInputFile>
+               <WaNoInputFile logical_filename="report_template.body">report_template.body</WaNoInputFile>
+            </WaNoInputFiles>
         </WaNoTemplate>
     """
     # Write the XML contents to the file
