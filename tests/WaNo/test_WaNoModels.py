@@ -497,12 +497,13 @@ def test_MultipleOf(tmpWaNoRoot):
         "test_string": {"Type": "String", "content": '"Hello"', "name": "test_string"},
     }
 
+    #assert wm.__reversed__() == reversed(wm.get_data())
 
     wm.set_root(tmpWaNoRoot)
     this_root = wm.get_root()
     assert this_root.get_name() == "DummyRoot"
 
-    # wm.add_item()
+    #wm.add_item()
     # assert wm.number_of_multiples() == 2
     wm.delete_item()
     assert wm.number_of_multiples() == 1
@@ -513,10 +514,12 @@ def test_MultipleOf(tmpWaNoRoot):
     assert wm.number_of_multiples() == 2
     assert wm.get_delta_to_default() == 2
     assert wm.changed_from_default() is True
+    wm.delete_item()
+    assert wm.number_of_multiples() == 1
     wm.set_parent_visible(True)
     wm.set_visible(True)
     wm.update_xml()
-
+    wm.decommission()
 
 def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     xml_root_string = """
