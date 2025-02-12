@@ -1,5 +1,6 @@
 import copy
 import os
+from pathlib import Path
 
 from _pytest.python_api import raises
 
@@ -16,7 +17,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoSwitchModel,
     WaNoModelDictLike,
     MultipleOfModel,
-    WaNoItemScriptFileModel,
+    WaNoItemScriptFileModel, WaNoModelRoot,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -352,7 +353,7 @@ def test_WaNoNoneModel():
     assert repr(wm) == ""
 
 
-def test_MultipleOf():
+def test_MultipleOf(tmpWaNoRoot):
     wm_with_switches = MultipleOfModel()
     xml_1_switch = fromstring(
         """
@@ -495,7 +496,12 @@ def test_MultipleOf():
         },
         "test_string": {"Type": "String", "content": '"Hello"', "name": "test_string"},
     }
-    # requires root
+
+
+    wm.set_root(tmpWaNoRoot)
+    this_root = wm.get_root()
+    assert this_root.get_name() == "DummyRoot"
+
     # wm.add_item()
     # assert wm.number_of_multiples() == 2
     wm.delete_item()
@@ -512,16 +518,19 @@ def test_MultipleOf():
     wm.update_xml()
 
 
-# def test_WaNoModelRoot():
-#    xml = fromstring(
-#        """
-#            <WaNoRoot name="DummyRoot">
-#                <WaNoInt name="dummy_int">0</WaNoInt>
-#            </WaNoRoot>
-#        """
-#    )
-#    wm = WaNoModelRoot(explicit_xml=xml)
-#    this_xml_return = wm.parse_from_xml()
-#    assert this_xml_return is None
-#    sec_schema = wm.get_secure_schema()
-#    print()
+def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
+    xml_root_string = """
+        <WaNoTemplate>
+            <WaNoRoot name="DummyRoot">
+                <WaNoInt name="dummy_int">0</WaNoInt>
+            </WaNoRoot>
+            <WaNoExecCommand>echo Hello</WaNoExecCommand>
+        </WaNoTemplate>
+    """
+
+    with tmpfileWaNoXml.open("w") as f:
+        f.write(xml_root_string)
+
+    current_directory = Path(tmpfileWaNoXml).parent
+    wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
+    assert wm.get_name() == "DummyRoot"
