@@ -36,7 +36,7 @@ def test_WaNoItemIntModel():
     assert wiim.get_data() == 2
     wiim.set_data(3)
     assert wiim.get_data() == 3
-    assert wiim.get_secure_schema() == {"key": {"type": "int"}}
+    assert wiim.get_secure_schema() == {"key": {"type": "number"}}
     assert wiim.get_delta_to_default() == 3
     wiim.apply_delta(4)
     assert wiim.get_data() == 4
