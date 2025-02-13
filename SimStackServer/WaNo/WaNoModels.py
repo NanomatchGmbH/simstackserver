@@ -271,6 +271,7 @@ class WaNoChoiceModel(AbstractWanoModel):
         return schema
 
 
+# ToDo: Timo I could not find any usage of DynamicChoiceModel in any Nanomatch-WaNo
 class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def __init__(self, *args, **kwargs):
         super(WaNoDynamicChoiceModel, self).__init__(*args, **kwargs)
@@ -656,7 +657,7 @@ class WaNoSwitchModel(WaNoModelListLike):
 
     # def __getitem__(self, item):
     #    return self.wano_list[self._visible_thing].__getitem__(item)
-
+    # ToDo in usage?
     def __iter__(self):
         return self.wano_list.__iter__()
 
@@ -722,6 +723,7 @@ class WaNoSwitchModel(WaNoModelListLike):
             )
             self._registered = True
 
+    # ToDo: Timo this does not have any usage except in the test?
     def get_parent(self):
         return self._parent
 
@@ -827,6 +829,7 @@ class MultipleOfModel(AbstractWanoModel):
     def last_item_check(self):
         return len(self.list_of_dicts) == 1
 
+    # ToDo: Timo - should be private?
     def parse_one_child(self, child, build_view=False):
         # A bug still exists, which allows visibility conditions to be fired prior to the existence of the model
         # but this is transient.
@@ -1982,7 +1985,7 @@ class WaNoItemIntModel(AbstractWanoModel):
         return int(self.myint)
 
     def get_secure_schema(self) -> Optional[str]:
-        schema = {self.name: {"type": "int"}}
+        schema = {self.name: {"type": "number"}}
         return schema
 
     def set_data(self, data):
@@ -2173,7 +2176,6 @@ class WaNoItemFileModel(AbstractWanoModel):
             self._cached_logical_name = outfile
             return outfile
         # Upload and copy
-        # print(submitdir)
         if submitdir is not None and self.is_local_file:
             destdir = os.path.join(submitdir, "inputs")
             mkdir_p(destdir)
