@@ -22,12 +22,13 @@ jobs:
           environments: test
       - name: run tests
         shell: bash
-        run:  pixi run tests
+        run:  pixi run tests | tee pytest-coverage.txt
       - name: Pytest coverage comment
         id: coverageComment
         uses: MishaKav/pytest-coverage-comment@main
         with:
           junitxml-path: ./pytest.xml
+          pytest-coverage-path: ./pytest-coverage.txt
   lint:
     runs-on: ubuntu-latest
     steps:
