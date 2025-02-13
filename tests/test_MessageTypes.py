@@ -1,3 +1,4 @@
+import msgpack
 import pytest
 from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE, InvalidMessageError
 
@@ -56,5 +57,6 @@ def test_abortsinglejob_message():
     assert unpacked_message["WFEM_UID"] == wfem_uid
 
 def test_invalid_message_error():
+    mymessage = msgpack.dumps({"InvalidKey": "InvalidValue"})
     with pytest.raises(InvalidMessageError):
-        Message.unpack(b'{"InvalidKey": "InvalidValue"}')
+        Message.unpack(mymessage)
