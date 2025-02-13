@@ -26,6 +26,7 @@ from xml.etree.ElementTree import fromstring
 
 
 def test_WaNoItemIntModel():
+    raise RuntimeError("HELLO")
     wiim = WaNoItemIntModel()
     xml = fromstring(
         """
