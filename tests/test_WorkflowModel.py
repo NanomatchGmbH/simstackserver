@@ -106,14 +106,16 @@ class TestXMLYMLInstantiationBase:
     def test_to_xml(self):
         instance = TestClass()
         instance.set_field_value("test_field", "test_value")
-        xml_str = instance.to_xml()
-        root = ET.fromstring(xml_str)
-        assert root.find("test_field").text == "test_value"
+        parent = etree.Element("Parent")
+        instance.to_xml(parent_element=parent)
+
+        assert etree.tounicode(parent) == "<Parent><test_field>test_value</test_field></Parent>"
 
     def test_from_xml(self):
-        xml_str = "<TestClass><test_field>test_value</test_field></TestClass>"
+        xml_str = "<Parent><test_field>test_value</test_field></Parent>"
+        xml = etree.fromstring(xml_str)
         instance = TestClass()
-        instance.from_xml(xml_str)
+        instance.from_xml(xml)
         assert instance.get_field_value("test_field") == "test_value"
 
 
