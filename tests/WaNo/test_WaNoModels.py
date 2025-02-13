@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from _pytest.python_api import raises
+from jsonschema.exceptions import ValidationError
 
 from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.WaNo.WaNoModels import (
@@ -17,7 +18,9 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoSwitchModel,
     WaNoModelDictLike,
     MultipleOfModel,
-    WaNoItemScriptFileModel, WaNoModelRoot, WaNoParseError,
+    WaNoItemScriptFileModel,
+    WaNoModelRoot,
+    WaNoParseError,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -497,13 +500,14 @@ def test_MultipleOf(tmpWaNoRoot):
         "test_string": {"Type": "String", "content": '"Hello"', "name": "test_string"},
     }
 
-    #assert wm.__reversed__() == reversed(wm.get_data())
+    # assert wm.__reversed__() == reversed(wm.get_data())
 
     wm.set_root(tmpWaNoRoot)
     this_root = wm.get_root()
     assert this_root.get_name() == "DummyRoot"
 
-    #wm.add_item()
+    # TODO: fix add_item()
+    # wm.add_item()
     # assert wm.number_of_multiples() == 2
     wm.delete_item()
     assert wm.number_of_multiples() == 1
@@ -520,6 +524,7 @@ def test_MultipleOf(tmpWaNoRoot):
     wm.set_visible(True)
     wm.update_xml()
     wm.decommission()
+
 
 def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     xml_root_string = """
@@ -565,36 +570,52 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     assert wm.get_name() == "DummyRoot"
     assert wm.get_type_str() == "WaNoRoot"
     assert wm.get_render_substitutions() == {}
-    assert wm.get_new_resource_model().queue == 'default'
-    assert wm.get_secure_schema() == {'$id': 'https://example.com/product.schema.json', '$schema': 'https://json-schema.org/draft/2020-12/schema', 'additionalProperties': False, 'description': 'DummyRoot secure schema', 'properties': {'dummy_int': {'type': 'int'}}, 'required': ['dummy_int'], 'title': 'DummyRoot', 'type': 'object'}
+    assert wm.get_new_resource_model().queue == "default"
+    assert wm.get_secure_schema() == {
+        "$id": "https://example.com/product.schema.json",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": False,
+        "description": "DummyRoot secure schema",
+        "properties": {"dummy_int": {"type": "number"}},
+        "required": ["dummy_int"],
+        "title": "DummyRoot",
+        "type": "object",
+    }
     wm.block_signals(True)
     assert wm.block_signals(False) is True
     with raises(ValueError):
         wm.verify_output_against_schema({})
     # ToDo: json validator has a problem with the schema with "type": "int" - maybe the get_secure_schema() is buggy
-    # res_true = wm.verify_against_secure_schema({'dummy_int': 1})
-    # res_false = wm.verify_against_secure_schema({'dummy_int': '1'})
-    # res_also_false = wm.verify_against_secure_schema({'dummy_int_2': 1})
-
+    res_true = wm.verify_against_secure_schema({"dummy_int": 1})
+    with raises(ValidationError):
+        wm.verify_against_secure_schema({"dummy_int": "1"})
+    with raises(ValidationError):
+        wm.verify_against_secure_schema({"dummy_int_2": 1})
 
     # ToDo: Fix simstack ModuleNotFoundError
     # wm = WaNoModelRoot(model_only=False, wano_dir_root=current_directory)
 
-    #ToDo: Do we need to generate output_config.ini and output_dict.yml to test lines in _parse_from_xml ?
+    # ToDo: Do we need to generate output_config.ini and output_dict.yml to test lines in _parse_from_xml ?
 
     assert wm.get_import_model() is None
     assert wm.get_export_model() is None
-    assert wm.get_output_files(only_static=True) == ['output_config.ini', 'output_dict.yml']
+    assert wm.get_output_files(only_static=True) == [
+        "output_config.ini",
+        "output_dict.yml",
+    ]
     with raises(NotImplementedError):
         wm.save_xml(None)
     # ToDo: Do we need to change paths to seriously test those?
     assert wm.get_changed_paths() == {}
     assert wm.get_changed_command_paths() == {}
-    assert wm.get_all_variable_paths() == ['dummy_int']
-    assert wm.get_all_variable_paths(export=False) == ['dummy_int']
-    assert wm.get_paths_and_data_dict() == {'dummy_int': '0'}
-    assert wm.get_extra_inputs_aiida() == ['deposit_init.sh', 'report_template.body']
-    assert wm.get_paths_and_type_dict_aiida() == {'dummy_int': 'Int'}
+    assert wm.get_all_variable_paths() == ["dummy_int"]
+    assert wm.get_all_variable_paths(export=False) == ["dummy_int"]
+    assert wm.get_paths_and_data_dict() == {"dummy_int": "0"}
+    assert wm.get_extra_inputs_aiida() == ["deposit_init.sh", "report_template.body"]
+    assert wm.get_paths_and_type_dict_aiida() == {"dummy_int": "Int"}
     # res4 = wm.get_valuedict_with_aiida_types()
     assert wm.get_dir_root().name == "WaNo"
+    assert wm.get_metadata_dict() == {"folder": "WaNo", "name": "DummyRoot"}
+    # ToDo: wano_walker_paths for dictlike and listlike
+    assert wm.wano_walker_paths() == [("dummy_int", "Int")]
     print()

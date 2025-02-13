@@ -2,8 +2,9 @@ import pytest
 import tempfile
 
 from SimStackServer.WaNo.WaNoModels import (
-   WaNoModelRoot,
+    WaNoModelRoot,
 )
+
 
 @pytest.fixture
 def tmpdir() -> tempfile.TemporaryDirectory:
