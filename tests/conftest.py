@@ -1,8 +1,13 @@
 import pytest
 import tempfile
-
+import os
 from SimStackServer.WaNo.WaNoModels import (
     WaNoModelRoot,
+)
+
+from SimStackServer.WorkflowModel import (
+    Resources,
+    WorkflowExecModule,
 )
 
 
@@ -64,13 +69,6 @@ def tmpWaNoRoot(tmpfileWaNoXml, tmpdir):
 
 @pytest.fixture
 def workflow_exec_module_fixture(tmpdir):
-    from SimStackServer.WorkflowModel import (
-        Resources,
-        WorkflowExecModule,
-        workflow_element_factory,
-    )
-    import os
-
     """
     Returns a WorkflowExecModule instance with minimal (but valid) defaults for pytest.
     """
@@ -88,8 +86,8 @@ def workflow_exec_module_fixture(tmpdir):
     )
 
     # Construct a minimal WorkflowElementList for inputs/outputs:
-    inputs_list = workflow_element_factory("WorkflowElementList")
-    outputs_list = workflow_element_factory("WorkflowElementList")
+    # inputs_list = workflow_element_factory("WorkflowElementList")
+    # outputs_list = workflow_element_factory("WorkflowElementList")
 
     if "CONDA_PREFIX" not in os.environ:
         os.environ["CONDA_PREFIX"] = "/opt/conda/envs/myenv"
