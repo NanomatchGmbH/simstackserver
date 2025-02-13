@@ -201,7 +201,8 @@ def test_WaNoFileModel(tmpdir):
     wifm.set_visible(False)
     assert wifm.render({}, "./", "./") == "molecule_test.pdb"
     wifm.set_visible(True)
-    wifm.set_data("inputs/molecule.pdb")
+    testmol = Path(__file__).parent / "inputs" / "molecule.pdb"
+    wifm.set_data(str(testmol))
     dest_file = tmpdir + "/inputs/molecule_test.pdb"
     assert wifm.render({}, "./", tmpdir) == "molecule_test.pdb"
     assert os.path.exists(dest_file)
@@ -467,7 +468,7 @@ def test_MultipleOf(tmpWaNoRoot):
     assert wm.last_item_check() is True
     outdict = {}
     for i, item in wm.items():
-        this_item = item.model_to_dict(outdict)
+        item.model_to_dict(outdict)
     assert outdict == {
         "test_float": {
             "Type": "Float",
@@ -586,7 +587,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     with raises(ValueError):
         wm.verify_output_against_schema({})
     # ToDo: json validator has a problem with the schema with "type": "int" - maybe the get_secure_schema() is buggy
-    res_true = wm.verify_against_secure_schema({"dummy_int": 1})
+    wm.verify_against_secure_schema({"dummy_int": 1})
     with raises(ValidationError):
         wm.verify_against_secure_schema({"dummy_int": "1"})
     with raises(ValidationError):
