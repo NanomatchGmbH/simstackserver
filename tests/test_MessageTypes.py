@@ -97,3 +97,50 @@ def test_delete_wf_message():
     unpacked_type, unpacked_message = Message.unpack(res)
     assert unpacked_message["MessageType"] == 7
     assert unpacked_message["workflow_submit_name"] == "test_wf"
+
+
+def test_get_http_server_request_message():
+    res = Message.get_http_server_request_message("test_basefolder")
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_message["MessageType"] == 13
+    assert unpacked_message["basefolder"] == "test_basefolder"
+
+
+def test_submit_single_job_message(workflow_exec_module_fixture):
+    res = Message.submit_single_job_message(workflow_exec_module_fixture)
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_type == 19
+    ref_dict = {
+        "uid": "0c3f3863-c696-42a4-8ff5-4d5e3222d39a",
+        "given_name": "TestWFEM",
+        "path": "test_path",
+        "wano_xml": "test_wano.xml",
+        "outputpath": "testdir",
+        "original_result_directory": "",
+        "inputs": {},
+        "outputs": {},
+        "exec_command": "echo 'Hello, WorkflowExecModule!'",
+        "resources": {
+            "resource_name": "<Connected Server>",
+            "walltime": "86399",
+            "cpus_per_node": "1",
+            "nodes": "1",
+            "queue": "default",
+            "memory": "1GB",
+            "custom_requests": "",
+            "base_URI": "",
+            "port": "22",
+            "username": "",
+            "basepath": "simstack_workspace",
+            "queueing_system": "Internal",
+            "sw_dir_on_resource": "/home/nanomatch/nanomatch",
+            "extra_config": "None Required (default)",
+            "ssh_private_key": "UseSystemDefault",
+            "sge_pe": "",
+            "reuse_results": "False",
+        },
+        "runtime_directory": "unstarted",
+        "jobid": "unstarted",
+        "external_runtime_directory": "",
+    }
+    assert unpacked_message["wfem"] == ref_dict
