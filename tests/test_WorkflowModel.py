@@ -152,12 +152,6 @@ def SampleWFEM():
     return wfem
 
 
-def test_wfem_variables():
-    wfem = WorkflowExecModule()
-    vars = wfem._get_mamba_variables()
-    print(vars)
-
-
 class TestWorkflowModel(unittest.TestCase):
     def setUp(self):
         logging.basicConfig(level=logging.DEBUG)

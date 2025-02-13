@@ -865,38 +865,12 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         remote_server_manager = RemoteServerManager.get_instance()
         return remote_server_manager.server_from_resource(self.resources)
 
-    def _get_mamba_variables(self) -> Dict[str, str]:
-        """Gets all manually exported conda variables."""
-        for com in ["mamba", "conda"]:
-            try:
-                conda_command = [com, "env", "config", "vars", "list", "--json"]
-                proc = subprocess.run(
-                    conda_command, capture_output=True, encoding="Utf-8"
-                )
-                if proc.returncode != 0:
-                    self._logger.error(
-                        f"Could not parse Conda variables. Stdout was: {proc.stdout}, Stderr: {proc.stderr}"
-                    )
-                    continue
-                text = proc.stdout
-                vardict = json.loads(text)
-                return vardict
-            except FileNotFoundError:
-                pass
-        return {}
-
     def _get_prolog_unicore_compatibility(self, resources):
         """
 
         :param resources:
         :return:
         """
-        exported_variables = self._get_mamba_variables()
-
-        varstring = [
-            f"export {var}={content}" for var, content in exported_variables.items()
-        ]
-        varstring = "\n".join(varstring)
 
         script = f"""
 UC_NODES={resources.nodes}; export UC_NODES;
@@ -908,9 +882,6 @@ BASEFOLDER="{self._conda_base_prefix}"
 # The following are exports to resolve previous and future
 # versions of the SimStackServer conda / python interpreters
 ###########################################################
-# These are the exports present in SimStackServer conda environment:
-{varstring}
-# End
 
 simstack_server_mamba_source () {{{{
     MICROMAMBA_BIN="$BASEFOLDER/envs/simstack_server_v6/bin/micromamba"
