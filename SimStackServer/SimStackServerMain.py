@@ -702,16 +702,7 @@ class SimStackServer(object):
         self._config = Config()
         if self._config.is_running():
             return False
-
-        try:
-            me = my_executable
-            # We register with crontab:
-            self._config.register_crontab(me)
-
-            return True
-
-        except Exception as e:
-            raise e
+        return True
 
     def setup_zmq_port(self, port, password):
         if self._zmq_context is None:
