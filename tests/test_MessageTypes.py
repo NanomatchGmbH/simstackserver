@@ -70,17 +70,20 @@ def test_invalid_message_error():
     with pytest.raises(InvalidMessageError):
         Message.unpack(mymessage)
 
+
 def test_dict_message():
     mymessage = {"MessageKey": "MessageValue"}
     returned_message = Message.dict_message(SSS_MESSAGETYPE.CONNECT, mymessage)
     msg_unpacked = Message.unpack(returned_message)
     assert [k for k in msg_unpacked[1].keys()] == ["MessageKey", "MessageType"]
 
+
 def test_list_wfs_messages():
     res = Message.list_wfs_message()
     unpacked_type, unpacked_message = Message.unpack(res)
     assert unpacked_type == 3
-    assert unpacked_message == {'MessageType': 3}
+    assert unpacked_message == {"MessageType": 3}
+
 
 def test_list_jobs_of_wf_message():
     res = Message.list_jobs_of_wf_message("test_wf")
