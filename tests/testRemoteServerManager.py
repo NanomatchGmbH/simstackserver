@@ -10,7 +10,7 @@ from pathlib import Path
 from SimStackServer.ClusterManager import ClusterManager
 from SimStackServer.RemoteServerManager import RemoteServerManager
 from SimStackServer.WorkflowModel import Resources, Workflow, WorkflowExecModule
-from tests.testWorkflowModel import SampleWFEM
+from tests.test_WorkflowModel import SampleWFEM
 
 
 class TestRemoteServerManager(unittest.TestCase):

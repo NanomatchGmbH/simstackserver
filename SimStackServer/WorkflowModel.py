@@ -4,7 +4,6 @@ import datetime
 import json
 import pathlib
 import re
-import subprocess
 import time
 import logging
 import os
@@ -12,7 +11,6 @@ import shutil
 import jsonschema
 import traceback
 import uuid
-from abc import abstractmethod
 from enum import Flag, auto
 from glob import glob
 from io import StringIO
@@ -21,7 +19,6 @@ from os.path import join
 from pathlib import Path
 
 from os import path
-from typing import Dict
 
 import yaml
 from lxml import etree
@@ -141,6 +138,15 @@ class XMLYMLInstantiationBase(object):
 
     def get_field_value(self, fieldname):
         return self._field_values[fieldname]
+
+    @property
+    def name(self):
+        if hasattr(self, "_name"):
+            return self._name
+        else:
+            raise NotImplementedError(
+                "Implement property or define _name in child class"
+            )
 
     @classmethod
     def fields(cls) -> list:
@@ -295,8 +301,6 @@ class XMLYMLInstantiationBase(object):
         pass
 
 
-
-
 def workflow_element_factory(name):
     """
     Placeholder function to generate WorkflowElements based on their name. Currently only returns the class of WorkflowElement
@@ -328,7 +332,6 @@ def workflow_element_factory(name):
     elif name == "bool":
         return bool
     else:
-        # print(globals())
         if name.startswith("np."):
             name = name[3:]
             classobj = getattr(globals()["np"], name)
@@ -457,7 +460,7 @@ class WorkflowElementList(object):
                 else:
                     try:
                         myfo = fieldobject(child.text)
-                    except TypeError as e:
+                    except (TypeError, ValueError) as e:
                         self._logger.exception(
                             "Could not instantiate object. Type was: %s. Text was: %s"
                             % (type(fieldobject), child.text)
