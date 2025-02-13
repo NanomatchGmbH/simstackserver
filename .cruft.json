@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/NanomatchGmbH/python-pixi-cruft.git",
-  "commit": "c836b1296e39431ed37a8f2a7bb53725259d6519",
+  "commit": "aeade964b62182d853769ae2796408a2289cdc64",
   "checkout": null,
   "context": {
     "cookiecutter": {

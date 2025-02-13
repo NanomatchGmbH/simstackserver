@@ -111,7 +111,7 @@ pytest-cov = ">=6.0.0,<7"
 # Cruft dependencies end. Add yours below this line
 
 [tool.pixi.feature.test.tasks]
-tests = "python -m pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=SimStackServer | tee pytest-coverage.txt"
+tests = "python -m pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=SimStackServer"
 
 [tool.pixi.feature.mypy.dependencies]
 mypy = "*"

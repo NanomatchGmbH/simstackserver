@@ -21,12 +21,12 @@ jobs:
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
           environments: test
       - name: run tests
+        shell: bash
         run:  pixi run tests
       - name: Pytest coverage comment
         id: coverageComment
         uses: MishaKav/pytest-coverage-comment@main
         with:
-          pytest-coverage-path: ./pytest-coverage.txt
           junitxml-path: ./pytest.xml
   lint:
     runs-on: ubuntu-latest
@@ -38,6 +38,7 @@ jobs:
         with:
           environments: lint
       - name: Format and lint
+        shell: bash
         run: |
           pixi run lint
       - name: Assert no changes
