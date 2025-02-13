@@ -22,7 +22,9 @@ jobs:
           environments: test
       - name: run tests
         shell: bash
-        run:  pixi run tests
+        run: |
+          set -o pipefail
+          pixi run tests
       - name: Pytest coverage comment
         id: coverageComment
         uses: MishaKav/pytest-coverage-comment@main
@@ -41,6 +43,7 @@ jobs:
       - name: Format and lint
         shell: bash
         run: |
+          set -o pipefail
           pixi run lint
       - name: Assert no changes
         run: git diff --exit-code
