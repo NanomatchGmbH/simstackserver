@@ -144,3 +144,47 @@ def test_submit_single_job_message(workflow_exec_module_fixture):
         "external_runtime_directory": "",
     }
     assert unpacked_message["wfem"] == ref_dict
+
+
+def test_get_http_server_ack_message():
+    res = Message.get_http_server_ack_message(22, "testuser", "testpw")
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_type == 13
+    assert unpacked_message == {
+        "MessageType": 13,
+        "http_pass": "testpw",
+        "http_port": 22,
+        "http_user": "testuser",
+    }
+
+
+def test_list_jobs_of_wf_message_reply():
+    res = Message.list_jobs_of_wf_message_reply("test_wf", [])
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_type == 6
+    assert unpacked_message == {
+        "MessageType": 6,
+        "list_of_jobs": [],
+        "workflow_submit_name": "test_wf",
+    }
+
+
+def test_list_wfs_reply_message():
+    res = Message.list_wfs_reply_message([])
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_type == 4
+    assert unpacked_message == {"MessageType": 4, "workflows": []}
+
+
+def test_submit_wf_message():
+    res = Message.submit_wf_message("testfile.dat")
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_type == 12
+    assert unpacked_message == {"MessageType": 12, "filename": "testfile.dat"}
+
+
+def test_abort_wf_message():
+    res = Message.abort_wf_message("test_wf")
+    unpacked_type, unpacked_message = Message.unpack(res)
+    assert unpacked_type == 8
+    assert unpacked_message == {"MessageType": 8, "workflow_submit_name": "test_wf"}
