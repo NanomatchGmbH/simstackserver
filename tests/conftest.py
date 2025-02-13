@@ -60,3 +60,55 @@ def tmpWaNoRoot(tmpfileWaNoXml, tmpdir):
 
     # Yield the fully-initialized instance for use in tests
     yield wm
+
+
+@pytest.fixture
+def workflow_exec_module_fixture(tmpdir):
+    from SimStackServer.WorkflowModel import (
+        Resources,
+        WorkflowExecModule,
+        workflow_element_factory,
+    )
+    import os
+
+    """
+    Returns a WorkflowExecModule instance with minimal (but valid) defaults for pytest.
+    """
+    # Create a minimal Resources object (adjust fields as needed in your code).
+    resources = Resources(
+        # You may need to fill other fields depending on how Resources is defined
+        # or if it inherits from XMLYMLInstantiationBase with required fields.
+        resource_name=None,
+        queueing_system="Internal",  # or "unset" or "slurm", etc.
+        cpus_per_node=1,
+        nodes=1,
+        memory="1GB",
+        custom_requests="",
+        reuse_results=False,
+    )
+
+    # Construct a minimal WorkflowElementList for inputs/outputs:
+    inputs_list = workflow_element_factory("WorkflowElementList")
+    outputs_list = workflow_element_factory("WorkflowElementList")
+
+    if "CONDA_PREFIX" not in os.environ:
+        os.environ["CONDA_PREFIX"] = "/opt/conda/envs/myenv"
+
+    # Instantiate the WorkflowExecModule with some defaults
+    wfem = WorkflowExecModule(
+        uid="0c3f3863-c696-42a4-8ff5-4d5e3222d39a",
+        given_name="TestWFEM",
+        path="test_path",
+        wano_xml="test_wano.xml",
+        outputpath="testdir",  # or "unset"
+        original_result_directory="",
+        # inputs=inputs_list,
+        # outputs=outputs_list,
+        exec_command="echo 'Hello, WorkflowExecModule!'",
+        resources=resources,
+        runtime_directory="unstarted",
+        jobid="unstarted",
+        external_runtime_directory="",
+    )
+
+    return wfem
