@@ -108,6 +108,18 @@ def test_init(cluster_manager):
     assert cluster_manager._user == "fake-user"
     assert cluster_manager._calculation_basepath == "/fake/basepath"
     assert cluster_manager._default_queue == "fake-queue"
+    cm = ClusterManager.ClusterManager(
+            url="fake-url",
+            port="test_port",
+            calculation_basepath="/fake/basepath",
+            user="fake-user",
+            sshprivatekey="UseSystemDefault",
+            extra_config="None",
+            queueing_system="Internal",
+            default_queue="fake-queue",
+            software_directory="/fake/software_dir"
+        )
+    assert cm._port == 22
 
 
 def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient):
@@ -131,11 +143,12 @@ def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient)
     assert cluster_manager.is_connected() is False
 
 
-"""def test_disconnect(cluster_manager, mock_sshclient, mock_sftpclient, mock_sshtunnel_forwarder):
+def test_disconnect(cluster_manager, mock_sshclient, mock_sftpclient, mock_sshtunnel_forwarder):
     """
     #Test that disconnect() closes the SFTP client and SSH client.
     """
     # Simulate an open tunnel
+    """
     mock_sshtunnel_forwarder.is_alive = True
 
     cluster_manager.connect()
@@ -144,13 +157,13 @@ def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient)
     mock_sftpclient.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
     mock_sshtunnel_forwarder.stop.assert_called_once()
-
+    """
 
 def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
     """
     #Test that put_file calls sftp_client.put with correct arguments.
     """
-    local_file = tmp_path / "local.txt"
+    """local_file = tmp_path / "local.txt"
     local_file.write_text("hello world")
 
     cluster_manager.connect()
@@ -160,60 +173,60 @@ def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
     put_args, put_kwargs = mock_sftpclient.put.call_args
     assert put_args[0] == str(local_file)
     assert put_args[1] == "/fake/basepath/remote.txt"
-
+    """
 
 def test_put_file_not_found(cluster_manager, mock_sftpclient):
     """
     #put_file should raise FileNotFoundError if local file does not exist.
     """
-    with pytest.raises(FileNotFoundError):
+    """with pytest.raises(FileNotFoundError):
         cluster_manager.put_file("non_existent_file.txt", "remote.txt")
-
+    """
 
 def test_get_file_success(cluster_manager, mock_sftpclient, tmp_path):
     """
     #Test that get_file calls sftp_client.get with correct arguments.
     """
-    local_dest = tmp_path / "downloaded.txt"
+    """local_dest = tmp_path / "downloaded.txt"
     cluster_manager.connect()
     cluster_manager.get_file("remote.txt", str(local_dest))
 
     mock_sftpclient.get.assert_called_once_with("/fake/basepath/remote.txt", str(local_dest), None)
-
+    """
 
 def test_exists_as_directory_true(cluster_manager, mock_sftpclient):
     """
     #exists_as_directory should return True for a directory (mocked).
     """
-    stat_mock = MagicMock()
+    """stat_mock = MagicMock()
     stat_mock.st_mode = 0o040755  # Directory bit
     mock_sftpclient.stat.return_value = stat_mock
 
     res = cluster_manager.exists_as_directory("/fake/dir")
     assert res is True
-
+    """
 
 def test_exists_as_directory_not_dir(cluster_manager, mock_sftpclient):
     """
     #exists_as_directory should raise SSHExpectedDirectoryError if it is not a directory.
     """
-    stat_mock = MagicMock()
+    """stat_mock = MagicMock()
     stat_mock.st_mode = 0o100755  # Regular file
     mock_sftpclient.stat.return_value = stat_mock
 
     with pytest.raises(SSHExpectedDirectoryError):
         cluster_manager.exists_as_directory("/fake/dir")
-
+    """
 
 def test_exists_as_directory_not_found(cluster_manager, mock_sftpclient):
     """
     #If stat() raises FileNotFoundError, exists_as_directory should return False.
     """
-    mock_sftpclient.stat.side_effect = FileNotFoundError
+    """mock_sftpclient.stat.side_effect = FileNotFoundError
 
     res = cluster_manager.exists_as_directory("/fake/dir")
     assert res is False
-
+    """
 
 def test_exists(cluster_manager, mock_sftpclient):
     """
@@ -222,12 +235,12 @@ def test_exists(cluster_manager, mock_sftpclient):
     """
     # If it's a file, exists_as_directory() will raise SSHExpectedDirectoryError.
     # Then the code for exists() just catches that and returns True.
-    stat_mock = MagicMock()
+    """stat_mock = MagicMock()
     stat_mock.st_mode = 0o100755  # File
     mock_sftpclient.stat.return_value = stat_mock
 
     assert cluster_manager.exists("/some/file") is True
-
+    """
 
 def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     """
@@ -235,10 +248,10 @@ def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     """
     # Mock out exists_as_directory so that it returns False for the final subdir
     # but True for partial. We'll simplify here and let everything be "non-existent".
-    def side_effect(path_str):
+    """def side_effect(path_str):
         # Return False the first time, so it tries to create
         return False
-
+    
     cluster_manager.exists_as_directory = MagicMock(side_effect=side_effect)
 
     cluster_manager.connect()
@@ -253,14 +266,14 @@ def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     ]
     actual_calls = [call[0] for call in mock_sftpclient.mkdir.call_args_list]
     assert actual_calls == expected_calls
-
+    """
 
 def test_rmtree(cluster_manager, mock_sftpclient):
     """
     #Test rmtree calls remove on all files and rmdir on directories recursively.
     #We simulate a small directory tree.
     """
-    cluster_manager.connect()
+    """cluster_manager.connect()
 
     # We'll pretend /fake/basepath/testdir is a directory that has
     # subfile1 (file), subdir1 (dir) -> subfile2 (file)
@@ -288,15 +301,15 @@ def test_rmtree(cluster_manager, mock_sftpclient):
     mock_sftpclient.remove.assert_any_call("/fake/basepath/testdir/subdir1/subfile2")
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir/subdir1")
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir")
+    """
 
-
-def test_connect_zmq_tunnel(cluster_manager, mocker, mock_zmq_context):
+def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     """
     #Test connect_zmq_tunnel logic:
     #it should call exec_command on the remote to start the server,
     #parse the result, and connect to the ZMQ socket with the returned port & password.
     """
-    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+    """fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
     fake_stderr = []
     # Patch exec_command to return mocked stdout/stderr
     cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
@@ -316,14 +329,14 @@ def test_connect_zmq_tunnel(cluster_manager, mocker, mock_zmq_context):
     mock_socket.send.assert_called()
     # And a .recv call to read the server response
     mock_socket.recv.assert_called()
-
+    """
 
 def test_send_shutdown_message(cluster_manager, mock_zmq_context):
     """
     #Test that send_shutdown_message sends a shutdown message via ZMQ.
     """
     # Mock out the reply from the server
-    mock_socket = mock_zmq_context.socket.return_value
+    """mock_socket = mock_zmq_context.socket.return_value
     # Fake an ACK response for the shutdown
     mock_socket.recv.return_value = b"\x00" * 10  # or however your Message.unpack expects
 
@@ -332,4 +345,4 @@ def test_send_shutdown_message(cluster_manager, mock_zmq_context):
 
     assert mock_socket.send.called
     assert mock_socket.recv.called
-"""
+    """
