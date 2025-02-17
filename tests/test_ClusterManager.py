@@ -8,6 +8,8 @@ import sshtunnel
 import zmq
 
 from SimStackServer import ClusterManager
+from SimStackServer.MessageTypes import Message
+from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
 
@@ -159,7 +161,7 @@ def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient)
     assert cluster_manager.is_connected() is False
 
 
-def test_disconnect(cluster_manager, mock_sshclient, mock_sftpclient, mock_sshtunnel_forwarder):
+def test_disconnect(cluster_manager,mock_zmq_context, mock_sshclient, mock_sftpclient, mock_sshtunnel_forwarder):
     """
     #Test that disconnect() closes the SFTP client and SSH client.
     """
@@ -167,12 +169,32 @@ def test_disconnect(cluster_manager, mock_sshclient, mock_sftpclient, mock_sshtu
 
     mock_sshtunnel_forwarder.is_alive = True
 
+    """fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+    fake_stderr = []
+    # Patch exec_command to return mocked stdout/stderr
+    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
+
+    # We'll need a mock socket for ZMQ so we don't do actual network calls:
+    mock_socket = mock_zmq_context.socket.return_value
+    mock_socket.recv.return_value = Message.dict_message(MTS.CONNECT, {"info": "connected"})
+    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
+        # paramiko_tunnel normally returns (new_url, tunnel),
+        # so let's return a dummy URL and a mock tunnel object.
+        mock_tunnel = MagicMock()
+        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+
+        # Make the normal connect (SSH) call; it will run our patch
+        cluster_manager.connect()
+        cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)"""
+
+
     cluster_manager.connect()
     cluster_manager.disconnect()
 
     mock_sftpclient.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
-    #mock_sshtunnel_forwarder.stop.assert_called_once()
+
+    mock_sshtunnel_forwarder.stop.assert_called_once()
 
 
 def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
@@ -325,16 +347,23 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     #it should call exec_command on the remote to start the server,
     #parse the result, and connect to the ZMQ socket with the returned port & password.
     """
-    """fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
     fake_stderr = []
     # Patch exec_command to return mocked stdout/stderr
     cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
 
-    # We call connect(), then connect_zmq_tunnel
-    cluster_manager.connect()
+    # We'll need a mock socket for ZMQ so we don't do actual network calls:
+    mock_socket = mock_zmq_context.socket.return_value
+    mock_socket.recv.return_value = Message.dict_message(MTS.CONNECT, {"info": "connected"})
+    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
+        # paramiko_tunnel normally returns (new_url, tunnel),
+        # so let's return a dummy URL and a mock tunnel object.
+        mock_tunnel = MagicMock()
+        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
 
-    # The command we pass here is somewhat irrelevant in test, so let's do a dummy
-    cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
+        # Make the normal connect (SSH) call; it will run our patch
+        cluster_manager.connect()
+        cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
 
     # Check that we set the correct plain_username/password
     mock_socket = mock_zmq_context.socket.return_value
@@ -345,7 +374,7 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     mock_socket.send.assert_called()
     # And a .recv call to read the server response
     mock_socket.recv.assert_called()
-    """
+
 
 def test_send_shutdown_message(cluster_manager, mock_zmq_context):
     """
