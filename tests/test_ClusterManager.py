@@ -135,6 +135,9 @@ def test_dummy_callback(cluster_manager,capsys):
     # In this case, "50.0 % done"
     assert "50 % done" in captured.out.strip()
 
+def test_get_ssh_url(cluster_manager):
+    assert cluster_manager.get_ssh_url() == 'fake-user@fake-url:22'
+
 def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient):
     """
     Test that connect() calls paramiko.SSHClient.connect and opens SFTP.
