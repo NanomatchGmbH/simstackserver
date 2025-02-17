@@ -164,7 +164,7 @@ def test_disconnect(cluster_manager, mock_sshclient, mock_sftpclient, mock_sshtu
     #Test that disconnect() closes the SFTP client and SSH client.
     """
     # Simulate an open tunnel
-    """
+
     mock_sshtunnel_forwarder.is_alive = True
 
     cluster_manager.connect()
@@ -172,8 +172,8 @@ def test_disconnect(cluster_manager, mock_sshclient, mock_sftpclient, mock_sshtu
 
     mock_sftpclient.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
-    mock_sshtunnel_forwarder.stop.assert_called_once()
-    """
+    #mock_sshtunnel_forwarder.stop.assert_called_once()
+
 
 def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
     """
