@@ -423,6 +423,26 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     # And a .recv call to read the server response
     mock_socket.recv.assert_called()
 
+    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
+        # paramiko_tunnel normally returns (new_url, tunnel),
+        # so let's return a dummy URL and a mock tunnel object.
+        mock_tunnel = MagicMock()
+        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+
+        with patch("SimStackServer.__version__", new="7.1.2"):
+            cluster_manager.connect()
+            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
+
+    # Check that we set the correct plain_username/password
+    mock_socket = mock_zmq_context.socket.return_value
+    assert mock_socket.plain_username == b"simstack_client"
+    assert mock_socket.plain_password == b"secretkey"
+
+    # We also expect a .send call to send a CONNECT message
+    mock_socket.send.assert_called()
+    # And a .recv call to read the server response
+    mock_socket.recv.assert_called()
+
 
 def test_send_shutdown_message(cluster_manager, mock_zmq_context):
     """
@@ -611,3 +631,101 @@ def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftp
     # Now calling get_newest_version_directory will enter the except FileNotFoundError: block
     with pytest.raises(FileNotFoundError):
         result = cluster_manager.get_newest_version_directory("/fake/nonexistent")
+
+
+def test_get_workflow_job_list_success(cluster_manager, mock_zmq_context):
+    """
+    Test get_workflow_job_list() when the server's message has 'list_of_jobs'.
+    """
+    # Mock the ZMQ socket
+    mock_socket = mock_zmq_context.socket.return_value
+
+    # We'll also mock cluster_manager._recv_message to simulate server response
+    # that includes "list_of_jobs".
+    cluster_manager._recv_message = MagicMock(
+        return_value=(MTS.ACK, {"list_of_jobs": ["job1", "job2"]})
+    )
+
+    # Assign the mock socket to the cluster_manager
+    cluster_manager._socket = mock_socket
+
+    # Call the method
+    result = cluster_manager.get_workflow_job_list("some_workflow")
+
+    # Check that the socket was used to send the correct message
+    # (list_jobs_of_wf_message(...) is presumably building a dictionary or such)
+    expected_send = Message.list_jobs_of_wf_message(
+        workflow_submit_name="some_workflow"
+    )
+    mock_socket.send.assert_called_once_with(expected_send)
+
+    # Verify _recv_message was called
+    cluster_manager._recv_message.assert_called_once()
+
+    # Assert that we got the correct list of jobs back
+    assert result == ["job1", "job2"]
+
+
+def test_get_workflow_job_list_missing_key(cluster_manager, mock_zmq_context):
+    """
+    Test get_workflow_job_list() when the server's message is missing 'list_of_jobs',
+    which should raise ConnectionError.
+    """
+    # Mock the ZMQ socket
+    mock_socket = mock_zmq_context.socket.return_value
+
+    # Return a dictionary missing "list_of_jobs"
+    cluster_manager._recv_message = MagicMock(
+        return_value=(MTS.ACK, {"some_unexpected_key": []})
+    )
+
+    cluster_manager._socket = mock_socket
+
+    # Expect a ConnectionError due to missing "list_of_jobs"
+    with pytest.raises(ConnectionError) as excinfo:
+        cluster_manager.get_workflow_job_list("some_workflow")
+
+    assert "Could not read message in workflow job list update" in str(excinfo.value)
+
+    # socket.send was still called, but there's no valid key in the response
+    expected_send = Message.list_jobs_of_wf_message(
+        workflow_submit_name="some_workflow"
+    )
+    mock_socket.send.assert_called_once_with(expected_send)
+
+
+def test_abort_wf(cluster_manager, mock_zmq_context):
+    """
+    Test that abort_wf() sends the correct abort message and then calls _recv_ack_message.
+    """
+    # Provide a mock socket
+    mock_socket = mock_zmq_context.socket.return_value
+    cluster_manager._socket = mock_socket
+
+    # We'll patch the _recv_ack_message so it doesn't do real network ops
+    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
+        cluster_manager.abort_wf("my-test-workflow")
+
+    # Check the socket sent the correct abort message
+    expected_msg = Message.abort_wf_message("my-test-workflow")
+    mock_socket.send.assert_called_once_with(expected_msg)
+
+    # Check that _recv_ack_message was called
+    mock_recv_ack.assert_called_once()
+
+
+def test_abort_wf_logs_debug(cluster_manager, mock_zmq_context):
+    """
+    If you want to test the debug log statement as well.
+    """
+    mock_socket = mock_zmq_context.socket.return_value
+    cluster_manager._socket = mock_socket
+
+    with patch.object(cluster_manager, "_recv_ack_message"), patch.object(
+        cluster_manager._logger, "debug"
+    ) as mock_debug:
+        cluster_manager.abort_wf("my-workflow")
+
+    mock_debug.assert_called_once_with(
+        "Sent Abort WF message for submitname my-workflow"
+    )
