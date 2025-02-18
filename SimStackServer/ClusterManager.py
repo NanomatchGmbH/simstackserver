@@ -31,10 +31,7 @@ from SimStackServer.Util.FileUtilities import (
     filewalker,
 )
 
-
-class SSHExpectedDirectoryError(Exception):
-    pass
-
+from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
 class ClusterManager:
     def __init__(
