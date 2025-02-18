@@ -1,4 +1,5 @@
 # test_cluster_manager.py
+import pathlib
 
 import pytest
 from unittest.mock import MagicMock, patch
@@ -291,39 +292,40 @@ def test_exists(cluster_manager, mock_sftpclient):
     """
     # If it's a file, exists_as_directory() will raise SSHExpectedDirectoryError.
     # Then the code for exists() just catches that and returns True.
-    """stat_mock = MagicMock()
+    cluster_manager.connect()
+    stat_mock = MagicMock()
     stat_mock.st_mode = 0o100755  # File
     mock_sftpclient.stat.return_value = stat_mock
-
     assert cluster_manager.exists("/some/file") is True
-    """
 
 
 def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     """
     #Test mkdir_p calls sftp_client.mkdir for each subdirectory that does not exist.
     """
+
     # Mock out exists_as_directory so that it returns False for the final subdir
     # but True for partial. We'll simplify here and let everything be "non-existent".
-    """def side_effect(path_str):
+    def side_effect(path_str):
         # Return False the first time, so it tries to create
         return False
 
     cluster_manager.exists_as_directory = MagicMock(side_effect=side_effect)
 
     cluster_manager.connect()
-    cluster_manager.mkdir_p("foo/bar/baz")
-
+    mydir = cluster_manager.mkdir_p(pathlib.Path("foo/bar/baz"))
+    assert mydir == "foo/bar/baz"
     # We expect mkdir to have been called 3 times:
     # /fake/basepath/foo, /fake/basepath/foo/bar, /fake/basepath/foo/bar/baz
     expected_calls = [
+        ("fake",),
+        ("fake/basepath",),
         ("/fake/basepath/foo",),
         ("/fake/basepath/foo/bar",),
         ("/fake/basepath/foo/bar/baz",),
     ]
     actual_calls = [call[0] for call in mock_sftpclient.mkdir.call_args_list]
     assert actual_calls == expected_calls
-    """
 
 
 def test_rmtree(cluster_manager, mock_sftpclient):
@@ -331,7 +333,7 @@ def test_rmtree(cluster_manager, mock_sftpclient):
     #Test rmtree calls remove on all files and rmdir on directories recursively.
     #We simulate a small directory tree.
     """
-    """cluster_manager.connect()
+    cluster_manager.connect()
 
     # We'll pretend /fake/basepath/testdir is a directory that has
     # subfile1 (file), subdir1 (dir) -> subfile2 (file)
@@ -339,7 +341,7 @@ def test_rmtree(cluster_manager, mock_sftpclient):
         if path == "/fake/basepath/testdir":
             return [
                 MagicMock(filename="subfile1", st_mode=0o100755),  # file
-                MagicMock(filename="subdir1", st_mode=0o040755),   # dir
+                MagicMock(filename="subdir1", st_mode=0o040755),  # dir
             ]
         elif path == "/fake/basepath/testdir/subdir1":
             return [
@@ -359,7 +361,6 @@ def test_rmtree(cluster_manager, mock_sftpclient):
     mock_sftpclient.remove.assert_any_call("/fake/basepath/testdir/subdir1/subfile2")
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir/subdir1")
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir")
-    """
 
 
 def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
@@ -404,13 +405,14 @@ def test_send_shutdown_message(cluster_manager, mock_zmq_context):
     #Test that send_shutdown_message sends a shutdown message via ZMQ.
     """
     # Mock out the reply from the server
-    """mock_socket = mock_zmq_context.socket.return_value
+    mock_socket = mock_zmq_context.socket.return_value
     # Fake an ACK response for the shutdown
-    mock_socket.recv.return_value = b"\x00" * 10  # or however your Message.unpack expects
-
+    mock_socket.recv.return_value = Message.dict_message(
+        MTS.ACK, {"info": "acknowledge WF submission"}
+    )
     cluster_manager._socket = mock_socket
+    cluster_manager.connect()
     cluster_manager.send_shutdown_message()
 
     assert mock_socket.send.called
     assert mock_socket.recv.called
-    """
