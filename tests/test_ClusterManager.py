@@ -25,6 +25,7 @@ def mock_sshclient():
     mock_ssh.open_sftp.return_value = mock_sftp
     return mock_ssh
 
+
 @pytest.fixture
 def mock_sftpclient(mock_sshclient):
     sftp_mock = mock_sshclient.open_sftp()
@@ -45,12 +46,14 @@ def mock_sftpclient(mock_sshclient):
 
     return sftp_mock
 
+
 @pytest.fixture
 def mock_sshtunnel_forwarder():
     """Creates a MagicMock for sshtunnel.SSHTunnelForwarder."""
     mock_forwarder = MagicMock(spec=sshtunnel.SSHTunnelForwarder)
     mock_forwarder.is_alive = False
     return mock_forwarder
+
 
 @pytest.fixture
 def mock_zmq_context():
@@ -62,9 +65,9 @@ def mock_zmq_context():
 
 
 @pytest.fixture
-@patch('paramiko.SSHClient', autospec=True)
-@patch('sshtunnel.SSHTunnelForwarder', autospec=True)
-@patch('zmq.Context.instance', autospec=True)
+@patch("paramiko.SSHClient", autospec=True)
+@patch("sshtunnel.SSHTunnelForwarder", autospec=True)
+@patch("zmq.Context.instance", autospec=True)
 def cluster_manager(
     mock_zmq_context_class,
     mock_sshtunnel_forwarder_class,
@@ -72,7 +75,7 @@ def cluster_manager(
     mock_sshclient,
     mock_sftpclient,
     mock_sshtunnel_forwarder,
-    mock_zmq_context
+    mock_zmq_context,
 ):
     """
     Creates a ClusterManager with the paramiko, sshtunnel, and zmq classes all patched.
@@ -97,9 +100,10 @@ def cluster_manager(
         extra_config="None",
         queueing_system="Internal",
         default_queue="fake-queue",
-        software_directory="/fake/software_dir"
+        software_directory="/fake/software_dir",
     )
     return cm
+
 
 def test_init(cluster_manager):
     """
@@ -111,19 +115,20 @@ def test_init(cluster_manager):
     assert cluster_manager._calculation_basepath == "/fake/basepath"
     assert cluster_manager._default_queue == "fake-queue"
     cm = ClusterManager.ClusterManager(
-            url="fake-url",
-            port="test_port",
-            calculation_basepath="/fake/basepath",
-            user="fake-user",
-            sshprivatekey="UseSystemDefault",
-            extra_config="None",
-            queueing_system="Internal",
-            default_queue="fake-queue",
-            software_directory="/fake/software_dir"
-        )
+        url="fake-url",
+        port="test_port",
+        calculation_basepath="/fake/basepath",
+        user="fake-user",
+        sshprivatekey="UseSystemDefault",
+        extra_config="None",
+        queueing_system="Internal",
+        default_queue="fake-queue",
+        software_directory="/fake/software_dir",
+    )
     assert cm._port == 22
 
-def test_dummy_callback(cluster_manager,capsys):
+
+def test_dummy_callback(cluster_manager, capsys):
     """
     Test that _dummy_callback prints the expected output.
     """
@@ -137,14 +142,16 @@ def test_dummy_callback(cluster_manager,capsys):
     # In this case, "50.0 % done"
     assert "50 % done" in captured.out.strip()
 
+
 def test_get_ssh_url(cluster_manager):
-    assert cluster_manager.get_ssh_url() == 'fake-user@fake-url:22'
+    assert cluster_manager.get_ssh_url() == "fake-user@fake-url:22"
+
 
 def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient):
     """
     Test that connect() calls paramiko.SSHClient.connect and opens SFTP.
     """
-    mock_sftpclient.st_mode=0
+    mock_sftpclient.st_mode = 0
     cluster_manager.connect()
     mock_sshclient.connect.assert_called_once_with(
         "fake-url", 22, username="fake-user", key_filename=None, compress=True
@@ -161,7 +168,13 @@ def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient)
     assert cluster_manager.is_connected() is False
 
 
-def test_disconnect(cluster_manager,mock_zmq_context, mock_sshclient, mock_sftpclient, mock_sshtunnel_forwarder):
+def test_disconnect(
+    cluster_manager,
+    mock_zmq_context,
+    mock_sshclient,
+    mock_sftpclient,
+    mock_sshtunnel_forwarder,
+):
     """
     #Test that disconnect() closes the SFTP client and SSH client.
     """
@@ -187,14 +200,13 @@ def test_disconnect(cluster_manager,mock_zmq_context, mock_sshclient, mock_sftpc
         cluster_manager.connect()
         cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)"""
 
-
     cluster_manager.connect()
     cluster_manager.disconnect()
 
     mock_sftpclient.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
 
-    #mock_sshtunnel_forwarder.stop.assert_called_once()
+    # mock_sshtunnel_forwarder.stop.assert_called_once()
 
 
 def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
@@ -210,7 +222,7 @@ def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
     mock_sftpclient.put.assert_called_once()
     put_args, put_kwargs = mock_sftpclient.put.call_args
     assert put_args[0] == str(local_file)
-    #ToDo: Not sure this should be the output, tbh
+    # ToDo: Not sure this should be the output, tbh
     assert put_args[1] == "/fake/basepath/remote.txt/local.txt"
 
 
@@ -230,7 +242,9 @@ def test_get_file_success(cluster_manager, mock_sftpclient, tmp_path):
     cluster_manager.connect()
     cluster_manager.get_file("remote.txt", str(local_dest))
 
-    mock_sftpclient.get.assert_called_once_with("/fake/basepath/remote.txt", str(local_dest), None)
+    mock_sftpclient.get.assert_called_once_with(
+        "/fake/basepath/remote.txt", str(local_dest), None
+    )
 
 
 def test_exists_as_directory_true(cluster_manager, mock_sftpclient):
@@ -284,6 +298,7 @@ def test_exists(cluster_manager, mock_sftpclient):
     assert cluster_manager.exists("/some/file") is True
     """
 
+
 def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     """
     #Test mkdir_p calls sftp_client.mkdir for each subdirectory that does not exist.
@@ -293,7 +308,7 @@ def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     """def side_effect(path_str):
         # Return False the first time, so it tries to create
         return False
-    
+
     cluster_manager.exists_as_directory = MagicMock(side_effect=side_effect)
 
     cluster_manager.connect()
@@ -309,6 +324,7 @@ def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     actual_calls = [call[0] for call in mock_sftpclient.mkdir.call_args_list]
     assert actual_calls == expected_calls
     """
+
 
 def test_rmtree(cluster_manager, mock_sftpclient):
     """
@@ -345,6 +361,7 @@ def test_rmtree(cluster_manager, mock_sftpclient):
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir")
     """
 
+
 def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     """
     #Test connect_zmq_tunnel logic:
@@ -358,7 +375,9 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
 
     # We'll need a mock socket for ZMQ so we don't do actual network calls:
     mock_socket = mock_zmq_context.socket.return_value
-    mock_socket.recv.return_value = Message.dict_message(MTS.CONNECT, {"info": "connected"})
+    mock_socket.recv.return_value = Message.dict_message(
+        MTS.CONNECT, {"info": "connected"}
+    )
     with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
         # paramiko_tunnel normally returns (new_url, tunnel),
         # so let's return a dummy URL and a mock tunnel object.
