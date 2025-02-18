@@ -520,3 +520,94 @@ def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
     )
 
     assert local_ssh_client is mock_sshclient_instance
+
+
+def test_get_http_server_address(cluster_manager, mock_zmq_context):
+    # Mock out the reply from the server for the 'get_http_server_address()' call
+    mock_socket = mock_zmq_context.socket.return_value
+    mock_socket.recv.return_value = Message.dict_message(
+        MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"}
+    )
+    # Use the same socket in the cluster_manager
+    cluster_manager._socket = mock_socket
+
+    # Patch sshtunnel.SSHTunnelForwarder so it won't do a real SSH connection
+    with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
+        # The forwarder instance returned by the constructor:
+        mock_forwarder_instance = MagicMock()
+        mock_forwarder_cls.return_value = mock_forwarder_instance
+
+        # Pretend the tunnel is "alive"
+        mock_forwarder_instance.is_alive = True
+
+        # Suppose the forwarder binds on local port 9999
+        mock_forwarder_instance.local_bind_port = 9999
+
+        # The forwarder won't raise an error when start() is called
+        mock_forwarder_instance.start.return_value = None
+
+        cluster_manager.connect()
+        address = cluster_manager.get_http_server_address()
+        assert address == "http://dummy:404@localhost:9999"
+
+        # Check that SSHTunnelForwarder was created with the expected arguments
+        mock_forwarder_cls.assert_called_once_with(
+            ("fake-url", 22),  # (self._url, self._port)
+            ssh_username="fake-user",
+            ssh_pkey=None,  # key_filename might be None or something else
+            threaded=False,
+            remote_bind_address=("127.0.0.1", 505),
+        )
+
+        # start() should have been called on the forwarder
+        mock_forwarder_instance.start.assert_called_once()
+
+
+def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftpclient):
+    """
+    Verify that get_newest_version_directory returns the correct 'Vx' directory
+    given a mixture of directory names like 'V2', 'V3', 'V6', 'envs', etc.
+    """
+
+    cluster_manager.connect()
+
+    # We'll define a custom side_effect for listdir_attr
+    # so that it returns multiple 'directories' or 'files'.
+    def mock_listdir_attr(path):
+        names = ["V2", "V3", "V6", "VV", "envs", "randomfile"]
+
+        entries = []
+        for name in names:
+            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
+            entry_mock.filename = name
+
+            # If it's V2, V3, V6, or 'envs', we treat it as a directory
+            if name in ["V2", "V3", "V6", "VV", "envs"]:
+                entry_mock.st_mode = 0o040755  # Directory bit
+            else:
+                entry_mock.st_mode = 0o100644  # Regular file bit
+
+            entries.append(entry_mock)
+        return entries
+
+    # Assign that side effect to the mock SFTP client
+    mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
+
+    # Now call the method under test
+    result = cluster_manager.get_newest_version_directory("/fake/path")
+
+    # According to the logic in get_newest_version_directory,
+    # it loops over these entries, looks for "Vxx" or "envs",
+    # and returns "V6" as the largest version found (which yields "V6").
+    assert result == "V6", f"Expected 'V6' but got '{result}'"
+
+    # Optional: check that we actually called sftp_client.listdir_attr
+    mock_sftpclient.listdir_attr.assert_called_once_with("/fake/path")
+
+    mock_sftpclient.listdir_attr.side_effect = FileNotFoundError(
+        "No such file or directory"
+    )
+
+    # Now calling get_newest_version_directory will enter the except FileNotFoundError: block
+    with pytest.raises(FileNotFoundError):
+        result = cluster_manager.get_newest_version_directory("/fake/nonexistent")
