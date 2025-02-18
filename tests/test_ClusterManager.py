@@ -393,39 +393,51 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     #it should call exec_command on the remote to start the server,
     #parse the result, and connect to the ZMQ socket with the returned port & password.
     """
-    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
     fake_stderr = []
-    # Patch exec_command to return mocked stdout/stderr
-    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
+    for fake_stdout in [
+        ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"],
+        ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.2.4"],
+        ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey GETLINE586,6,ZMQ,4.3.4"],
+    ]:
+        # Patch exec_command to return mocked stdout/stderr
+        cluster_manager.exec_command = MagicMock(
+            return_value=(fake_stdout, fake_stderr)
+        )
 
-    # We'll need a mock socket for ZMQ so we don't do actual network calls:
-    mock_socket = mock_zmq_context.socket.return_value
-    mock_socket.recv.return_value = Message.dict_message(
-        MTS.CONNECT, {"info": "connected"}
-    )
+        # We'll need a mock socket for ZMQ so we don't do actual network calls:
+        mock_socket = mock_zmq_context.socket.return_value
+        mock_socket.recv.return_value = Message.dict_message(
+            MTS.CONNECT, {"info": "connected"}
+        )
+        with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
+            # paramiko_tunnel normally returns (new_url, tunnel),
+            # so let's return a dummy URL and a mock tunnel object.
+            mock_tunnel = MagicMock()
+            mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+
+            # Make the normal connect (SSH) call; it will run our patch
+            cluster_manager.connect()
+            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
+
+        # Check that we set the correct plain_username/password
+        mock_socket = mock_zmq_context.socket.return_value
+        assert mock_socket.plain_username == b"simstack_client"
+        assert mock_socket.plain_password == b"secretkey"
+
+        # We also expect a .send call to send a CONNECT message
+        mock_socket.send.assert_called()
+        # And a .recv call to read the server response
+        mock_socket.recv.assert_called()
+
     with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
         # paramiko_tunnel normally returns (new_url, tunnel),
         # so let's return a dummy URL and a mock tunnel object.
-        mock_tunnel = MagicMock()
-        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-
-        # Make the normal connect (SSH) call; it will run our patch
-        cluster_manager.connect()
-        cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
-
-    # Check that we set the correct plain_username/password
-    mock_socket = mock_zmq_context.socket.return_value
-    assert mock_socket.plain_username == b"simstack_client"
-    assert mock_socket.plain_password == b"secretkey"
-
-    # We also expect a .send call to send a CONNECT message
-    mock_socket.send.assert_called()
-    # And a .recv call to read the server response
-    mock_socket.recv.assert_called()
-
-    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
-        # paramiko_tunnel normally returns (new_url, tunnel),
-        # so let's return a dummy URL and a mock tunnel object.
+        fake_stderr = []
+        fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+        # Patch exec_command to return mocked stdout/stderr
+        cluster_manager.exec_command = MagicMock(
+            return_value=(fake_stdout, fake_stderr)
+        )
         mock_tunnel = MagicMock()
         mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
 
@@ -631,6 +643,43 @@ def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftp
     # Now calling get_newest_version_directory will enter the except FileNotFoundError: block
     with pytest.raises(FileNotFoundError):
         result = cluster_manager.get_newest_version_directory("/fake/nonexistent")
+
+
+def test_get_server_command_for_software_directory(cluster_manager, mock_sftpclient):
+    cluster_manager.connect()
+
+    not_implemented_names = ["V2", "V3", "V4"]
+    for nin in not_implemented_names:
+
+        def mock_listdir_attr(path):
+            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
+            entry_mock.filename = nin
+            entry_mock.st_mode = 0o040755  # Directory bit
+
+            return [entry_mock]
+
+        mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
+
+        with pytest.raises(NotImplementedError):
+            cluster_manager.get_server_command_from_software_directory(nin)
+
+    implemented_names = ["V6", "V8"]
+    for imp_name in implemented_names:
+
+        def mock_listdir_attr(path):
+            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
+            entry_mock.filename = imp_name
+            entry_mock.st_mode = 0o040755  # Directory bit
+
+            return [entry_mock]
+
+        mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
+
+        res = cluster_manager.get_server_command_from_software_directory(imp_name)
+        assert (
+            res
+            == f"{imp_name}/envs/simstack_server_v6/bin/micromamba run -r {imp_name} --name=simstack_server_v6 SimStackServer"
+        )
 
 
 def test_get_workflow_job_list_success(cluster_manager, mock_zmq_context):
