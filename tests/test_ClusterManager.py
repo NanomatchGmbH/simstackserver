@@ -1,5 +1,6 @@
 # test_cluster_manager.py
 import pathlib
+from os import path
 
 import pytest
 from unittest.mock import MagicMock, patch
@@ -777,4 +778,17 @@ def test_abort_wf_logs_debug(cluster_manager, mock_zmq_context):
 
     mock_debug.assert_called_once_with(
         "Sent Abort WF message for submitname my-workflow"
+    )
+
+
+def test_put(cluster_manager):
+    cluster_manager._calculation_basepath = "/foo/bar"
+    cluster_manager.connect()
+    input_dir = "%s/input_dirs/RemoteServerManager" % path.dirname(
+        path.realpath(__file__)
+    )
+    transferdir = path.join(input_dir, "test_transfer_dir")
+    todir = "unittest_files"
+    assert (
+        cluster_manager.put_directory(transferdir, todir) == "/foo/bar/unittest_files"
     )
