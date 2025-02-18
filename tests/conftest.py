@@ -18,6 +18,16 @@ def tmpdir() -> tempfile.TemporaryDirectory:
 
 
 @pytest.fixture
+def tmpfile(tmp_path):
+    tmpfile = tmp_path / "tmp_file.dat"
+
+    # Just touching the file ensures it exists; or you can open/write to it.
+    tmpfile.touch()
+
+    yield tmpfile
+
+
+@pytest.fixture
 def tmpfileWaNoXml(tmp_path):
     """Create a file named 'WaNo.xml' in a unique temp dir."""
     path = tmp_path / "WaNo"

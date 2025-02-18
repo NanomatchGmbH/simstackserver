@@ -5,6 +5,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 import paramiko
+from paramiko.hostkeys import HostKeys
+from paramiko.rsakey import RSAKey
 import sshtunnel
 import zmq
 
@@ -12,6 +14,28 @@ from SimStackServer import ClusterManager
 from SimStackServer.MessageTypes import Message
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
+
+
+@pytest.fixture
+def ssh_client_with_host_keys():
+    """
+    Returns a real paramiko.SSHClient whose _host_keys attribute is
+    populated with at least one host key, so save_host_keys() can write data.
+    """
+    ssh_client = paramiko.SSHClient()
+    # Optionally load system host keys if you wish:
+    # ssh_client.load_system_host_keys()
+
+    # Or create your own dummy key:
+    host_keys = HostKeys()
+
+    # Generate an RSA key purely in memory:
+    private_key = RSAKey.generate(bits=1024)
+    host_keys.add("example.com", "ssh-rsa", private_key)
+
+    # Assign that HostKeys object to the SSHClient internals
+    ssh_client._host_keys = host_keys
+    return ssh_client
 
 
 @pytest.fixture
@@ -416,3 +440,83 @@ def test_send_shutdown_message(cluster_manager, mock_zmq_context):
 
     assert mock_socket.send.called
     assert mock_socket.recv.called
+
+
+def test_save_hostkeyfile(cluster_manager, ssh_client_with_host_keys, tmpfile):
+    cluster_manager.connect()
+    cluster_manager._ssh_client = ssh_client_with_host_keys
+    cluster_manager.save_hostkeyfile(tmpfile)
+    assert tmpfile.exists()
+    content = tmpfile.read_text()
+    assert content.startswith("example.com ssh-rsa")
+
+
+def test_get_new_connected_ssh_channel_with_config(cluster_manager):
+    """
+    Test that get_new_connected_ssh_channel() loads extra host keys, sets missing
+    host key policy, and calls connect with a custom key file.
+    """
+    # Simulate custom key and host key file
+    cluster_manager._sshprivatekeyfilename = "my_private_key"
+    cluster_manager._extra_hostkey_file = "/extra/hosts"
+    cluster_manager._unknown_host_connect_workaround = True
+
+    # Create a mock SSHClient instance
+    mock_sshclient_instance = MagicMock(spec=paramiko.SSHClient)
+
+    with patch(
+        "paramiko.SSHClient", return_value=mock_sshclient_instance
+    ) as mock_sshclient_cls:
+        local_ssh_client = cluster_manager.get_new_connected_ssh_channel()
+
+    # Verify an SSHClient was created
+    mock_sshclient_cls.assert_called_once()
+
+    # Check calls on the mock instance
+    mock_sshclient_instance.load_system_host_keys.assert_called_once()
+    mock_sshclient_instance.load_host_keys.assert_called_once_with("/extra/hosts")
+    mock_sshclient_instance.set_missing_host_key_policy.assert_called_once_with(
+        paramiko.AutoAddPolicy
+    )
+
+    mock_sshclient_instance.connect.assert_called_once_with(
+        "fake-url",
+        22,
+        username="fake-user",
+        key_filename="my_private_key",
+        compress=True,
+    )
+
+    # Ensure we return the mock instance
+    assert local_ssh_client is mock_sshclient_instance
+
+
+def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
+    """
+    Test that if _sshprivatekeyfilename == "UseSystemDefault",
+    we pass None as the key_filename.
+    """
+    cluster_manager._sshprivatekeyfilename = "UseSystemDefault"
+    cluster_manager._extra_hostkey_file = None
+    cluster_manager._unknown_host_connect_workaround = False
+
+    mock_sshclient_instance = MagicMock(spec=paramiko.SSHClient)
+    with patch("paramiko.SSHClient", return_value=mock_sshclient_instance):
+        local_ssh_client = cluster_manager.get_new_connected_ssh_channel()
+
+    # load_system_host_keys always called
+    mock_sshclient_instance.load_system_host_keys.assert_called_once()
+    # But no load_host_keys or set_missing_host_key_policy
+    mock_sshclient_instance.load_host_keys.assert_not_called()
+    mock_sshclient_instance.set_missing_host_key_policy.assert_not_called()
+
+    # Check that connect used None for key_filename
+    mock_sshclient_instance.connect.assert_called_once_with(
+        "fake-url",
+        22,
+        username="fake-user",
+        key_filename=None,
+        compress=True,
+    )
+
+    assert local_ssh_client is mock_sshclient_instance
