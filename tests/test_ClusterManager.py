@@ -310,20 +310,6 @@ def test_exists_as_directory_not_found(cluster_manager, mock_sftpclient):
     assert res is False
 
 
-def test_exists(cluster_manager, mock_sftpclient):
-    """
-    #If path is not a directory but does not raise FileNotFoundError,
-    #test_exists will still return True (since there's a file).
-    """
-    # If it's a file, exists_as_directory() will raise SSHExpectedDirectoryError.
-    # Then the code for exists() just catches that and returns True.
-    cluster_manager.connect()
-    stat_mock = MagicMock()
-    stat_mock.st_mode = 0o100755  # File
-    mock_sftpclient.stat.return_value = stat_mock
-    assert cluster_manager.exists("/some/file") is True
-
-
 def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     """
     #Test mkdir_p calls sftp_client.mkdir for each subdirectory that does not exist.
@@ -792,3 +778,166 @@ def test_put(cluster_manager):
     assert (
         cluster_manager.put_directory(transferdir, todir) == "/foo/bar/unittest_files"
     )
+
+
+def test_random_singlejob_exec_directory(cluster_manager, mock_sftpclient):
+    cluster_manager.connect()
+    stat_mock = MagicMock()
+    stat_mock.st_mode = 0o040755  # File
+    with pytest.raises(FileExistsError):
+        cluster_manager.mkdir_random_singlejob_exec_directory("testdir", num_retries=1)
+
+    def side_effect(path_str):
+        # Return False the first time, so it tries to create
+        return False
+
+    cluster_manager.exists = MagicMock(side_effect=side_effect)
+    res = str(cluster_manager.mkdir_random_singlejob_exec_directory("testdir"))
+    assert res.split("/")[0] == "singlejob_exec_directories"
+    assert "testdir" in res.split("/")[1]
+
+
+def test_exists(cluster_manager, mock_sftpclient):
+    """
+    #If path is not a directory but does not raise FileNotFoundError,
+    #test_exists will still return True (since there's a file).
+    """
+    # If it's a file, exists_as_directory() will raise SSHExpectedDirectoryError.
+    # Then the code for exists() just catches that and returns True.
+    cluster_manager.connect()
+    stat_mock = MagicMock()
+    stat_mock.st_mode = 0o100755  # File
+    mock_sftpclient.stat.return_value = stat_mock
+    assert cluster_manager.exists("/some/file") is True
+
+
+def test_list_dir(cluster_manager, mock_sftpclient):
+    cluster_manager.connect()
+    # Create two mocked SFTPAttributes, one directory and one file
+    file_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
+    file_attr_mock.filename = "myfile.txt"
+    file_attr_mock.longname = "-rw-r--r-- 1 user group 1234 date myfile.txt"
+    file_attr_mock.st_mode = 0o100644  # indicates a regular file
+
+    dir_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
+    dir_attr_mock.filename = "somedir"
+    dir_attr_mock.longname = "drwxr-xr-x 2 user group 4096 date somedir"
+    dir_attr_mock.st_mode = 0o040755  # directory bit
+
+    # Make listdir_iter(...) return these two entries
+    mock_sftpclient.listdir_iter.return_value = [file_attr_mock, dir_attr_mock]
+
+    # Call the function under test
+    result = cluster_manager.list_dir("some/subdirectory")
+    assert result == [
+        {"name": "myfile.txt", "path": "/fake/basepath/some/subdirectory", "type": "f"},
+        {"name": "somedir", "path": "/fake/basepath/some/subdirectory", "type": "d"},
+    ]
+
+    # Check that we called listdir_iter with the correct path
+    mock_sftpclient.listdir_iter.assert_called_once_with(
+        "/fake/basepath/some/subdirectory"
+    )
+
+
+def test_exists_remote(cluster_manager, mock_sftpclient):
+    cluster_manager.connect()
+
+    assert cluster_manager.exists_remote("/foo/bar") is True
+
+    error = IOError("Test - Forced error")
+    error.errno = 3
+    mock_sftpclient.stat.side_effect = error
+    with pytest.raises(IOError):
+        cluster_manager.exists_remote("/my/nonexistent/path")
+
+    error.errno = 2
+    mock_sftpclient.stat.side_effect = error
+    assert cluster_manager.exists_remote("/foo/bar") is False
+
+
+def test_get_directory(cluster_manager, mock_sftpclient, tmpdir):
+    cluster_manager.connect()
+
+    def side_effect_False(path_str):
+        return False
+
+    cluster_manager.exists_remote = MagicMock(side_effect=side_effect_False)
+
+    with pytest.raises(FileNotFoundError):
+        cluster_manager.get_directory("server/dir", tmpdir + "/todir")
+
+    def side_effect_True(path_str):
+        return True
+
+    cluster_manager.exists_remote = MagicMock(side_effect=side_effect_True)
+
+    cluster_manager.connect()
+
+    remote_root = "remote"
+    local_root = tmpdir + "/" + "local_dest"
+
+    # 1) Mock listdir(...) so each directory returns the sub-items we want.
+    def mock_listdir(path):
+        if path == "remote":
+            # remote/ has subdir + file1
+            return ["subdir", "file1"]
+        elif path in ("remote/subdir", "remote/subdir/"):
+            # remote/subdir/ has file2
+            return ["file2"]
+        else:
+            # If we ever look inside a file or anything else, return nothing
+            return []
+
+    # 2) Mock stat(...) so we know which items are dirs vs. files.
+    #    We'll return a lightweight object with st_mode set accordingly.
+    def mock_stat(path):
+        class MockAttrs:
+            pass
+
+        attrs = MockAttrs()
+        # Our 'directories': remote, remote/subdir, remote/subdir/
+        if path in ("remote", "remote/subdir", "remote/subdir/"):
+            attrs.st_mode = 0o040755  # directory bit => stat.S_ISDIR is True
+        else:
+            attrs.st_mode = 0o100644  # file bit
+        return attrs
+
+    # 3) Mock the actual file download with get(...)
+    #    We'll create a dummy local file so the code sees something.
+    def mock_get(remote_path, local_path):
+        with open(local_path, "w") as f:
+            f.write("dummy content")
+
+    mock_sftpclient.listdir.side_effect = mock_listdir
+    mock_sftpclient.stat.side_effect = mock_stat
+    mock_sftpclient.get.side_effect = mock_get
+
+    # 4) Call the method under test
+    cluster_manager.get_directory(remote_root, str(local_root))
+
+    # 5) Verify the local files got created without infinite recursion
+    file1_path = local_root + "/" + "file1"
+    file2_path = local_root + "/" + "subdir" + "/" + "file2"
+
+    assert pathlib.Path(file1_path).exists(), "file1 was not downloaded to local"
+    assert pathlib.Path(
+        file2_path
+    ).exists(), "file2 inside subdir was not downloaded to local"
+
+    # (Optional) Check the final structure if you like
+    # print(list(local_root.rglob("*")))
+
+    """file_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
+    file_attr_mock.filename = "myfile.txt"
+    file_attr_mock.longname = "-rw-r--r-- 1 user group 1234 date myfile.txt"
+    file_attr_mock.st_mode = 0o100644  # indicates a regular file
+
+    dir_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
+    dir_attr_mock.filename = "somedir"
+    dir_attr_mock.longname = "drwxr-xr-x 2 user group 4096 date somedir"
+    dir_attr_mock.st_mode = 0o040755  # directory bit"""
+
+    # mock_sftpclient.listdir.return_value = ["myfile.txt", "myotherfile.txt"]
+
+    # cluster_manager.get_directory("server/dir", tmpdir + "/todir")
