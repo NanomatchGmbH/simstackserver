@@ -1086,3 +1086,8 @@ def test_load_extra_host_keys(cluster_manager, mock_sshclient):
     cluster_manager.load_extra_host_keys("myfile")
     assert cluster_manager._extra_hostkey_file == "myfile"
     mock_sshclient.load_host_keys.assert_called()
+
+def test_set_connect_to_unknown_hosts(cluster_manager):
+    assert cluster_manager._unknown_host_connect_workaround is False
+    cluster_manager.set_connect_to_unknown_hosts(True)
+    assert cluster_manager._unknown_host_connect_workaround is True
