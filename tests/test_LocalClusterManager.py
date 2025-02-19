@@ -215,8 +215,9 @@ def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient, tmpdi
     cluster_manager.set_connect_to_unknown_hosts(True)
     cluster_manager._calculation_basepath = tmpdir
     cluster_manager.connect()
-    mock_sshclient.connect.assert_called_once_with("fake-url", 22, username="fake-user",
-                                                    key_filename=None, compress=True)
+    mock_sshclient.connect.assert_called_once_with(
+        "fake-url", 22, username="fake-user", key_filename=None, compress=True
+    )
     assert cluster_manager.is_connected() is True
     mock_sftpclient.get_channel.assert_called_once()
 
@@ -356,9 +357,14 @@ def test_put_directory(tmpdir, cluster_manager):
     (src / "sub").mkdir()
     (src / "sub" / "fileB.txt").write_text("B")
     # Override put_file to simply copy the file using shutil.
-    cluster_manager.put_file = lambda frm, to, cb=None, bo=None: shutil.copyfile(frm, pathlib.Path(tmpdir)/to)
+    cluster_manager.put_file = lambda frm, to, cb=None, bo=None: shutil.copyfile(
+        frm, pathlib.Path(tmpdir) / to
+    )
     # Call put_directory.
-    with patch("SimStackServer.LocalClusterManager.LocalClusterManager.exists_as_directory", return_value = True):
+    with patch(
+        "SimStackServer.LocalClusterManager.LocalClusterManager.exists_as_directory",
+        return_value=True,
+    ):
         dest = cluster_manager.put_directory(str(src), "dest_dir")
     # dest should be resolved relative to _calculation_basepath.
     expected = cluster_manager.resolve_file_in_basepath("dest_dir", None)
@@ -375,20 +381,20 @@ def test_exists_remote(cluster_manager, tmpfile):
     assert cluster_manager.exists_remote("/non/existent/path") is False
 
 
-def test_get_directory(tmp_path, cluster_manager):
+def test_get_directory(tmpdir, cluster_manager):
     # Prepare a dummy "remote" tree in the local filesystem.
-    """remote_dir = tmp_path / "remote"
+    cluster_manager._calculation_basepath = tmpdir
+    tmp_path = pathlib.Path(tmpdir)
+    remote_dir = tmp_path / "remote"
     remote_dir.mkdir()
     (remote_dir / "file1.txt").write_text("F1")
     (remote_dir / "subdir").mkdir()
     (remote_dir / "subdir" / "file2.txt").write_text("F2")
-    # Override resolve_file_in_basepath to use the tmp_path.
-    cluster_manager.resolve_file_in_basepath = lambda f, b: str(remote_dir / f)
     # Call get_directory to copy the "remote" tree to a destination.
     dest_dir = tmp_path / "dest"
     cluster_manager.get_directory("remote", str(dest_dir))
     assert (dest_dir / "file1.txt").exists()
-    assert (dest_dir / "subdir" / "file2.txt").exists()"""
+    assert (dest_dir / "subdir" / "file2.txt").exists()
 
 
 def test_put_file_success(tmp_path, cluster_manager):
@@ -421,21 +427,21 @@ def test_remote_open(tmp_path, cluster_manager):
     assert content == "remote content"
 
 
-def test_list_dir(tmp_path, cluster_manager):
+def test_list_dir(tmpdir, cluster_manager):
+    cluster_manager._calculation_basepath = tmpdir
     # Create a dummy directory with a file and a subdirectory.
-    """test_dir = tmp_path / "list_test"
+    tmp_path = pathlib.Path(tmpdir)
+    test_dir = tmp_path / "list_test"
     test_dir.mkdir()
     (test_dir / "file.txt").write_text("data")
     (test_dir / "subdir").mkdir()
-    # Override resolve_file_in_basepath to return test_dir.
-    cluster_manager.resolve_file_in_basepath = lambda f, b: str(test_dir)
     # Use os.scandir in list_dir.
-    result = cluster_manager.list_dir("ignored")
+    result = cluster_manager.list_dir("list_test")
     expected = []
     for entry in os.scandir(str(test_dir)):
         typ = "d" if entry.is_dir() else "f"
         expected.append({"name": entry.name, "path": str(test_dir), "type": typ})
-    assert result == expected"""
+    assert result == expected
 
 
 def test_get_default_queue(cluster_manager):
@@ -570,11 +576,6 @@ def test_get_url_for_workflow(cluster_manager):
     assert url == "http://dummy:404@localhost:9999/workflow1"
 
 
-import socket
-import pytest
-from unittest.mock import MagicMock
-from SimStackServer.LocalClusterManager import LocalClusterManager
-
 def test__is_socket_closed_returns_false_when_data():
     """
     Simulate an open socket by having recv return non-empty data.
@@ -584,6 +585,7 @@ def test__is_socket_closed_returns_false_when_data():
     dummy_sock.recv.return_value = b"hello"  # non-empty data
     result = LocalClusterManager._is_socket_closed(dummy_sock)
     assert result is False
+
 
 def test__is_socket_closed_returns_true_when_empty():
     """
@@ -595,6 +597,7 @@ def test__is_socket_closed_returns_true_when_empty():
     result = LocalClusterManager._is_socket_closed(dummy_sock)
     assert result is True
 
+
 def test__is_socket_closed_returns_false_on_blocking_error():
     """
     If recv raises BlockingIOError, the socket is open (but no data available),
@@ -605,6 +608,7 @@ def test__is_socket_closed_returns_false_on_blocking_error():
     result = LocalClusterManager._is_socket_closed(dummy_sock)
     assert result is False
 
+
 def test__is_socket_closed_returns_true_on_connection_reset():
     """
     If recv raises ConnectionResetError, _is_socket_closed should return True.
@@ -613,6 +617,7 @@ def test__is_socket_closed_returns_true_on_connection_reset():
     dummy_sock.recv.side_effect = ConnectionResetError
     result = LocalClusterManager._is_socket_closed(dummy_sock)
     assert result is True
+
 
 def test__is_socket_closed_unexpected_exception():
     """
