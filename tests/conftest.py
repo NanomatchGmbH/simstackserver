@@ -35,6 +35,20 @@ def tmpfileWaNoXml(tmp_path):
     # If you only need the path:
     yield xmlfile
 
+@pytest.fixture
+def tmpfile(tmp_path):
+    """Create a file named 'WaNo.xml' in a unique temp dir."""
+    newfile = tmp_path / "testfile.dat"
+
+    newfile.touch()
+
+    # If you need an open file handle:
+    # with path.open("w") as f:
+    #     yield f
+
+    # If you only need the path:
+    yield newfile
+
 
 @pytest.fixture
 def tmpWaNoRoot(tmpfileWaNoXml, tmpdir):
