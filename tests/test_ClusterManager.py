@@ -416,16 +416,17 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
         # And a .recv call to read the server response
         mock_socket.recv.assert_called()
 
+    fake_stderr = []
+    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+    # Patch exec_command to return mocked stdout/stderr
+    cluster_manager.exec_command = MagicMock(
+        return_value=(fake_stdout, fake_stderr)
+    )
+    mock_tunnel = MagicMock()
     with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
         # paramiko_tunnel normally returns (new_url, tunnel),
         # so let's return a dummy URL and a mock tunnel object.
-        fake_stderr = []
-        fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
-        # Patch exec_command to return mocked stdout/stderr
-        cluster_manager.exec_command = MagicMock(
-            return_value=(fake_stdout, fake_stderr)
-        )
-        mock_tunnel = MagicMock()
+
         mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
 
         with patch("SimStackServer.__version__", new="7.1.2"):
@@ -441,6 +442,29 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     mock_socket.send.assert_called()
     # And a .recv call to read the server response
     mock_socket.recv.assert_called()
+
+
+    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
+        # paramiko_tunnel normally returns (new_url, tunnel),
+        # so let's return a dummy URL and a mock tunnel object.
+
+        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+        cluster_manager.get_http_server_address = MagicMock(return_value = "127.0.1.2")
+        with patch("SimStackServer.__version__", new="6.1.2"):
+            cluster_manager.connect()
+            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=True, verbose=True)
+
+            with patch.object(cluster_manager, "get_http_server_address",
+                              side_effect=Exception):
+                # Now, any code calling cluster_manager.get_http_server_address()
+                # will raise ConnectionError instead of returning normally.
+
+                # If your code calls get_http_server_address() inside connect_zmq_tunnel(...),
+                # you can do:
+                with pytest.raises(Exception):
+                    cluster_manager.connect_zmq_tunnel(
+                        "some_fake_command", connect_http=True, verbose=True
+                    )
 
 
 def test_send_shutdown_message(cluster_manager, mock_zmq_context):
@@ -542,14 +566,7 @@ def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
 
 
 def test_get_http_server_address(cluster_manager, mock_zmq_context):
-    # Mock out the reply from the server for the 'get_http_server_address()' call
-    mock_socket = mock_zmq_context.socket.return_value
-    mock_socket.recv.return_value = Message.dict_message(
-        MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"}
-    )
-    # Use the same socket in the cluster_manager
-    cluster_manager._socket = mock_socket
-
+    cluster_manager._sshprivatekeyfilename = "/fake/ssh/key"
     # Patch sshtunnel.SSHTunnelForwarder so it won't do a real SSH connection
     with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
         # The forwarder instance returned by the constructor:
@@ -565,6 +582,14 @@ def test_get_http_server_address(cluster_manager, mock_zmq_context):
         # The forwarder won't raise an error when start() is called
         mock_forwarder_instance.start.return_value = None
 
+        # Mock out the reply from the server for the 'get_http_server_address()' call
+        mock_socket = mock_zmq_context.socket.return_value
+        mock_socket.recv.return_value = Message.dict_message(
+            MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"}
+        )
+        # Use the same socket in the cluster_manager
+        cluster_manager._socket = mock_socket
+
         cluster_manager.connect()
         address = cluster_manager.get_http_server_address()
         assert address == "http://dummy:404@localhost:9999"
@@ -573,13 +598,45 @@ def test_get_http_server_address(cluster_manager, mock_zmq_context):
         mock_forwarder_cls.assert_called_once_with(
             ("fake-url", 22),  # (self._url, self._port)
             ssh_username="fake-user",
-            ssh_pkey=None,  # key_filename might be None or something else
+            ssh_pkey="/fake/ssh/key",  # key_filename might be None or something else
             threaded=False,
             remote_bind_address=("127.0.0.1", 505),
         )
 
         # start() should have been called on the forwarder
         mock_forwarder_instance.start.assert_called_once()
+
+        mock_forwarder_instance.is_alive = False
+        cluster_manager.connect()
+        with pytest.raises(sshtunnel.BaseSSHTunnelForwarderError, match="Cannot start ssh tunnel."):
+            cluster_manager.get_http_server_address()
+
+
+def test_get_http_server_address_connect_error(cluster_manager, mock_zmq_context):
+    # Patch sshtunnel.SSHTunnelForwarder so it won't do a real SSH connection
+    with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
+        # The forwarder instance returned by the constructor:
+        mock_forwarder_instance = MagicMock()
+        mock_forwarder_cls.return_value = mock_forwarder_instance
+
+        # Pretend the tunnel is "alive"
+        mock_forwarder_instance.is_alive = True
+
+        # Suppose the forwarder binds on local port 9999
+        mock_forwarder_instance.local_bind_port = 9999
+
+        # The forwarder won't raise an error when start() is called
+        mock_forwarder_instance.start.return_value = None
+        mock_socket = mock_zmq_context.socket.return_value
+        mock_socket.recv.return_value = Message.dict_message(
+            MTS.ACK, {"http_user": "dummy", "http_pass": "404"}
+        )
+        # Use the same socket in the cluster_manager
+        cluster_manager._socket = mock_socket
+        cluster_manager.connect()
+        with pytest.raises(ConnectionError):
+            cluster_manager.get_http_server_address()
+
 
 
 def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftpclient):
@@ -925,19 +982,90 @@ def test_get_directory(cluster_manager, mock_sftpclient, tmpdir):
         file2_path
     ).exists(), "file2 inside subdir was not downloaded to local"
 
-    # (Optional) Check the final structure if you like
-    # print(list(local_root.rglob("*")))
 
-    """file_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    file_attr_mock.filename = "myfile.txt"
-    file_attr_mock.longname = "-rw-r--r-- 1 user group 1234 date myfile.txt"
-    file_attr_mock.st_mode = 0o100644  # indicates a regular file
+def test_send_clearserverstate_message(cluster_manager, mock_zmq_context):
+    """
+    Test that send_clearserverstate_message() sends the correct message
+    and calls _recv_ack_message().
+    """
+    mock_socket = mock_zmq_context.socket.return_value
+    cluster_manager._socket = mock_socket
 
-    dir_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    dir_attr_mock.filename = "somedir"
-    dir_attr_mock.longname = "drwxr-xr-x 2 user group 4096 date somedir"
-    dir_attr_mock.st_mode = 0o040755  # directory bit"""
+    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
+        cluster_manager.send_clearserverstate_message()
 
-    # mock_sftpclient.listdir.return_value = ["myfile.txt", "myotherfile.txt"]
+    # Check that the socket was called with the correct message
+    mock_socket.send.assert_called_once_with(Message.clearserverstate_message())
+    # Check that we got an ACK
+    mock_recv_ack.assert_called_once()
 
-    # cluster_manager.get_directory("server/dir", tmpdir + "/todir")
+
+def test_delete_wf(cluster_manager, mock_zmq_context):
+    """
+    Test delete_wf() sends the correct 'delete_wf_message' and logs a debug.
+    """
+    mock_socket = mock_zmq_context.socket.return_value
+    cluster_manager._socket = mock_socket
+
+    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack, \
+         patch.object(cluster_manager._logger, "debug") as mock_debug:
+        cluster_manager.delete_wf("some_workflow")
+
+    # The cluster manager should send a delete_wf_message with 'some_workflow'
+    mock_socket.send.assert_called_once_with(Message.delete_wf_message("some_workflow"))
+    # Make sure _recv_ack_message() was called
+    mock_recv_ack.assert_called_once()
+    # Confirm a debug log was generated
+    # Because the code does string interpolation itself, we expect one argument.
+    mock_debug.assert_called_once_with("Sent delete WF message for submitname %s" % ("some_workflow"))
+
+
+def test_get_workflow_list(cluster_manager, mock_zmq_context):
+    """
+    Test get_workflow_list() sends the correct list_wfs_message and returns 'workflows' from the server.
+    """
+    mock_socket = mock_zmq_context.socket.return_value
+    cluster_manager._socket = mock_socket
+
+    # Suppose the server replies with an ACK plus a workflows list
+    with patch.object(cluster_manager, "_recv_message", return_value=(MTS.ACK, {"workflows": ["wf1", "wf2"]})) as mock_recv:
+        result = cluster_manager.get_workflow_list()
+
+    # We should have sent the list_wfs_message:
+    mock_socket.send.assert_called_once_with(Message.list_wfs_message())
+    # Check that we got the right data from _recv_message
+    mock_recv.assert_called_once()
+    # And the method returns ["wf1", "wf2"]
+    assert result == ["wf1", "wf2"]
+
+def test_is_directory_true(cluster_manager, mock_sftpclient):
+    """
+    If st_mode indicates a directory (0o040755), is_directory should return True.
+    """
+    cluster_manager.connect()
+
+    dir_stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
+    dir_stat_mock.st_mode = 0o040755  # Directory bit set
+    mock_sftpclient.stat.return_value = dir_stat_mock
+
+    result = cluster_manager.is_directory("some/path")
+    assert result is True
+    # Check the .stat call
+    mock_sftpclient.stat.assert_called()
+
+
+def test_is_directory_false(cluster_manager, mock_sftpclient):
+    """
+    If st_mode indicates a file (0o100644) or anything that's not a directory,
+    is_directory should return False.
+    """
+    cluster_manager.connect()
+
+    file_stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
+    file_stat_mock.st_mode = 0o100644  # Regular file
+    mock_sftpclient.stat.return_value = file_stat_mock
+
+    result = cluster_manager.is_directory("some/path")
+    assert result is False
+    # Check the .stat call
+    mock_sftpclient.stat.assert_called()
