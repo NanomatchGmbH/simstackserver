@@ -178,6 +178,7 @@ def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient):
     Test that connect() calls paramiko.SSHClient.connect and opens SFTP.
     """
     mock_sftpclient.st_mode = 0
+    cluster_manager.set_connect_to_unknown_hosts(True)
     cluster_manager.connect()
     mock_sshclient.connect.assert_called_once_with(
         "fake-url", 22, username="fake-user", key_filename=None, compress=True
@@ -193,46 +194,160 @@ def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient)
     mock_sshclient.get_transport.return_value = None
     assert cluster_manager.is_connected() is False
 
-
-def test_disconnect(
-    cluster_manager,
-    mock_zmq_context,
-    mock_sshclient,
-    mock_sftpclient,
-    mock_sshtunnel_forwarder,
-):
+def test_connection_context_already_connected(cluster_manager):
     """
-    #Test that disconnect() closes the SFTP client and SSH client.
+    If we are already connected, connection_context() should yield None
+    without calling connect_ssh_and_zmq_if_disconnected,
+    but disconnect when the context ends.
     """
-    # Simulate an open tunnel
+    cluster_manager.is_connected = MagicMock(return_value=True)
 
-    mock_sshtunnel_forwarder.is_alive = True
+    with patch.object(cluster_manager, "connect_ssh_and_zmq_if_disconnected") as mock_connect, \
+         patch.object(cluster_manager, "disconnect") as mock_disconnect:
+        with cluster_manager.connection_context() as result:
+            # Because already connected, we expect yield None
+            assert result is None
+            # Ensure we did NOT call connect_ssh_and_zmq_if_disconnected
+            mock_connect.assert_not_called()
 
-    """fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
-    fake_stderr = []
-    # Patch exec_command to return mocked stdout/stderr
-    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
+        # Exiting the context calls disconnect
+        mock_disconnect.assert_called_once()
 
-    # We'll need a mock socket for ZMQ so we don't do actual network calls:
-    mock_socket = mock_zmq_context.socket.return_value
-    mock_socket.recv.return_value = Message.dict_message(MTS.CONNECT, {"info": "connected"})
-    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
-        # paramiko_tunnel normally returns (new_url, tunnel),
-        # so let's return a dummy URL and a mock tunnel object.
-        mock_tunnel = MagicMock()
-        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+def test_connection_context_not_connected(cluster_manager):
+    """
+    If we are not connected, connection_context() should call
+    connect_ssh_and_zmq_if_disconnected(...), yield its result,
+    and then call disconnect at the end.
+    """
+    cluster_manager.is_connected = MagicMock(return_value=False)
 
-        # Make the normal connect (SSH) call; it will run our patch
-        cluster_manager.connect()
-        cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)"""
+    # We'll pretend connect_ssh_and_zmq_if_disconnected returns "some_tunnel_info"
+    with patch.object(cluster_manager, "connect_ssh_and_zmq_if_disconnected", return_value="some_tunnel_info") as mock_connect, \
+         patch.object(cluster_manager, "disconnect") as mock_disconnect:
+        with cluster_manager.connection_context() as result:
+            # Because not connected, we yield the value from connect_ssh_and_zmq_if_disconnected
+            assert result == "some_tunnel_info"
+            mock_connect.assert_called_once_with(connect_http=False, verbose=False)
 
-    cluster_manager.connect()
+        # Exiting the context calls disconnect
+        mock_disconnect.assert_called_once()
+
+
+def test_connect_ssh_and_zmq_if_disconnected_already_connected(cluster_manager):
+    """
+    If is_connected() is True, connect_ssh_and_zmq_if_disconnected should do nothing.
+    """
+    # Mock is_connected to return True
+    cluster_manager.is_connected = MagicMock(return_value=True)
+
+    with patch.object(cluster_manager, "connect") as mock_connect, \
+            patch.object(cluster_manager, "connect_zmq_tunnel") as mock_tunnel, \
+            patch.object(cluster_manager, "_get_server_command") as mock_cmd:
+        cluster_manager.connect_ssh_and_zmq_if_disconnected(connect_http=False, verbose=False)
+
+    mock_connect.assert_not_called()
+    mock_cmd.assert_not_called()
+    mock_tunnel.assert_not_called()
+
+def test_connect_ssh_and_zmq_if_disconnected_not_connected(cluster_manager):
+    """
+    If is_connected() is False, the method should call:
+      - connect()
+      - _get_server_command()
+      - connect_zmq_tunnel(...)
+    """
+    cluster_manager.is_connected = MagicMock(return_value=False)
+
+    with patch.object(cluster_manager, "connect") as mock_connect, \
+         patch.object(cluster_manager, "_get_server_command", return_value="myservercmd") as mock_cmd, \
+         patch.object(cluster_manager, "connect_zmq_tunnel") as mock_tunnel:
+
+        cluster_manager.connect_ssh_and_zmq_if_disconnected(connect_http=True, verbose=True)
+
+    # Now we expect the following calls:
+    mock_connect.assert_called_once()
+    mock_cmd.assert_called_once()
+    mock_tunnel.assert_called_once_with("myservercmd", connect_http=True, verbose=True)
+
+
+def test_disconnect_all_set(cluster_manager):
+    """
+    Test that disconnect() calls close() on socket, sftp_client,
+    ssh_client, and handles _http_server_tunnel and _zmq_ssh_tunnel correctly.
+    """
+    # 1) Mock everything the method checks.
+    mock_socket = MagicMock()
+    mock_sftp = MagicMock()
+    mock_sshclient = MagicMock()
+
+    # The http tunnel forwarder:
+    mock_http_tunnel = MagicMock()
+    # e.g. it has a _server_list with 2 "servers"
+    mock_http_tunnel._server_list = [MagicMock(), MagicMock()]
+    # each of these servers has .timeout set
+    # ._transport is also present
+    mock_transport = MagicMock()
+    mock_http_tunnel._transport = mock_transport
+
+    # The zmq tunnel:
+    mock_zmq_tunnel = MagicMock()
+    # ensure it has a "kill" attribute
+    mock_zmq_tunnel.kill = MagicMock()
+
+    # 2) Assign them all to the cluster_manager
+    cluster_manager._socket = mock_socket
+    cluster_manager._sftp_client = mock_sftp
+    cluster_manager._ssh_client = mock_sshclient
+    cluster_manager._http_server_tunnel = mock_http_tunnel
+    cluster_manager._zmq_ssh_tunnel = mock_zmq_tunnel
+
+    # 3) Call the method under test
     cluster_manager.disconnect()
 
-    mock_sftpclient.close.assert_called_once()
+    # 4) Verify each block's side effects:
+    #    a) socket and sftp close
+    mock_socket.close.assert_called_once()
+    mock_sftp.close.assert_called_once()
+
+    #    b) ssh_client close (no if check => always called)
     mock_sshclient.close.assert_called_once()
 
-    # mock_sshtunnel_forwarder.stop.assert_called_once()
+    #    c) http_server_tunnel is not None => sets each _srv.timeout = 0.01
+    for srv in mock_http_tunnel._server_list:
+        assert srv.timeout == 0.01
+
+    #        then calls _transport.close() and .stop()
+    mock_transport.close.assert_called_once()
+    mock_http_tunnel.stop.assert_called_once()
+
+    #    d) zmq_ssh_tunnel is not None => has kill => calls kill()
+    mock_zmq_tunnel.kill.assert_called_once()
+
+
+def test_disconnect_minimal(cluster_manager):
+    """
+    Test that disconnect() gracefully handles None attributes.
+    Only _ssh_client is guaranteed to be closed.
+    """
+    # By default everything is None, except _ssh_client,
+    # which the fixture usually mocks. If not, mock it:
+    mock_sshclient = MagicMock()
+    cluster_manager._ssh_client = mock_sshclient
+    cluster_manager._socket = None
+    cluster_manager._sftp_client = None
+    cluster_manager._http_server_tunnel = None
+    cluster_manager._zmq_ssh_tunnel = None
+
+    cluster_manager.disconnect()
+
+    # Only the ssh_client is guaranteed to close. No other calls happen.
+    mock_sshclient.close.assert_called_once()
+
+def test_delete_file(cluster_manager, mock_sftpclient):
+    cluster_manager._sftp_client = mock_sftpclient
+    cluster_manager.connect()
+    cluster_manager.delete_file("myfile")
+    mock_sftpclient.remove.assert_called_once()
 
 
 def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
@@ -362,6 +477,10 @@ def test_rmtree(cluster_manager, mock_sftpclient):
 
     mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
 
+    cluster_manager.exists_as_directory = MagicMock(return_value=False)
+    res = cluster_manager.rmtree("testdir")
+    assert res is None
+
     # Mock out exists_as_directory to always True for these paths
     cluster_manager.exists_as_directory = MagicMock(return_value=True)
 
@@ -373,6 +492,31 @@ def test_rmtree(cluster_manager, mock_sftpclient):
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir/subdir1")
     mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir")
 
+
+def test_remote_open(cluster_manager, mock_sftpclient):
+    cluster_manager._sftp_client = mock_sftpclient
+    cluster_manager.remote_open("myfile", 'r')
+    mock_sftpclient.open.assert_called_once()
+
+def test_default_queue(cluster_manager):
+    assert cluster_manager.get_default_queue() == "fake-queue"
+
+def test_exec_command(cluster_manager):
+    mock_sshclient_instance = MagicMock(spec=paramiko.SSHClient)
+    mock_stdin = MagicMock()
+    mock_stdout = MagicMock()
+    mock_stderr = MagicMock()
+    mock_sshclient_instance.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+    with patch(
+        "paramiko.SSHClient", return_value=mock_sshclient_instance
+    ) as mock_sshclient_cls:
+
+        stdout, stderr = cluster_manager.exec_command("test-command")
+
+    mock_sshclient_instance.exec_command.assert_called_once_with("test-command")
+
+    assert stdout is mock_stdout
+    assert stderr is mock_stderr
 
 def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     """
@@ -465,6 +609,49 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
                     cluster_manager.connect_zmq_tunnel(
                         "some_fake_command", connect_http=True, verbose=True
                     )
+
+
+def test_connect_zmq_tunnel_extra_config(cluster_manager, mock_zmq_context):
+    fake_stderr = []
+    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+    # Patch exec_command to return mocked stdout/stderr
+    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
+    mock_tunnel = MagicMock()
+
+    cluster_manager._extra_config = "some_config"
+
+    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel, \
+        patch.object(cluster_manager, "exists", return_value=False) as mock_method:
+        # paramiko_tunnel normally returns (new_url, tunnel),
+        # so let's return a dummy URL and a mock tunnel object.
+
+        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+
+        cluster_manager.connect()
+        with pytest.raises(ConnectionError):
+            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
+
+def test_connect_zmq_tunnel_other_queuing(cluster_manager, mock_zmq_context):
+    fake_stderr = []
+    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
+    # Patch exec_command to return mocked stdout/stderr
+    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
+    mock_tunnel = MagicMock()
+
+    cluster_manager._queueing_system = "pbs"
+
+    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel, \
+        patch.object(cluster_manager, "exists", return_value=False) as mock_method:
+        # paramiko_tunnel normally returns (new_url, tunnel),
+        # so let's return a dummy URL and a mock tunnel object.
+
+        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
+
+        cluster_manager.connect()
+        with pytest.raises(ConnectionError):
+            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
+
+
 
 
 def test_send_shutdown_message(cluster_manager, mock_zmq_context):
@@ -692,7 +879,7 @@ def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftp
 
 def test_get_server_command_for_software_directory(cluster_manager, mock_sftpclient):
     cluster_manager.connect()
-
+    cluster_manager._queueing_system = "AiiDA"
     not_implemented_names = ["V2", "V3", "V4"]
     for nin in not_implemented_names:
 
@@ -715,7 +902,6 @@ def test_get_server_command_for_software_directory(cluster_manager, mock_sftpcli
             entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
             entry_mock.filename = imp_name
             entry_mock.st_mode = 0o040755  # Directory bit
-
             return [entry_mock]
 
         mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
@@ -725,6 +911,34 @@ def test_get_server_command_for_software_directory(cluster_manager, mock_sftpcli
             res
             == f"{imp_name}/envs/simstack_server_v6/bin/micromamba run -r {imp_name} --name=simstack_server_v6 SimStackServer"
         )
+
+def test_get_server_command_for_software_directory_no_micromamba(cluster_manager, mock_sftpclient):
+    cluster_manager.connect()
+
+    with patch("SimStackServer.ClusterManager.ClusterManager.exists", return_value=False):
+        vname="V6"
+        def mock_listdir_attr(path):
+            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
+            entry_mock.filename = vname
+            entry_mock.st_mode = 0o040755  # Directory bit
+            return [entry_mock]
+
+        mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
+        with pytest.raises(FileNotFoundError):
+            cluster_manager.get_server_command_from_software_directory(vname)
+
+
+def test_get_server_command(cluster_manager):
+    # Patch the method get_server_command_from_software_directory on the cluster_manager instance
+    with patch.object(cluster_manager, "get_server_command_from_software_directory",
+                      return_value="dummy_cmd") as mock_method:
+        result = cluster_manager._get_server_command()
+
+        # Check that the result is what we expect
+        assert result == "dummy_cmd"
+
+        # Verify that the patched method was called once with the correct software directory
+        mock_method.assert_called_once_with(cluster_manager._software_directory)
 
 
 def test_get_workflow_job_list_success(cluster_manager, mock_zmq_context):
@@ -1086,6 +1300,7 @@ def test_load_extra_host_keys(cluster_manager, mock_sshclient):
     cluster_manager.load_extra_host_keys("myfile")
     assert cluster_manager._extra_hostkey_file == "myfile"
     mock_sshclient.load_host_keys.assert_called()
+
 
 def test_set_connect_to_unknown_hosts(cluster_manager):
     assert cluster_manager._unknown_host_connect_workaround is False
