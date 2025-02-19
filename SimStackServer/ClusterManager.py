@@ -33,6 +33,7 @@ from SimStackServer.Util.FileUtilities import (
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
+
 class ClusterManager:
     def __init__(
         self,
@@ -761,6 +762,7 @@ class ClusterManager:
             return False
         return transport.is_active()
 
+    # ToDo: Is this wrong? Should this not return False?
     def exists(self, path):
         try:
             return self.exists_as_directory(path)
