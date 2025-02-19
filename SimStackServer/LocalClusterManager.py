@@ -254,12 +254,12 @@ class LocalClusterManager:
 
     def exists_remote(self, path):
         return os.path.exists(path)
-
+    #ToDo: Check if in usage anywhere except in test -
     def get_directory(
         self,
         from_directory_on_server: str,
         to_directory: str,
-        optional_callback=None,
+        optional_callback=None, # not used?
         basepath_override=None,
     ):
         from_directory_on_server_resolved = self.resolve_file_in_basepath(
