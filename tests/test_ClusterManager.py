@@ -419,9 +419,7 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     fake_stderr = []
     fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
     # Patch exec_command to return mocked stdout/stderr
-    cluster_manager.exec_command = MagicMock(
-        return_value=(fake_stdout, fake_stderr)
-    )
+    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
     mock_tunnel = MagicMock()
     with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
         # paramiko_tunnel normally returns (new_url, tunnel),
@@ -443,19 +441,21 @@ def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
     # And a .recv call to read the server response
     mock_socket.recv.assert_called()
 
-
     with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
         # paramiko_tunnel normally returns (new_url, tunnel),
         # so let's return a dummy URL and a mock tunnel object.
 
         mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-        cluster_manager.get_http_server_address = MagicMock(return_value = "127.0.1.2")
+        cluster_manager.get_http_server_address = MagicMock(return_value="127.0.1.2")
         with patch("SimStackServer.__version__", new="6.1.2"):
             cluster_manager.connect()
-            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=True, verbose=True)
+            cluster_manager.connect_zmq_tunnel(
+                "some_fake_command", connect_http=True, verbose=True
+            )
 
-            with patch.object(cluster_manager, "get_http_server_address",
-                              side_effect=Exception):
+            with patch.object(
+                cluster_manager, "get_http_server_address", side_effect=Exception
+            ):
                 # Now, any code calling cluster_manager.get_http_server_address()
                 # will raise ConnectionError instead of returning normally.
 
@@ -608,7 +608,9 @@ def test_get_http_server_address(cluster_manager, mock_zmq_context):
 
         mock_forwarder_instance.is_alive = False
         cluster_manager.connect()
-        with pytest.raises(sshtunnel.BaseSSHTunnelForwarderError, match="Cannot start ssh tunnel."):
+        with pytest.raises(
+            sshtunnel.BaseSSHTunnelForwarderError, match="Cannot start ssh tunnel."
+        ):
             cluster_manager.get_http_server_address()
 
 
@@ -636,7 +638,6 @@ def test_get_http_server_address_connect_error(cluster_manager, mock_zmq_context
         cluster_manager.connect()
         with pytest.raises(ConnectionError):
             cluster_manager.get_http_server_address()
-
 
 
 def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftpclient):
@@ -1007,8 +1008,9 @@ def test_delete_wf(cluster_manager, mock_zmq_context):
     mock_socket = mock_zmq_context.socket.return_value
     cluster_manager._socket = mock_socket
 
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack, \
-         patch.object(cluster_manager._logger, "debug") as mock_debug:
+    with patch.object(
+        cluster_manager, "_recv_ack_message"
+    ) as mock_recv_ack, patch.object(cluster_manager._logger, "debug") as mock_debug:
         cluster_manager.delete_wf("some_workflow")
 
     # The cluster manager should send a delete_wf_message with 'some_workflow'
@@ -1017,7 +1019,9 @@ def test_delete_wf(cluster_manager, mock_zmq_context):
     mock_recv_ack.assert_called_once()
     # Confirm a debug log was generated
     # Because the code does string interpolation itself, we expect one argument.
-    mock_debug.assert_called_once_with("Sent delete WF message for submitname %s" % ("some_workflow"))
+    mock_debug.assert_called_once_with(
+        "Sent delete WF message for submitname %s" % ("some_workflow")
+    )
 
 
 def test_get_workflow_list(cluster_manager, mock_zmq_context):
@@ -1028,7 +1032,11 @@ def test_get_workflow_list(cluster_manager, mock_zmq_context):
     cluster_manager._socket = mock_socket
 
     # Suppose the server replies with an ACK plus a workflows list
-    with patch.object(cluster_manager, "_recv_message", return_value=(MTS.ACK, {"workflows": ["wf1", "wf2"]})) as mock_recv:
+    with patch.object(
+        cluster_manager,
+        "_recv_message",
+        return_value=(MTS.ACK, {"workflows": ["wf1", "wf2"]}),
+    ) as mock_recv:
         result = cluster_manager.get_workflow_list()
 
     # We should have sent the list_wfs_message:
@@ -1037,6 +1045,7 @@ def test_get_workflow_list(cluster_manager, mock_zmq_context):
     mock_recv.assert_called_once()
     # And the method returns ["wf1", "wf2"]
     assert result == ["wf1", "wf2"]
+
 
 def test_is_directory_true(cluster_manager, mock_sftpclient):
     """
@@ -1069,3 +1078,11 @@ def test_is_directory_false(cluster_manager, mock_sftpclient):
     assert result is False
     # Check the .stat call
     mock_sftpclient.stat.assert_called()
+
+
+def test_load_extra_host_keys(cluster_manager, mock_sshclient):
+    cluster_manager._ssh_client = mock_sshclient
+    cluster_manager.connect()
+    cluster_manager.load_extra_host_keys("myfile")
+    assert cluster_manager._extra_hostkey_file == "myfile"
+    mock_sshclient.load_host_keys.assert_called()
