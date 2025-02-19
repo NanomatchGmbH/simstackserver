@@ -440,7 +440,7 @@ class ClusterManager:
                 % VDIR
             )
             VDIR = "V6"
-
+        #ToDo: The line below is never executed - we either throw an error or the version is set to V6
         if VDIR != "V6":
             myenv = "simstack_server"
         else:
