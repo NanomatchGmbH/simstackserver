@@ -48,6 +48,7 @@ class LocalClusterManager:
         queueing_system,
         default_queue,
         software_directory=None,
+        filegen_mode = False
     ):
         """
 
@@ -58,6 +59,7 @@ class LocalClusterManager:
         :param user (str): Username on the respective server.
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
+        :param filegen_mode (bool): If True: Do not submit anything and stop once the first WaNo is rendered
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
@@ -71,8 +73,6 @@ class LocalClusterManager:
         self._user = user
         self._sshprivatekeyfilename = sshprivatekey
         self._default_queue = default_queue
-        self._ssh_client = paramiko.SSHClient()
-        self._ssh_client.load_system_host_keys()
         self._should_be_connected = False
         self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
@@ -81,13 +81,13 @@ class LocalClusterManager:
         self._socket = None
         self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
         self._http_server_tunnel = None
-        self._zmq_ssh_tunnel = None
         self._http_user = None
         self._http_pass = None
         self._http_base_address = None
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
         self._software_directory = software_directory
+        self._filegen_mode = filegen_mode
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -108,9 +108,7 @@ class LocalClusterManager:
         :param filename (str): Filename of the extra hostkey db
         :return:
         """
-        assert self._ssh_client is not None, "SSH Client not yet initialized"
-        self._extra_hostkey_file = filename
-        self._ssh_client.load_host_keys(filename)
+        return
 
     def save_hostkeyfile(self, filename):
         """
@@ -118,28 +116,8 @@ class LocalClusterManager:
         :param filename (str): File to save to.
         :return:
         """
-        self._ssh_client.save_host_keys(filename)
+        return
 
-    def get_new_connected_ssh_channel(self):
-        key_filename = None
-        if self._sshprivatekeyfilename != "UseSystemDefault":
-            key_filename = self._sshprivatekeyfilename
-
-        local_ssh_client = paramiko.SSHClient()
-        local_ssh_client.load_system_host_keys()
-        if self._extra_hostkey_file is not None:
-            local_ssh_client.load_host_keys(self._extra_hostkey_file)
-        if self._unknown_host_connect_workaround:
-            local_ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-
-        local_ssh_client.connect(
-            self._url,
-            self._port,
-            username=self._user,
-            key_filename=key_filename,
-            compress=True,
-        )
-        return local_ssh_client
 
     def set_connect_to_unknown_hosts(self, connect_to_unknown_hosts):
         self._unknown_host_connect_workaround = connect_to_unknown_hosts
@@ -149,24 +127,6 @@ class LocalClusterManager:
         Connect the ssh_client and setup the sftp tunnel.
         :return: Nothing
         """
-        if not self.connection_is_localhost_and_same_user():
-            key_filename = None
-            if self._sshprivatekeyfilename != "UseSystemDefault":
-                key_filename = self._sshprivatekeyfilename
-
-            if self._unknown_host_connect_workaround:
-                self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-            self._ssh_client.connect(
-                self._url,
-                self._port,
-                username=self._user,
-                key_filename=key_filename,
-                compress=True,
-            )
-            self._ssh_client.get_transport().set_keepalive(30)
-            self._sftp_client = self._ssh_client.open_sftp()
-            self._sftp_client.get_channel().settimeout(1.0)
-            self.mkdir_p(self._calculation_basepath, basepath_override="")
         self._should_be_connected = True
 
     @contextmanager
@@ -196,11 +156,6 @@ class LocalClusterManager:
         if self._socket is not None:
             self._socket.close()
 
-        if self._sftp_client is not None:
-            self._sftp_client.close()
-
-        self._ssh_client.close()
-
         if self._http_server_tunnel is not None:
             # This handling here is purely for windows. Somehow, the transport is not closed, if not set.
             for _srv in self._http_server_tunnel._server_list:
@@ -208,14 +163,7 @@ class LocalClusterManager:
 
             self._http_server_tunnel._transport.close()
             self._http_server_tunnel.stop()
-            # print("http server stopped")
 
-        # print("Killing ZMQ tunnel")
-        if self._zmq_ssh_tunnel is not None:
-            if hasattr(self._zmq_ssh_tunnel, "kill"):
-                # This is because it can be that the tunnel was not done via paramiko subprocess
-                self._zmq_ssh_tunnel.kill()
-                # print("Killed zmq tunnel")
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
@@ -368,13 +316,10 @@ class LocalClusterManager:
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
         """
-        if self.connection_is_localhost_and_same_user():
-            p = subprocess.run(command, shell=True, capture_output=True)
-            stdout = p.stdout.decode().split("\n")
-            stderr = p.stderr.decode().split("\n")
-        else:
-            myclient = self.get_new_connected_ssh_channel()
-            stdin, stdout, stderr = myclient.exec_command(command)
+
+        p = subprocess.run(command, shell=True, capture_output=True)
+        stdout = p.stdout.decode().split("\n")
+        stderr = p.stderr.decode().split("\n")
         return stdout, stderr
 
     def get_server_command_from_software_directory(self, software_directory: str):
@@ -545,23 +490,10 @@ class LocalClusterManager:
         socket.setsockopt(zmq.LINGER, True)
         socket.setsockopt(zmq.SNDTIMEO, 2000)
         socket.setsockopt(zmq.RCVTIMEO, 2000)
-
-        from zmq import ssh
-
-        key_filename = None
-        if self._sshprivatekeyfilename != "UseSystemDefault":
-            key_filename = self._sshprivatekeyfilename
-
         connect_address = "tcp://127.0.0.1:%d" % port
-        if self._url != "localhost":
-            ssh_url = self.get_ssh_url()
-            self._zmq_ssh_tunnel = ssh.tunnel_connection(
-                socket, connect_address, ssh_url, keyfile=key_filename, paramiko=True
-            )
-        else:
-            self._zmq_ssh_tunnel = None
-            socket.connect(connect_address)
-            print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
+
+        socket.connect(connect_address)
+        print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
         # For testing if localhost == jump host, don't do anything. Otherwise, test with different user
         socket.send(Message.connect_message())
         # Windows somehow needs this amount of time before the socket is ready:
@@ -703,10 +635,6 @@ class LocalClusterManager:
         """
         if self.connection_is_localhost_and_same_user():
             return self._should_be_connected
-        transport = self._ssh_client.get_transport()
-        if transport is None:
-            return False
-        return transport.is_active()
 
     def exists(self, path):
         try:
@@ -740,12 +668,8 @@ class LocalClusterManager:
 
     def is_directory(self, path, basepath_override=None):
         resolved = self.resolve_file_in_basepath(path, basepath_override)
-        if self.connection_is_localhost_and_same_user():
-            return (Path.home() / resolved).is_dir()
-        sftpa: SFTPAttributes = self._sftp_client.stat(resolved)
-        if stat.S_ISDIR(sftpa.st_mode):
-            return True
-        return False
+        return (Path.home() / resolved).is_dir()
+
 
     def get_http_server_address(self):
         """
@@ -753,49 +677,23 @@ class LocalClusterManager:
         server tunnel if it is not present.
         :return:
         """
-        self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
 
-        if self._http_server_tunnel is None or not self._http_server_tunnel.is_alive:
-            if self._http_server_tunnel is not None:
-                self._http_server_tunnel.stop()
-            """ Reconnect starting here """
-            self._socket.send(
-                Message.get_http_server_request_message(
-                    basefolder=self.get_calculation_basepath()
-                )
+        self._socket.send(
+            Message.get_http_server_request_message(
+                basefolder=self.get_calculation_basepath()
             )
-            messagetype, message = self._recv_message()
-            if "http_port" not in message:
-                raise ConnectionError("Could not read message in http job starter.")
-            # print(message)
-            myport = int(message["http_port"])
-            self._http_user = message["http_user"]
-            self._http_pass = message["http_pass"]
-            if self.connection_is_localhost_and_same_user():
-                return "http://%s:%s@localhost:%d" % (
-                    self._http_user,
-                    self._http_pass,
-                    myport,
-                )
-            key_filename = None
-            if self._sshprivatekeyfilename != "UseSystemDefault":
-                key_filename = self._sshprivatekeyfilename
-            self._http_server_tunnel = sshtunnel.SSHTunnelForwarder(
-                (self._url, self._port),
-                ssh_username=self._user,
-                ssh_pkey=key_filename,
-                threaded=False,
-                remote_bind_address=("127.0.0.1", myport),
-            )
-            self._http_server_tunnel.start()
-
-        if not self._http_server_tunnel.is_alive:
-            raise sshtunnel.BaseSSHTunnelForwarderError("Cannot start ssh tunnel.")
-
+        )
+        messagetype, message = self._recv_message()
+        if "http_port" not in message:
+            raise ConnectionError("Could not read message in http job starter.")
+        # print(message)
+        myport = int(message["http_port"])
+        self._http_user = message["http_user"]
+        self._http_pass = message["http_pass"]
         return "http://%s:%s@localhost:%d" % (
             self._http_user,
             self._http_pass,
-            self._http_server_tunnel.local_bind_port,
+            myport,
         )
 
     def exists_as_directory(self, path):
@@ -805,7 +703,6 @@ class LocalClusterManager:
         :return bool: Exists, does not exist
         """
         if self.connection_is_localhost_and_same_user():
-            print(path)
             if Path(path).is_file():
                 raise SSHExpectedDirectoryError(
                     "Path <%s> to expected directory exists, but was not directory"
@@ -813,15 +710,6 @@ class LocalClusterManager:
                 )
             else:
                 return Path(path).is_dir()
-        try:
-            sftpa: SFTPAttributes = self._sftp_client.stat(str(path))
-        except FileNotFoundError:
-            return False
-        if stat.S_ISDIR(sftpa.st_mode):
-            return True
-        raise SSHExpectedDirectoryError(
-            "Path <%s> to expected directory exists, but was not directory" % path
-        )
 
     def mkdir_p(self, directory, basepath_override=None, mode_override=None):
         """
@@ -855,16 +743,9 @@ class LocalClusterManager:
         """
         if self._socket is not None:
             self._socket.close()
-        if self._sftp_client is not None:
-            self._sftp_client.close()
-        self._ssh_client.close()
+
         if (
             self._http_server_tunnel is not None
             and not self._http_server_tunnel.is_alive
         ):
             self._http_server_tunnel.stop()
-
-        if self._zmq_ssh_tunnel is not None:
-            if hasattr(self._zmq_ssh_tunnel, "kill"):
-                # This is because it can be that the tunnel was not done via paramiko subprocess
-                self._zmq_ssh_tunnel.kill()
