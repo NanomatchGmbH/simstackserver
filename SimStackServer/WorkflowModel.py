@@ -49,6 +49,7 @@ from nestdictmod.flatten_dict import flatten_dict
 from jinja2 import Template
 
 
+
 class ParserError(Exception):
     pass
 
@@ -2427,8 +2428,15 @@ class WFPass(XMLYMLInstantiationBase):
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
 
+class ReportCollector:
+    def __init__(self):
+        self._parents_by_uid = {}
 
-class WorkflowBase(XMLYMLInstantiationBase):
+    def announce_report(self, uid, parent_uid):
+        self._parents_by_uid[uid] = parent_uid
+
+
+class Workflow(XMLYMLInstantiationBase):
     _fields = [
         (
             "elements",
@@ -2481,6 +2489,18 @@ class WorkflowBase(XMLYMLInstantiationBase):
         super().__init__(*args, **kwargs)
         self._name = "Workflow"
         self._logger = logging.getLogger("Workflow")
+        self._input_variables = {}
+        self._output_variables = {}
+        self._prepared_aiida_variables = None
+        self._report_collector = None
+        # Assembly then knows their uid.
+        self._path_to_aiida_uuid = {}
+        self._filepath_to_aiida_uuid = {}
+        from SimStackServer.RemoteServerManager import RemoteServerManager
+
+        self._remote_server_manager = RemoteServerManager.get_instance()
+        self._result_repo = ResultRepo()
+        self._input_hashes = {}
 
     def _abs_resolve_storage(self):
         if not self.storage.startswith("/"):
@@ -2504,17 +2524,17 @@ class WorkflowBase(XMLYMLInstantiationBase):
 
     def finalize(self):
         html_doc = """<!DOCTYPE html>
-<html lang="en-us">
-<head>
-%s
-</head>
-<body>
-<li class="indent">
-%s
-</li>
-</body>
-</html>
-"""
+    <html lang="en-us">
+    <head>
+    %s
+    </head>
+    <body>
+    <li class="indent">
+    %s
+    </li>
+    </body>
+    </html>
+    """
 
         outstring_body = """"""
         headfile = join(self._get_template_dir(), "head.html")
@@ -2526,7 +2546,7 @@ class WorkflowBase(XMLYMLInstantiationBase):
                 myelement = self.elements.get_element_by_uid(node)
 
                 cp = path.commonprefix([self.storage, myelement.runtime_directory])
-                relruntimedir = myelement.runtime_directory[len(cp) :]
+                relruntimedir = myelement.runtime_directory[len(cp):]
                 if relruntimedir.startswith("/"):
                     relruntimedir = relruntimedir[1:]
                 myelement: WorkflowExecModule
@@ -2546,11 +2566,11 @@ class WorkflowBase(XMLYMLInstantiationBase):
                     body_html, pretty_print=True, method="html"
                 )
                 outstring_body += (
-                    """  <ul>
-                   %s
-                </ul>
-                """
-                    % single_element
+                        """  <ul>
+                       %s
+                    </ul>
+                    """
+                        % single_element
                 )
             except KeyError:
                 pass
@@ -2564,12 +2584,12 @@ class WorkflowBase(XMLYMLInstantiationBase):
         with open(reportname, "w") as outfile:
             outfile.write(html_doc)
 
-    @abc.abstractmethod
+
     def abort(self):
         self._field_values["status"] = JobStatus.ABORTED
         # This function has to be called from the child class
 
-    @abc.abstractmethod
+
     def delete(self):
         self._field_values["status"] = JobStatus.MARKED_FOR_DELETION
         # This function has to be called from the child class
@@ -2622,50 +2642,6 @@ class WorkflowBase(XMLYMLInstantiationBase):
 
     def set_queueing_system(self, queueing_system):
         self._field_values["queueing_system"] = queueing_system
-
-    @abc.abstractmethod
-    def all_job_abort(self):
-        raise NotImplementedError("Has to be implemented in child class")
-
-    @abc.abstractmethod
-    def delete_storage(self):
-        raise NotImplementedError("Has to be implemented in child class")
-
-    @abc.abstractmethod
-    def jobloop(self):
-        raise NotImplementedError("Has to be implemented in child class")
-
-    @abc.abstractmethod
-    def get_running_finished_job_list_formatted(self):
-        raise NotImplementedError("Has to be implemented in child class")
-
-
-class ReportCollector:
-    def __init__(self):
-        self._parents_by_uid = {}
-
-    def announce_report(self, uid, parent_uid):
-        self._parents_by_uid[uid] = parent_uid
-
-
-class Workflow(WorkflowBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._name = "Workflow"
-        self._logger = logging.getLogger("Workflow")
-        self._input_variables = {}
-        self._output_variables = {}
-        self._prepared_aiida_variables = None
-        self._report_collector = None
-        # self._report_collector  should record uids, when they happen and there place during execution
-        # Assembly then knows their uid.
-        self._path_to_aiida_uuid = {}
-        self._filepath_to_aiida_uuid = {}
-        from SimStackServer.RemoteServerManager import RemoteServerManager
-
-        self._remote_server_manager = RemoteServerManager.get_instance()
-        self._result_repo = ResultRepo()
-        self._input_hashes = {}
 
     def all_job_abort(self):
         for job in self.graph.get_running_jobs():
@@ -2884,14 +2860,6 @@ class Workflow(WorkflowBase):
                 self.graph.start(rdjob)
                 self.graph.finish(rdjob)
 
-        if False:
-            self._last_dump_time = time.time()
-            outfile1 = join(self.storage, "input_variables.yml")
-            with open(outfile1, "w") as outfile:
-                yaml.safe_dump(self._input_variables)
-            outfile2 = join(self.storage, "output_variables.yml")
-            with open(outfile2, "w") as outfile:
-                yaml.safe_dump(self._output_variables)
         if self.graph.is_workflow_finished():
             self._field_values["status"] = JobStatus.SUCCESSFUL
             self._logger.info("Workflow %s has been finished." % self.name)
@@ -2935,14 +2903,7 @@ class Workflow(WorkflowBase):
         )
         wano_dir_root = Path(join(self.storage, "workflow_data", wfem.path, "inputs"))
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
-
-        # with open(wfxml, 'rt') as infile:
-        #    xml = etree.parse(infile)
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
-        # MODELROOTDIRECT
-        # Split zwischen TrustedExecutionWaNoModelRoot
-        #  TEWaNoModelRoot(...) # kein custom exec command
-
         wmr = WaNoModelRoot(
             wano_dir_root=wano_dir_root, model_only=True, explicit_xml=explicit_wfxml
         )
@@ -3108,7 +3069,7 @@ class Workflow(WorkflowBase):
                         )
                     aiida_files.append(afile)
                     aiida_files_by_relpath[actual_tofile_rel] = afile
-        if do_aiida:
+        if do_aiida:  # pragma: no cover
             # Here we prep the aiida value dict:
             from wano_calcjob.WaNoCalcJobBase import clean_dict_for_aiida
             from wano_calcjob.WaNoCalcJobBase import WaNoCalcJob as WCJ
@@ -3178,7 +3139,7 @@ class Workflow(WorkflowBase):
                 mycm.get_directory(ext_runtime_dir, runtime_dir)
 
         staging_filename_to_aiida_obj = {}
-        if queueing_system == "AiiDA":
+        if queueing_system == "AiiDA": # pragma: no cover
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 
             myjob = AiiDAJob(myjobid)
@@ -3186,7 +3147,6 @@ class Workflow(WorkflowBase):
             aiida_to_simstack_pathmap = process_class.get_aiida_to_simstack_pathmap()
             simstack_path_to_aiida_uuid = {}
 
-        if queueing_system == "AiiDA":
             # from aiida.plugins import CalculationFactory
             # calcjob_class = CalculationFactory(wfem.name)
             pc = myjob.get_process_class()
