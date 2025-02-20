@@ -440,11 +440,8 @@ class ClusterManager:
                 % VDIR
             )
             VDIR = "V6"
-        #ToDo: The line below is never executed - we either throw an error or the version is set to V6
-        if VDIR != "V6":
-            myenv = "simstack_server"
-        else:
-            myenv = "simstack_server_v6"
+
+        myenv = "simstack_server_v6"
 
         if self._queueing_system == "AiiDA":
             myenv = "aiida"
@@ -762,7 +759,6 @@ class ClusterManager:
             return False
         return transport.is_active()
 
-    # ToDo: Is this wrong? Should this not return False?
     def exists(self, path):
         try:
             return self.exists_as_directory(path)
