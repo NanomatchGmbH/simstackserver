@@ -613,7 +613,7 @@ class LocalClusterManager:
     def get_workflow_list(self):
         if self._filegen_mode:
             self._logger.info("Listing workflows not supported in Filegenerator mode.")
-        return []
+            return []
         self._socket.send(Message.list_wfs_message())
         messagetype, message = self._recv_message()
         workflows = message["workflows"]

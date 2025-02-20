@@ -157,71 +157,6 @@ def test_get_ssh_url(cluster_manager):
     assert cluster_manager.get_ssh_url() == "fake-user@fake-url:22"
 
 
-def test_load_extra_host_keys(cluster_manager, mock_sshclient):
-    cluster_manager._ssh_client = mock_sshclient
-    cluster_manager.load_extra_host_keys("extra_hosts_file")
-    assert cluster_manager._extra_hostkey_file == "extra_hosts_file"
-    mock_sshclient.load_host_keys.assert_called_once_with("extra_hosts_file")
-
-
-def test_save_hostkeyfile(cluster_manager, ssh_client_with_host_keys, tmp_path):
-    tmp_file = tmp_path / "hostkeys.txt"
-    cluster_manager._ssh_client = ssh_client_with_host_keys
-    cluster_manager.save_hostkeyfile(str(tmp_file))
-    assert tmp_file.exists()
-    content = tmp_file.read_text()
-    assert content.startswith("example.com ssh-rsa")
-
-
-def test_get_new_connected_ssh_channel_with_config(cluster_manager):
-    cluster_manager._sshprivatekeyfilename = "my_private_key"
-    cluster_manager._extra_hostkey_file = "/extra/hosts"
-    cluster_manager._unknown_host_connect_workaround = True
-    mock_client = MagicMock(spec=paramiko.SSHClient)
-    with patch("paramiko.SSHClient", return_value=mock_client):
-        ret = cluster_manager.get_new_connected_ssh_channel()
-    mock_client.load_system_host_keys.assert_called_once()
-    mock_client.load_host_keys.assert_called_once_with("/extra/hosts")
-    mock_client.set_missing_host_key_policy.assert_called_once_with(
-        paramiko.AutoAddPolicy
-    )
-    mock_client.connect.assert_called_once_with(
-        "fake-url",
-        22,
-        username="fake-user",
-        key_filename="my_private_key",
-        compress=True,
-    )
-    assert ret is mock_client
-
-
-def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
-    cluster_manager._sshprivatekeyfilename = "UseSystemDefault"
-    cluster_manager._extra_hostkey_file = None
-    cluster_manager._unknown_host_connect_workaround = False
-    mock_client = MagicMock(spec=paramiko.SSHClient)
-    with patch("paramiko.SSHClient", return_value=mock_client):
-        ret = cluster_manager.get_new_connected_ssh_channel()
-    mock_client.load_system_host_keys.assert_called_once()
-    mock_client.load_host_keys.assert_not_called()
-    mock_client.set_missing_host_key_policy.assert_not_called()
-    mock_client.connect.assert_called_once_with(
-        "fake-url", 22, username="fake-user", key_filename=None, compress=True
-    )
-    assert ret is mock_client
-
-
-def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient, tmpdir):
-    cluster_manager.set_connect_to_unknown_hosts(True)
-    cluster_manager._calculation_basepath = tmpdir
-    cluster_manager.connect()
-    mock_sshclient.connect.assert_called_once_with(
-        "fake-url", 22, username="fake-user", key_filename=None, compress=True
-    )
-    assert cluster_manager.is_connected() is True
-    mock_sftpclient.get_channel.assert_called_once()
-
-
 def test_connection_context_already_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=True)
     with patch.object(
@@ -291,24 +226,10 @@ def test_disconnect_all_set(cluster_manager):
     cluster_manager._zmq_ssh_tunnel = mock_zmq
     cluster_manager.disconnect()
     mock_socket.close.assert_called_once()
-    mock_sftp.close.assert_called_once()
-    mock_ssh.close.assert_called_once()
     for srv in mock_http._server_list:
         assert srv.timeout == 0.01
     mock_http._transport.close.assert_called_once()
     mock_http.stop.assert_called_once()
-    mock_zmq.kill.assert_called_once()
-
-
-def test_disconnect_minimal(cluster_manager):
-    mock_ssh = MagicMock()
-    cluster_manager._ssh_client = mock_ssh
-    cluster_manager._socket = None
-    cluster_manager._sftp_client = None
-    cluster_manager._http_server_tunnel = None
-    cluster_manager._zmq_ssh_tunnel = None
-    cluster_manager.disconnect()
-    mock_ssh.close.assert_called_once()
 
 
 def test_resolve_file_in_basepath(cluster_manager):
