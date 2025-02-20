@@ -35,6 +35,7 @@ def tmpfileWaNoXml(tmp_path):
     # If you only need the path:
     yield xmlfile
 
+
 @pytest.fixture
 def tmpfile(tmp_path):
     """Create a file named 'WaNo.xml' in a unique temp dir."""
