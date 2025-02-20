@@ -31,9 +31,7 @@ from SimStackServer.Util.FileUtilities import (
     filewalker,
 )
 
-
-class SSHExpectedDirectoryError(Exception):
-    pass
+from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
 
 class ClusterManager:
@@ -443,10 +441,7 @@ class ClusterManager:
             )
             VDIR = "V6"
 
-        if VDIR != "V6":
-            myenv = "simstack_server"
-        else:
-            myenv = "simstack_server_v6"
+        myenv = "simstack_server_v6"
 
         if self._queueing_system == "AiiDA":
             myenv = "aiida"
