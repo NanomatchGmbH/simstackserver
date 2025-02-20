@@ -165,11 +165,11 @@ def test_load_extra_host_keys(cluster_manager, mock_sshclient):
 
 
 def test_save_hostkeyfile(cluster_manager, ssh_client_with_host_keys, tmp_path):
-    tmpfile = tmp_path / "hostkeys.txt"
+    tmp_file = tmp_path / "hostkeys.txt"
     cluster_manager._ssh_client = ssh_client_with_host_keys
-    cluster_manager.save_hostkeyfile(str(tmpfile))
-    assert tmpfile.exists()
-    content = tmpfile.read_text()
+    cluster_manager.save_hostkeyfile(str(tmp_file))
+    assert tmp_file.exists()
+    content = tmp_file.read_text()
     assert content.startswith("example.com ssh-rsa")
 
 
