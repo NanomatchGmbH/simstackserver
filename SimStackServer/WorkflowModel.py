@@ -2428,13 +2428,6 @@ class WFPass(XMLYMLInstantiationBase):
         newuid = renamedict[myuid]
         self._field_values["uid"] = newuid
 
-class ReportCollector:
-    def __init__(self):
-        self._parents_by_uid = {}
-
-    def announce_report(self, uid, parent_uid):
-        self._parents_by_uid[uid] = parent_uid
-
 
 class Workflow(XMLYMLInstantiationBase):
     _fields = [
