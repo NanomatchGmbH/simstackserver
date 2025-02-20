@@ -1,4 +1,3 @@
-import abc
 import copy
 import datetime
 import json
@@ -47,7 +46,6 @@ from SimStackServer.Util.ResultRepo import ResultRepo
 from clusterjob import FAILED
 from nestdictmod.flatten_dict import flatten_dict
 from jinja2 import Template
-
 
 
 class ParserError(Exception):
@@ -2539,7 +2537,7 @@ class Workflow(XMLYMLInstantiationBase):
                 myelement = self.elements.get_element_by_uid(node)
 
                 cp = path.commonprefix([self.storage, myelement.runtime_directory])
-                relruntimedir = myelement.runtime_directory[len(cp):]
+                relruntimedir = myelement.runtime_directory[len(cp) :]
                 if relruntimedir.startswith("/"):
                     relruntimedir = relruntimedir[1:]
                 myelement: WorkflowExecModule
@@ -2559,11 +2557,11 @@ class Workflow(XMLYMLInstantiationBase):
                     body_html, pretty_print=True, method="html"
                 )
                 outstring_body += (
-                        """  <ul>
+                    """  <ul>
                        %s
                     </ul>
                     """
-                        % single_element
+                    % single_element
                 )
             except KeyError:
                 pass
@@ -2577,11 +2575,9 @@ class Workflow(XMLYMLInstantiationBase):
         with open(reportname, "w") as outfile:
             outfile.write(html_doc)
 
-
     def abort(self):
         self._field_values["status"] = JobStatus.ABORTED
         # This function has to be called from the child class
-
 
     def delete(self):
         self._field_values["status"] = JobStatus.MARKED_FOR_DELETION
@@ -2897,6 +2893,7 @@ class Workflow(XMLYMLInstantiationBase):
         wano_dir_root = Path(join(self.storage, "workflow_data", wfem.path, "inputs"))
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+
         wmr = WaNoModelRoot(
             wano_dir_root=wano_dir_root, model_only=True, explicit_xml=explicit_wfxml
         )
@@ -3132,7 +3129,7 @@ class Workflow(XMLYMLInstantiationBase):
                 mycm.get_directory(ext_runtime_dir, runtime_dir)
 
         staging_filename_to_aiida_obj = {}
-        if queueing_system == "AiiDA": # pragma: no cover
+        if queueing_system == "AiiDA":  # pragma: no cover
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 
             myjob = AiiDAJob(myjobid)
