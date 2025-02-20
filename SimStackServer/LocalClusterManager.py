@@ -15,9 +15,11 @@ import random
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
+from SimStackServer.SimStackServerMain import WorkflowManager
+from SimStackServer.WorkflowModel import Workflow
+
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
-    from paramiko import SFTPAttributes
 
 from os import path
 import posixpath
@@ -48,7 +50,7 @@ class LocalClusterManager:
         queueing_system,
         default_queue,
         software_directory=None,
-        filegen_mode = False
+        filegen_mode=False,
     ):
         """
 
@@ -118,7 +120,6 @@ class LocalClusterManager:
         """
         return
 
-
     def set_connect_to_unknown_hosts(self, connect_to_unknown_hosts):
         self._unknown_host_connect_workaround = connect_to_unknown_hosts
 
@@ -163,7 +164,6 @@ class LocalClusterManager:
 
             self._http_server_tunnel._transport.close()
             self._http_server_tunnel.stop()
-
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
@@ -374,7 +374,8 @@ class LocalClusterManager:
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
         """
-
+        if self._queueing_system == "Filegenerator":
+            return
         if not self._extra_config.startswith("None"):
             extra_conf_mode = True
             exists = self.exists(self._extra_config)
@@ -546,9 +547,25 @@ class LocalClusterManager:
         return messagetype, message
 
     def submit_wf(self, filename, basepath_override=None):
-        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
-        self._socket.send(Message.submit_wf_message(resolved_filename))
-        self._recv_ack_message()
+        if self._filegen_mode:
+            resolved_filename = self.resolve_file_in_basepath(
+                filename, basepath_override
+            )
+            workflow = Workflow.new_instance_from_xml(resolved_filename)
+            wf_storage = workflow.get_field_value("storage")
+            if not wf_storage.startswith("/"):
+                workflow.set_field_value("storage", str(Path.home() / wf_storage))
+            wm = WorkflowManager()
+            wm.restore()
+            wm.add_finished_workflow(resolved_filename)
+            workflow.jobloop()
+            wm.backup_and_save()
+        else:
+            resolved_filename = self.resolve_file_in_basepath(
+                filename, basepath_override
+            )
+            self._socket.send(Message.submit_wf_message(resolved_filename))
+            self._recv_ack_message()
 
     def submit_single_job(self, wfem):
         self._socket.send(Message.submit_single_job_message(wfem))
@@ -594,6 +611,9 @@ class LocalClusterManager:
         self._recv_ack_message()
 
     def get_workflow_list(self):
+        if self._filegen_mode:
+            self._logger.info("Listing workflows not supported in Filegenerator mode.")
+        return []
         self._socket.send(Message.list_wfs_message())
         messagetype, message = self._recv_message()
         workflows = message["workflows"]
@@ -669,7 +689,6 @@ class LocalClusterManager:
     def is_directory(self, path, basepath_override=None):
         resolved = self.resolve_file_in_basepath(path, basepath_override)
         return (Path.home() / resolved).is_dir()
-
 
     def get_http_server_address(self):
         """
