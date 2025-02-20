@@ -37,7 +37,7 @@ def tmpfileWaNoXml(tmp_path):
 
 
 @pytest.fixture
-def tmpfile(tmp_path):
+def temporary_file(tmp_path):
     """Create a file named 'WaNo.xml' in a unique temp dir."""
     newfile = tmp_path / "testfile.dat"
 

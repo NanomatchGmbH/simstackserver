@@ -374,9 +374,9 @@ def test_put_directory(tmpdir, cluster_manager):
     assert os.path.exists(os.path.join(expected, "sub", "fileB.txt"))
 
 
-def test_exists_remote(cluster_manager, tmpfile):
+def test_exists_remote(cluster_manager, temporary_file):
     # In LocalClusterManager, exists_remote simply calls os.path.exists.
-    assert cluster_manager.exists_remote(tmpfile) is True
+    assert cluster_manager.exists_remote(temporary_file) is True
     # Non-existent file returns False.
     assert cluster_manager.exists_remote("/non/existent/path") is False
 
