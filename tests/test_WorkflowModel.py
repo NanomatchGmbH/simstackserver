@@ -49,6 +49,7 @@ def conda_prefix_tmpdir():
             os.makedirs(os.path.join(tmpdirname, "envs"), exist_ok=True)
             yield
 
+
 @pytest.fixture
 def temp_xml_file():
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -57,6 +58,7 @@ def temp_xml_file():
         with open(xml_file_path, "w") as xml_file:
             xml_file.write(xml_str)
         yield xml_file_path
+
 
 # Test for _is_basetype function
 def test_is_basetype():
@@ -132,7 +134,7 @@ class TestXMLYMLInstantiationBase:
         )
 
     def test_from_xml(self):
-        xml_str ="<Parent><test_field>test_value</test_field></Parent>"
+        xml_str = "<Parent><test_field>test_value</test_field></Parent>"
         xml = etree.fromstring(xml_str)
         instance = TestClass()
         instance.from_xml(xml)
@@ -546,6 +548,7 @@ def test_WFE_fill_in_variables():
     g.fill_in_variables({"${var}": "teststr2"})
     assert g._storage == [np.int64(4.0), "teststr", "teststr2"]
 
+
 def test_WFE_getitem_and_iter():
     g = WorkflowElementList()
     g._add_to_list("np.int64", np.int64(4.0))
@@ -555,14 +558,6 @@ def test_WFE_getitem_and_iter():
 
     for item in zip(g, [np.int64(4.0), "teststr"]):
         assert item[0] == item[1]
-
-
-
-
-
-
-
-
 
 
 def test_resources():
@@ -598,11 +593,13 @@ def test_resources():
     print(etree.tostring(test_xml, encoding="utf8", pretty_print=True).decode())
     ab.to_xml(test_xml)
 
+
 def overwrite_unset_fields_from_default_resources_sets_basepath():
     default_resources = Resources(basepath="/default/path")
     resources = Resources(resource_name="<Connected Server>")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.basepath == "/default/path"
+
 
 def overwrite_unset_fields_from_default_resources_sets_base_URI():
     default_resources = Resources(base_URI="http://default.uri")
@@ -611,11 +608,13 @@ def overwrite_unset_fields_from_default_resources_sets_base_URI():
     assert resources.base_URI is None
     assert resources.resource_name == "<Connected Server>"
 
+
 def overwrite_unset_fields_from_default_resources_sets_queue():
     default_resources = Resources(queue="default_queue")
     resources = Resources(queue="default")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.queue == "default_queue"
+
 
 def overwrite_unset_fields_from_default_resources_sets_queueing_system():
     default_resources = Resources(queueing_system="slurm")
@@ -623,19 +622,26 @@ def overwrite_unset_fields_from_default_resources_sets_queueing_system():
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.queueing_system == "slurm"
 
+
 def overwrite_unset_fields_from_default_resources_sets_sge_pe():
     default_resources = Resources(sge_pe="default_pe")
     resources = Resources(sge_pe="unset")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.sge_pe == "default_pe"
 
+
 def overwrite_unset_fields_from_default_resources_does_not_overwrite_set_fields():
-    default_resources = Resources(queue="default_queue", queueing_system="slurm", sge_pe="default_pe")
-    resources = Resources(queue="custom_queue", queueing_system="custom_system", sge_pe="custom_pe")
+    default_resources = Resources(
+        queue="default_queue", queueing_system="slurm", sge_pe="default_pe"
+    )
+    resources = Resources(
+        queue="custom_queue", queueing_system="custom_system", sge_pe="custom_pe"
+    )
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.queue == "custom_queue"
     assert resources.queueing_system == "custom_system"
     assert resources.sge_pe == "custom_pe"
+
 
 def test_StringList():
     test_xml = etree.Element("StringList")
