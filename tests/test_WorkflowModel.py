@@ -132,6 +132,7 @@ class TestXMLYMLInstantiationBase:
         )
 
     def test_from_xml(self):
+        xml_str ="<Parent><test_field>test_value</test_field></Parent>"
         xml = etree.fromstring(xml_str)
         instance = TestClass()
         instance.from_xml(xml)
@@ -594,10 +595,47 @@ def test_resources():
 
     test_xml = etree.Element("Workflow")
     ab = Workflow(elements=oik, graph=ooommmm)
-
-    ab.to_xml(test_xml)
     print(etree.tostring(test_xml, encoding="utf8", pretty_print=True).decode())
+    ab.to_xml(test_xml)
 
+def overwrite_unset_fields_from_default_resources_sets_basepath():
+    default_resources = Resources(basepath="/default/path")
+    resources = Resources(resource_name="<Connected Server>")
+    resources.overwrite_unset_fields_from_default_resources(default_resources)
+    assert resources.basepath == "/default/path"
+
+def overwrite_unset_fields_from_default_resources_sets_base_URI():
+    default_resources = Resources(base_URI="http://default.uri")
+    resources = Resources(base_URI="http://default.uri")
+    resources.overwrite_unset_fields_from_default_resources(default_resources)
+    assert resources.base_URI is None
+    assert resources.resource_name == "<Connected Server>"
+
+def overwrite_unset_fields_from_default_resources_sets_queue():
+    default_resources = Resources(queue="default_queue")
+    resources = Resources(queue="default")
+    resources.overwrite_unset_fields_from_default_resources(default_resources)
+    assert resources.queue == "default_queue"
+
+def overwrite_unset_fields_from_default_resources_sets_queueing_system():
+    default_resources = Resources(queueing_system="slurm")
+    resources = Resources(queueing_system="unset")
+    resources.overwrite_unset_fields_from_default_resources(default_resources)
+    assert resources.queueing_system == "slurm"
+
+def overwrite_unset_fields_from_default_resources_sets_sge_pe():
+    default_resources = Resources(sge_pe="default_pe")
+    resources = Resources(sge_pe="unset")
+    resources.overwrite_unset_fields_from_default_resources(default_resources)
+    assert resources.sge_pe == "default_pe"
+
+def overwrite_unset_fields_from_default_resources_does_not_overwrite_set_fields():
+    default_resources = Resources(queue="default_queue", queueing_system="slurm", sge_pe="default_pe")
+    resources = Resources(queue="custom_queue", queueing_system="custom_system", sge_pe="custom_pe")
+    resources.overwrite_unset_fields_from_default_resources(default_resources)
+    assert resources.queue == "custom_queue"
+    assert resources.queueing_system == "custom_system"
+    assert resources.sge_pe == "custom_pe"
 
 def test_StringList():
     test_xml = etree.Element("StringList")
