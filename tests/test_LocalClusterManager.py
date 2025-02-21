@@ -296,13 +296,16 @@ def test_put_directory(tmpdir, cluster_manager):
     assert os.path.exists(os.path.join(expected, "sub", "fileB.txt"))
 
 
-def test_mkdir_p(cluster_manager,tmpdir):
+def test_mkdir_p(cluster_manager, tmpdir):
     """
     the above test calls mkdir_p with put_directory, but not with a real directory so this tests covers one missing line
     """
     cluster_manager._calculation_basepath = tmpdir
-    #tmp_path = pathlib.Path(tmpdir) / "some_new_folder"
-    assert cluster_manager.mkdir_p(pathlib.Path("some_new_folder")) == str(tmpdir) +'/some_new_folder'
+    # tmp_path = pathlib.Path(tmpdir) / "some_new_folder"
+    assert (
+        cluster_manager.mkdir_p(pathlib.Path("some_new_folder"))
+        == str(tmpdir) + "/some_new_folder"
+    )
 
 
 def test_exists_remote(cluster_manager, temporary_file):
@@ -311,9 +314,9 @@ def test_exists_remote(cluster_manager, temporary_file):
     # Non-existent file returns False.
     assert cluster_manager.exists_remote("/non/existent/path") is False
 
+
 def test_get_queueing_system(cluster_manager):
     assert cluster_manager.get_queueing_system() == "Internal"
-
 
 
 def test_get_directory(tmpdir, cluster_manager):
@@ -594,3 +597,72 @@ def test___del___(cluster_manager):
     cluster_manager.connect()
     cluster_manager.__del__()
     mock_http_server_tunnel.stop.assert_called_once()
+
+
+def test_is_directory(cluster_manager, tmpdir):
+    cluster_manager._calculation_basepath = tmpdir
+    assert cluster_manager.is_directory(tmpdir) is False
+
+
+def test_get_newest_version_directory_envs_last(cluster_manager, mock_sftpclient):
+    """
+    Test get_newest_version_directory when entries are in order:
+    "V2", "V8", then "envs", then a non-matching entry.
+    In this order, even though V8 would set largest_version to 8,
+    the later "envs" forces largest_version to 6.
+    Final result should be "V6".
+    """
+
+    def fake_listdir_V6(path):
+        # By default, return a list with one file entry.
+        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
+        dir_attr.filename = "V6"
+        dir_attr.st_mode = 0o040755
+        return [dir_attr]
+
+    def fake_listdir_V2(path):
+        # By default, return a list with one file entry.
+        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
+        dir_attr.filename = "V2"
+        dir_attr.st_mode = 0o040755
+        return [dir_attr]
+
+    def fake_listdir_envs(path):
+        # By default, return a list with one file entry.
+        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
+        dir_attr.filename = "envs"
+        dir_attr.st_mode = 0o040755
+        return [dir_attr]
+
+    def fake_listdir_no_dir(path):
+        # By default, return a list with one file entry.
+        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
+        dir_attr.filename = "V2"
+        dir_attr.st_mode = 0o100644
+        return [dir_attr]
+
+    mock_sftpclient.listdir_attr.side_effect = fake_listdir_V6
+    cluster_manager._sftp_client = mock_sftpclient
+    result = cluster_manager.get_newest_version_directory("/fake/path")
+    assert result == "V6"
+
+    mock_sftpclient.listdir_attr.side_effect = fake_listdir_V2
+    cluster_manager._sftp_client = mock_sftpclient
+    result = cluster_manager.get_newest_version_directory("/fake/path")
+    assert result == "V2"
+
+    mock_sftpclient.listdir_attr.side_effect = fake_listdir_envs
+    cluster_manager._sftp_client = mock_sftpclient
+    result = cluster_manager.get_newest_version_directory("/fake/path")
+    assert result == "V6"
+
+    mock_sftpclient.listdir_attr.side_effect = fake_listdir_no_dir
+    cluster_manager._sftp_client = mock_sftpclient
+    result = cluster_manager.get_newest_version_directory("/fake/path")
+    assert result == "V-1"
+
+    mock_sftpclient.listdir_attr.side_effect = FileNotFoundError(2, "Not found")
+    with pytest.raises(FileNotFoundError) as excinfo:
+        cluster_manager.get_newest_version_directory("/nonexistent")
+    # Check that the error message includes the expected text.
+    assert "No such file" in str(excinfo.value)
