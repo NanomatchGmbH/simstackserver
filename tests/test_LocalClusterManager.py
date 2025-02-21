@@ -16,6 +16,7 @@ from paramiko.rsakey import RSAKey
 import sshtunnel
 import zmq
 
+from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
 from SimStackServer.LocalClusterManager import LocalClusterManager
 
@@ -415,20 +416,41 @@ def test_connection_is_localhost_and_same_user(cluster_manager):
     assert cluster_manager.connection_is_localhost_and_same_user() is False
 
 
-def test_connect_zmq_tunnel_error(cluster_manager, mock_zmq_context):
+def test_get_http_server_address_port_error(cluster_manager, mock_zmq_context):
     # For brevity, we only test that an exception is raised when
     # the tunnel is not alive.
-    """with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
-    mock_forwarder = MagicMock()
-    mock_forwarder.is_alive = False
-    mock_forwarder_cls.return_value = mock_forwarder
-    # Prepare a dummy response message.
-    sock = mock_zmq_context.socket.return_value
-    sock.recv.return_value = Message.dict_message(MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"})
-    cluster_manager._socket = sock
-    cluster_manager.connect()
-    with pytest.raises(sshtunnel.BaseSSHTunnelForwarderError, match="Cannot start ssh tunnel."):
-        cluster_manager.get_http_server_address()"""
+    with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
+        mock_forwarder = MagicMock()
+        mock_forwarder.is_alive = False
+        mock_forwarder_cls.return_value = mock_forwarder
+        # Prepare a dummy response message.
+        sock = mock_zmq_context.socket.return_value
+        sock.recv.return_value = Message.dict_message(
+            MTS.ACK, {"http_user": "dummy", "http_pass": "404"}
+        )
+        cluster_manager._socket = sock
+        cluster_manager.connect()
+        with pytest.raises(ConnectionError):
+            cluster_manager.get_http_server_address()
+        sock.recv.return_value = Message.dict_message(
+            MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"}
+        )
+        cluster_manager._socket = sock
+        cluster_manager.connect()
+        assert (
+            cluster_manager.get_http_server_address()
+            == "http://dummy:404@localhost:505"
+        )
+
+
+def test_exists_as_directory(cluster_manager, tmpdir, tmpfile):
+    with patch.object(
+        cluster_manager, "connection_is_localhost_and_same_user", return_value=True
+    ) as mock_connection_to_localhost:
+        assert cluster_manager.exists_as_directory(tmpdir) is True
+        mock_connection_to_localhost.assert_called_once()
+        with pytest.raises(SSHExpectedDirectoryError):
+            cluster_manager.exists_as_directory(tmpfile)
 
 
 def test_get_workflow_job_list(cluster_manager, mock_zmq_context):

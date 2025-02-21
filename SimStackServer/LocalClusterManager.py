@@ -33,9 +33,7 @@ from SimStackServer.MessageTypes import Message
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import filewalker
 
-
-class SSHExpectedDirectoryError(Exception):
-    pass
+from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
 
 class LocalClusterManager:
