@@ -296,11 +296,24 @@ def test_put_directory(tmpdir, cluster_manager):
     assert os.path.exists(os.path.join(expected, "sub", "fileB.txt"))
 
 
+def test_mkdir_p(cluster_manager,tmpdir):
+    """
+    the above test calls mkdir_p with put_directory, but not with a real directory so this tests covers one missing line
+    """
+    cluster_manager._calculation_basepath = tmpdir
+    #tmp_path = pathlib.Path(tmpdir) / "some_new_folder"
+    assert cluster_manager.mkdir_p(pathlib.Path("some_new_folder")) == str(tmpdir) +'/some_new_folder'
+
+
 def test_exists_remote(cluster_manager, temporary_file):
     # In LocalClusterManager, exists_remote simply calls os.path.exists.
     assert cluster_manager.exists_remote(temporary_file) is True
     # Non-existent file returns False.
     assert cluster_manager.exists_remote("/non/existent/path") is False
+
+def test_get_queueing_system(cluster_manager):
+    assert cluster_manager.get_queueing_system() == "Internal"
+
 
 
 def test_get_directory(tmpdir, cluster_manager):
@@ -572,3 +585,12 @@ def test__is_socket_closed_unexpected_exception():
     dummy_sock.recv.side_effect = OSError(9, "Bad file descriptor")
     result = LocalClusterManager._is_socket_closed(dummy_sock)
     assert result is False
+
+
+def test___del___(cluster_manager):
+    mock_http_server_tunnel = MagicMock()
+    mock_http_server_tunnel.is_alive = False
+    cluster_manager._http_server_tunnel = mock_http_server_tunnel
+    cluster_manager.connect()
+    cluster_manager.__del__()
+    mock_http_server_tunnel.stop.assert_called_once()
