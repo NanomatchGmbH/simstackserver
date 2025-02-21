@@ -545,9 +545,7 @@ class LocalClusterManager:
         return messagetype, message
 
     def submit_wf(self, filename, basepath_override=None):
-        resolved_filename = self.resolve_file_in_basepath(
-            filename, basepath_override
-        )
+        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
         if self._filegen_mode:
             workflow = Workflow.new_instance_from_xml(resolved_filename)
             wf_storage = workflow.get_field_value("storage")
