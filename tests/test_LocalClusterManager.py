@@ -19,6 +19,8 @@ import zmq
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
 from SimStackServer.LocalClusterManager import LocalClusterManager
+import SimStackServer
+
 
 #############################
 # Fixtures and Helpers
@@ -335,25 +337,6 @@ def test_get_directory(tmpdir, cluster_manager):
     assert (dest_dir / "subdir" / "file2.txt").exists()
 
 
-def test_put_file_success(tmp_path, cluster_manager):
-    src = tmp_path / "source.txt"
-    src.write_text("content")
-    # Override exists_as_directory to return False.
-    cluster_manager.exists_as_directory = lambda p: False
-    # Override resolve_file_in_basepath to prepend a fake base.
-    cluster_manager.resolve_file_in_basepath = lambda f, b: "/fake/basepath/" + f
-    # Instead of doing SFTP put, simulate by copying locally.
-    cluster_manager.put_file = lambda frm, to, cb=None, bo=None: shutil.copyfile(
-        frm, to
-    )
-    dest = tmp_path / "dest.txt"
-    cluster_manager.put_file(str(src), "dest.txt")
-    # Since our override for resolve_file_in_basepath isn’t used in this lambda,
-    # simply assert that dest file was created.
-    shutil.copyfile(str(src), str(dest))
-    assert dest.exists()
-
-
 def test_remote_open(tmp_path, cluster_manager):
     # Create a dummy file.
     file_path = tmp_path / "remote.txt"
@@ -545,6 +528,7 @@ def test_get_workflow_list(cluster_manager, mock_zmq_context):
     cluster_manager._filegen_mode = True
     assert cluster_manager.get_workflow_list() == []
 
+
 def test_get_url_for_workflow(cluster_manager):
     cluster_manager._http_base_address = "http://dummy:404@localhost:9999"
     url = cluster_manager.get_url_for_workflow("workflow1")
@@ -695,6 +679,7 @@ def test_get_newest_version_directory_envs_last(cluster_manager, mock_sftpclient
     # Check that the error message includes the expected text.
     assert "No such file" in str(excinfo.value)
 
+
 def test_is_connected(cluster_manager):
     cluster_manager._url = "localhost"
     cluster_manager._user = "testuser"
@@ -708,7 +693,10 @@ def test_submit_single_job(cluster_manager, mock_zmq_context):
     # Use the mock socket from the zmq context fixture.
     mock_socket = mock_zmq_context.socket.return_value
     cluster_manager._socket = mock_socket
-    with patch("SimStackServer.MessageTypes.Message.submit_single_job_message", return_value="test_message"):    # Patch _recv_ack_message so we don't have to simulate a real ACK.
+    with patch(
+        "SimStackServer.MessageTypes.Message.submit_single_job_message",
+        return_value="test_message",
+    ):  # Patch _recv_ack_message so we don't have to simulate a real ACK.
         with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
             wfem = {"job": "details"}  # Dummy job details
             cluster_manager.submit_single_job(wfem)
@@ -728,7 +716,9 @@ def test_send_jobstatus_message(cluster_manager, mock_zmq_context):
     wfem_uid = "job123"
     # Create a dummy response that _recv_message should return.
     dummy_response = (MTS.ACK, {"job_status": "running"})
-    with patch.object(cluster_manager, "_recv_message", return_value=dummy_response) as mock_recv:
+    with patch.object(
+        cluster_manager, "_recv_message", return_value=dummy_response
+    ) as mock_recv:
         result = cluster_manager.send_jobstatus_message(wfem_uid)
 
     expected_msg = Message.getsinglejobstatus_message(wfem_uid=wfem_uid)
@@ -783,15 +773,17 @@ def test_submit_wf(cluster_manager, tmpfileWaNoXml, mock_zmq_context):
     mock_socket = mock_zmq_context.socket.return_value
     cluster_manager._socket = mock_socket
     with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-        with patch("SimStackServer.MessageTypes.Message.submit_wf_message",
-               return_value="test_message"):  # Patch _recv_ack_message so we don't have to simulate a real ACK.
+        with patch(
+            "SimStackServer.MessageTypes.Message.submit_wf_message",
+            return_value="test_message",
+        ):  # Patch _recv_ack_message so we don't have to simulate a real ACK.
             cluster_manager.submit_wf(str(tmpfileWaNoXml))
             expected_msg = "test_message"
             mock_socket.send.assert_called_once_with(expected_msg)
             # And that the ack method was called.
             mock_recv_ack.assert_called_once()
 
-        #ToDo: In the test below, I cannot get backup_and_save to be mocked properly.
+        # ToDo: In the test below, I cannot get backup_and_save to be mocked properly.
         """
         cluster_manager._filegen_mode = True
         cluster_manager.resolve_file_in_basepath = lambda filename, base_override: "resolved.xml"
@@ -846,7 +838,10 @@ def test_recv_ack_message_failure(cluster_manager):
     dummy_message = {"error": "failed"}
     cluster_manager._recv_message = lambda: (MTS.CONNECT, dummy_message)
 
-    with pytest.raises(ConnectionAbortedError, match="Did not receive acknowledge after workflow submission."):
+    with pytest.raises(
+        ConnectionAbortedError,
+        match="Did not receive acknowledge after workflow submission.",
+    ):
         cluster_manager._recv_ack_message()
 
 
@@ -862,7 +857,7 @@ def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
       - Message.unpack returns (MTS.CONNECT, {...})
       - connect_http is False so get_http_server_address() is not called.
     """
-    cluster_manager._queueing_system="Filegenerator"
+    cluster_manager._queueing_system = "Filegenerator"
     assert cluster_manager.connect_zmq_tunnel("some command") is None
     cluster_manager._queueing_system = "pbs"
     cluster_manager._extra_config = "SomeConfigNotNone"
@@ -872,7 +867,6 @@ def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
 
     # Set up the instance so that the queue branch is triggered.
     cluster_manager._queueing_system = "pbs"  # not Internal/AiiDA/Filegenerator
-    cluster_manager._extra_config = "None"  # forces extra_conf_mode = False
     cluster_manager.exists = lambda x: True  # Dummy; not used in this branch
 
     # Prepare dummy stdout/stderr from exec_command.
@@ -886,7 +880,10 @@ def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
     cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
 
     # Patch Message.unpack to simulate receiving an ACK (i.e. a CONNECT message).
-    with patch("SimStackServer.MessageTypes.Message.unpack", return_value=(MTS.CONNECT, {"dummy": "data"})):
+    with patch(
+        "SimStackServer.MessageTypes.Message.unpack",
+        return_value=(MTS.CONNECT, {"dummy": "data"}),
+    ):
         # Patch time.sleep to avoid delays.
         with patch("time.sleep", return_value=None):
             # Ensure that _context is our mocked zmq context.
@@ -895,19 +892,139 @@ def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
             mock_socket = mock_zmq_context.socket.return_value
             # When socket.recv() is called, return some dummy bytes.
             mock_socket.recv.return_value = b"dummy_recv_data"
+            # make Connection error in line 406
+            dummy_stdout = ["dummy 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
+            dummy_stderr = []
+            # Have exec_command always return these values.
+            cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
 
             # Call the function with connect_http False.
             with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel("some_command", connect_http=False, verbose=True)
+                cluster_manager.connect_zmq_tunnel(
+                    "some_command", connect_http=False, verbose=True
+                )
 
-            # At this point, the function should have:
-            # - Parsed password = "secretkey", port = 555,
-            # - Created and connected a ZMQ socket,
-            # - Sent a CONNECT message, and
-            # - Received a valid response so that _should_be_connected becomes True.
-            """assert cluster_manager._should_be_connected is False
-            # Check that the socket was connected.
+            dummy_stdout = ["qsub\n"]
+            dummy_stderr = []
+            # Have exec_command always return these values.
+            cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
+            with pytest.raises(ConnectionError):
+                cluster_manager.connect_zmq_tunnel(
+                    "some_command", connect_http=False, verbose=True
+                )
+
+            cluster_manager._queueing_system = "Internal"
+            dummy_stdout = ["qsub 0 555 secretkey SERVER,6,ZMQ,4.2.4\n"]
+            dummy_stderr = []
+            cluster_manager.connect_zmq_tunnel(
+                "some_command", connect_http=False, verbose=True
+            )
+            with patch.object(SimStackServer, "__version__", "8.1.1"):
+                cluster_manager.connect_zmq_tunnel(
+                    "some_command", connect_http=False, verbose=True
+                )
             mock_socket.connect.assert_called_with("tcp://127.0.0.1:555")
-            # Also, we expect the socket to have been configured with username/password.
             assert mock_socket.plain_username == b"simstack_client"
-            assert mock_socket.plain_password == b"secretkey"""""
+            assert mock_socket.plain_password == b"secretkey"
+
+            dummy_stdout = ["qsub 0 555 secretkey NOSERVER,6,ZMQ,4.3.4\n"]
+            dummy_stderr = []
+            cluster_manager.connect_zmq_tunnel(
+                "some_command", connect_http=False, verbose=True
+            )
+            mock_socket.connect.assert_called_with("tcp://127.0.0.1:555")
+            assert mock_socket.plain_username == b"simstack_client"
+            assert mock_socket.plain_password == b"secretkey"
+
+            with patch.object(
+                cluster_manager, "get_http_server_address", return_value="1.0.0.1"
+            ):
+                cluster_manager.connect_zmq_tunnel(
+                    "some_command", connect_http=True, verbose=True
+                )
+            mock_socket.connect.assert_called_with("tcp://127.0.0.1:555")
+            assert mock_socket.plain_username == b"simstack_client"
+            assert mock_socket.plain_password == b"secretkey"
+            with patch.object(
+                cluster_manager, "get_http_server_address", side_effect=Exception
+            ):
+                with pytest.raises(Exception):
+                    cluster_manager.connect_zmq_tunnel(
+                        "some_fake_command", connect_http=True, verbose=True
+                    )
+
+            # repeat with extra_conf_mode false
+            cluster_manager._extra_config = "None"  # forces extra_conf_mode = False
+            cluster_manager._queueing_system = "pbs"
+            # Call the function with connect_http False.
+            with pytest.raises(ConnectionError):
+                cluster_manager.connect_zmq_tunnel(
+                    "some_command", connect_http=False, verbose=True
+                )
+
+
+def test_put_file_success(cluster_manager, tmpdir, tmpfile):
+    # Create a local source file.
+
+    tmpfile.write_text("hello world")
+
+    # Create an absolute base directory.
+    base_dir = pathlib.Path(tmpdir) / "base"
+    base_dir.mkdir()
+    cluster_manager._calculation_basepath = str(base_dir)
+
+    # Override exists_as_directory to return False (simulate that remote file is not a directory).
+    cluster_manager.exists_as_directory = lambda p: False
+
+    # Call put_file to "upload" the file.
+    cluster_manager.put_file(str(tmpfile), "remote.txt")
+
+    # Since the basepath is absolute, abstofile is constructed as:
+    #    base_dir + "/" + "remote.txt"
+    dest_file = pathlib.Path(str(base_dir) + "/remote.txt")
+    assert dest_file.exists(), f"Destination file {dest_file} does not exist."
+    assert dest_file.read_text() == "hello world"
+
+
+def test_put_file_not_found(cluster_manager):
+    # Call put_file with a non-existent source file, expecting FileNotFoundError.
+    with pytest.raises(FileNotFoundError):
+        cluster_manager.put_file("nonexistent.txt", "remote.txt")
+
+
+def test_mkdir_random_singlejob_exec_directory_success(cluster_manager):
+    # Set a fake calculation basepath.
+    cluster_manager._calculation_basepath = "/fake/basepath"
+
+    # Force exists() to always return False, so the branch for creating a new directory is executed.
+    cluster_manager.exists = lambda p: False
+
+    # Override mkdir_p so it simply returns the trial directory as a string (simulate creation).
+    cluster_manager.mkdir_p = (
+        lambda trialdir, basepath_override=None, mode_override=None: str(trialdir)
+    )
+
+    # Call the function. Use a small number of retries for the test.
+    trial_directory = cluster_manager.mkdir_random_singlejob_exec_directory(
+        "jobname", num_retries=3
+    )
+
+    # trial_directory is a Path. Assert it starts with "singlejob_exec_directories"
+    # and that "jobname" is part of the directory name.
+    trial_directory_str = str(trial_directory)
+    assert trial_directory_str.startswith("singlejob_exec_directories")
+    assert "jobname" in trial_directory_str
+
+
+def test_mkdir_random_singlejob_exec_directory_failure(cluster_manager):
+    # Set a fake calculation basepath.
+    cluster_manager._calculation_basepath = "/fake/basepath"
+
+    # Force exists() to always return True so that the loop never finds a free directory.
+    cluster_manager.exists = lambda p: True
+
+    # With a low num_retries, the function should eventually raise a FileExistsError.
+    with pytest.raises(
+        FileExistsError, match="Could not generate new directory in time."
+    ):
+        cluster_manager.mkdir_random_singlejob_exec_directory("jobname", num_retries=3)
