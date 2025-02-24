@@ -921,7 +921,6 @@ def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
     # Have exec_command always return these values.
     cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
 
-    # Patch Message.unpack to simulate receiving an ACK (i.e. a CONNECT message).
     # Patch time.sleep to avoid delays.
     with patch("time.sleep", return_value=None):
         with patch(
@@ -934,7 +933,6 @@ def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
             mock_socket = mock_zmq_context.socket.return_value
             # When socket.recv() is called, return some dummy bytes.
             mock_socket.recv.return_value = b"dummy_recv_data"
-            # make Connection error in line 406
             dummy_stdout = ["dummy 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
             dummy_stderr = []
             # Have exec_command always return these values.
@@ -1017,7 +1015,6 @@ def test_connect_zmq_tunnel_ConnectError(cluster_manager, mock_zmq_context):
             mock_socket = mock_zmq_context.socket.return_value
             # When socket.recv() is called, return some dummy bytes.
             mock_socket.recv.return_value = b"dummy_recv_data"
-            # make Connection error in line 406
 
             cluster_manager._queueing_system = "Internal"
 
@@ -1039,8 +1036,6 @@ def test_connect_zmq_tunnel_retry_loop(cluster_manager, mock_zmq_context, capsys
         cluster_manager._context = mock_zmq_context
         # Get the mock socket from the context.
         mock_socket = mock_zmq_context.socket.return_value
-        # When socket.recv() is called, return some dummy bytes.
-        # mock_socket.recv.return_value = b"dummy_recv_data"
         # Force recv to always raise zmq.error.Again.
         mock_socket.recv.side_effect = zmq.error.Again("timeout")
 
@@ -1052,14 +1047,12 @@ def test_connect_zmq_tunnel_retry_loop(cluster_manager, mock_zmq_context, capsys
 
         # Patch time.sleep so that it doesn't actually delay.
         with patch("time.sleep", return_value=None) as mock_sleep:
-            # Because the loop never successfully receives data, the variable 'data'
-            # is never assigned and eventually Message.unpack(data) will raise an error.
             with pytest.raises(Exception):
                 cluster_manager.connect_zmq_tunnel(
                     "dummy_command", connect_http=False, verbose=True
                 )
 
-        # Assert that time.sleep was called 10 times.
+        # Assert that time.sleep was called 11 times.
         assert mock_sleep.call_count == 11
 
         # Optionally, capture printed output and assert that the retry message was printed 10 times.
@@ -1089,8 +1082,6 @@ def test_connect_zmq_tunnel_stderr(cluster_manager, mock_zmq_context):
 
         # Patch time.sleep so that it doesn't actually delay.
         with patch("time.sleep", return_value=None):
-            # Because the loop never successfully receives data, the variable 'data'
-            # is never assigned and eventually Message.unpack(data) will raise an error.
             with pytest.raises(ConnectionError):
                 cluster_manager.connect_zmq_tunnel(
                     "dummy_command", connect_http=False, verbose=True
@@ -1102,8 +1093,6 @@ def test_connect_zmq_tunnel_stderr(cluster_manager, mock_zmq_context):
 
         # Patch time.sleep so that it doesn't actually delay.
         with patch("time.sleep", return_value=None):
-            # Because the loop never successfully receives data, the variable 'data'
-            # is never assigned and eventually Message.unpack(data) will raise an error.
             with pytest.raises(ConnectionError):
                 cluster_manager.connect_zmq_tunnel(
                     "dummy_command", connect_http=False, verbose=True
