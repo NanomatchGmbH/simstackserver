@@ -1069,6 +1069,47 @@ def test_connect_zmq_tunnel_retry_loop(cluster_manager, mock_zmq_context, capsys
         assert output.count(retry_message) == 10
 
 
+def test_connect_zmq_tunnel_stderr(cluster_manager, mock_zmq_context):
+    with patch(
+        "SimStackServer.MessageTypes.Message.unpack",
+        return_value=(MTS.CONNECT, {"dummy": "data"}),
+    ):
+        # Ensure that _context is our mocked zmq context.
+        cluster_manager._context = mock_zmq_context
+        # Get the mock socket from the context.
+        mock_socket = mock_zmq_context.socket.return_value
+        # When socket.recv() is called, return some dummy bytes.
+        mock_socket.recv.return_value = b"dummy_recv_data"
+
+        cluster_manager._queueing_system = "Internal"
+
+        dummy_stdout = ["qsub 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
+        dummy_stderr = ["FAIL"]
+        cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
+
+        # Patch time.sleep so that it doesn't actually delay.
+        with patch("time.sleep", return_value=None):
+            # Because the loop never successfully receives data, the variable 'data'
+            # is never assigned and eventually Message.unpack(data) will raise an error.
+            with pytest.raises(ConnectionError):
+                cluster_manager.connect_zmq_tunnel(
+                    "dummy_command", connect_http=False, verbose=True
+                )
+
+        dummy_stdout = []
+        dummy_stderr = []
+        cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
+
+        # Patch time.sleep so that it doesn't actually delay.
+        with patch("time.sleep", return_value=None):
+            # Because the loop never successfully receives data, the variable 'data'
+            # is never assigned and eventually Message.unpack(data) will raise an error.
+            with pytest.raises(ConnectionError):
+                cluster_manager.connect_zmq_tunnel(
+                    "dummy_command", connect_http=False, verbose=True
+                )
+
+
 def test_put_file_success(cluster_manager, tmpdir, tmpfile):
     # Create a local source file.
 
