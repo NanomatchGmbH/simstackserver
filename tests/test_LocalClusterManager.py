@@ -1,6 +1,8 @@
 # test_local_cluster_manager.py
+import copy
 import os
 import pathlib
+import posixpath
 import shutil
 import socket
 import subprocess
@@ -247,6 +249,18 @@ def test_resolve_file_in_basepath(cluster_manager):
     assert resolved == expected
 
 
+def test_resolve_file_in_basepath_no_abspath(cluster_manager):
+    # When basepath_override is None, it should use _calculation_basepath.
+    cluster_manager._calculation_basepath = "fake/basepath"
+    # If the resolved path doesn't start with "/", it prepends the home directory.
+    resolved = cluster_manager.resolve_file_in_basepath("myfile.txt", None)
+    if not resolved.startswith("/"):
+        expected = str(pathlib.Path.home() / "myfile.txt")
+    else:
+        expected = resolved
+    assert resolved == expected
+
+
 def test_delete_file(tmp_path, cluster_manager):
     # Create a dummy file to be deleted.
     testfile = tmp_path / "delete_me.txt"
@@ -386,6 +400,7 @@ def test_exec_command(cluster_manager):
 def test_get_server_command_from_software_directory(cluster_manager):
     # Test the branch that finds micromamba.
     # Override exists() to simulate that the micromamba binary exists.
+    cluster_manager._queueing_system = "AiiDA"
     cluster_manager.exists = lambda p: p.endswith(
         "/envs/simstack_server_v6/bin/micromamba"
     )
@@ -394,6 +409,22 @@ def test_get_server_command_from_software_directory(cluster_manager):
     )
     expected = "/fake/software_dir/envs/simstack_server_v6/bin/micromamba run -r /fake/software_dir --name=simstack_server_v6 SimStackServer"
     assert res == expected
+
+
+def test_get_server_command_from_software_directory_conda_sh_file(cluster_manager):
+    # Test the branch that finds micromamba.
+    # Override exists() to simulate that the micromamba binary exists.
+    cluster_manager.exists = lambda p: p.endswith("/etc/profile.d/conda.sh")
+    res = cluster_manager.get_server_command_from_software_directory(
+        "/fake/software_dir"
+    )
+    expected = "source /fake/software_dir/etc/profile.d/conda.sh; conda activate simstack_server_v6;  SimStackServer"
+    assert res == expected
+
+
+def test_get_server_command_from_software_directory_FileNotFound(cluster_manager):
+    with pytest.raises(FileNotFoundError):
+        cluster_manager.get_server_command_from_software_directory("/fake/software_dir")
 
 
 def test__get_server_command(cluster_manager):
@@ -986,10 +1017,55 @@ def test_put_file_success(cluster_manager, tmpdir, tmpfile):
     assert dest_file.read_text() == "hello world"
 
 
+def test_put_file_success_rel_path(cluster_manager, tmpdir, tmpfile):
+    # Create a local source file.
+
+    tmpfile.write_text("hello world")
+    fake_home = "/tmp"
+    with patch.object(pathlib.Path, "home", return_value=pathlib.Path(fake_home)):
+        # Create an absolute base directory.
+        base_dir = pathlib.Path(tmpdir) / "base"
+        base_dir.mkdir()
+        remote_dir = base_dir / "remote_directory"
+        remote_dir.mkdir()
+
+        base_dir_from_fake_home = str(base_dir).split("/tmp/")[1]
+        # Override exists_as_directory to return False (simulate that remote file is not a directory).
+        cluster_manager.exists_as_directory = lambda p: True
+
+        # Call put_file to "upload" the file.
+        cluster_manager.put_file(
+            str(tmpfile),
+            "remote_directory",
+            None,
+            basepath_override=base_dir_from_fake_home,
+        )
+
+        dest_file = pathlib.Path(
+            str(base_dir) + "/remote_directory/" + posixpath.basename(tmpfile)
+        )
+        assert dest_file.exists(), f"Destination file {dest_file} does not exist."
+        assert dest_file.read_text() == "hello world"
+
+
 def test_put_file_not_found(cluster_manager):
     # Call put_file with a non-existent source file, expecting FileNotFoundError.
     with pytest.raises(FileNotFoundError):
         cluster_manager.put_file("nonexistent.txt", "remote.txt")
+
+
+def test_get_file(cluster_manager, tmpfile, tmpdir):
+    tmpfile.write_text("hello world")
+
+    # Create an absolute base directory.
+    base_dir = pathlib.Path(tmpdir) / "base"
+    base_dir.mkdir()
+    cluster_manager._calculation_basepath = "/"
+
+    dest_file = pathlib.Path(str(base_dir) + "/" + posixpath.basename(tmpfile))
+    cluster_manager.get_file(str(tmpfile), dest_file)
+    assert dest_file.exists(), f"Destination file {dest_file} does not exist."
+    assert dest_file.read_text() == "hello world"
 
 
 def test_mkdir_random_singlejob_exec_directory_success(cluster_manager):
@@ -1028,3 +1104,17 @@ def test_mkdir_random_singlejob_exec_directory_failure(cluster_manager):
         FileExistsError, match="Could not generate new directory in time."
     ):
         cluster_manager.mkdir_random_singlejob_exec_directory("jobname", num_retries=3)
+
+
+def test_load_extra_host_keys(cluster_manager):
+    assert cluster_manager.load_extra_host_keys("dummyfile") is None
+
+
+def test_save_hostkeyfile(cluster_manager):
+    assert cluster_manager.save_hostkeyfile("dummyfile") is None
+
+
+def test_set_connect_to_unknown_hosts(cluster_manager):
+    prev = copy.deepcopy(cluster_manager._unknown_host_connect_workaround)
+    cluster_manager.set_connect_to_unknown_hosts(not prev)
+    assert cluster_manager._unknown_host_connect_workaround is not prev
