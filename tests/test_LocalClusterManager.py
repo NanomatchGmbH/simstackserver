@@ -814,44 +814,55 @@ def test_submit_wf(cluster_manager, tmpfileWaNoXml, mock_zmq_context):
             # And that the ack method was called.
             mock_recv_ack.assert_called_once()
 
-        # ToDo: In the test below, I cannot get backup_and_save to be mocked properly.
-        """
-        cluster_manager._filegen_mode = True
-        cluster_manager.resolve_file_in_basepath = lambda filename, base_override: "resolved.xml"
 
-        # Create a dummy workflow instance with expected behavior.
-        dummy_workflow = MagicMock()
-        # Suppose the workflow's storage field is a relative path.
-        dummy_workflow.get_field_value.return_value = "relative_storage"
-        # We'll patch the workflow methods we expect to be called.
-        dummy_workflow.set_field_value.return_value = None
-        dummy_workflow.jobloop.return_value = None
+def test_submit_wf_filegen_mode(cluster_manager):
+    # Force file-generation mode so the workflow branch is taken.
+    cluster_manager._filegen_mode = True
+    # Override resolve_file_in_basepath to return a known value.
+    cluster_manager.resolve_file_in_basepath = (
+        lambda filename, base_override: "resolved.xml"
+    )
 
+    # Create a dummy workflow object.
+    dummy_workflow = MagicMock()
+    # Simulate that the workflow's "storage" field is a relative path.
+    dummy_workflow.get_field_value.return_value = "relative_storage"
+    dummy_workflow.jobloop.return_value = None
 
+    # Create a dummy WorkflowManager instance.
+    dummy_wm = MagicMock()
+    dummy_wm.restore.return_value = None
+    dummy_wm.add_finished_workflow.return_value = None
+    dummy_wm.backup_and_save.return_value = None
 
-        # Patch Workflow.new_instance_from_xml and WorkflowManager.
-        with patch("SimStackServer.WorkflowModel.Workflow.new_instance_from_xml", return_value=dummy_workflow) as wf_patch:
-            with patch("SimStackServer.SimStackServerMain.WorkflowManager", autospec=True) as WM_patch:
-                def fake_backup_and_save():
-                    pass
+    with patch(
+        "SimStackServer.WorkflowModel.Workflow.new_instance_from_xml",
+        return_value=dummy_workflow,
+    ) as wf_patch:
+        with patch(
+            "SimStackServer.LocalClusterManager.WorkflowManager", autospec=True
+        ) as WM_patch:
+            WM_patch.return_value = dummy_wm
 
-                dummy_wm = MagicMock()
-                dummy_wm.restore.return_value = None
-                dummy_wm.add_finished_workflow.return_value = None
-                dummy_wm.backup_and_save.return_value = None
+            # Now call submit_wf.
+            cluster_manager.submit_wf("workflow.xml")
 
-                WM_patch.return_value = dummy_wm
-                # Call the function under test.
-                cluster_manager.submit_wf("workflow.xml")
+            # Verify that the workflow was instantiated with the resolved filename.
+            wf_patch.assert_called_once_with("resolved.xml")
 
-        # Verify that Workflow.new_instance_from_xml was called with the resolved filename.
-        wf_patch.assert_called_with("resolved.xml")
-        # Verify that the WorkflowManager instance's methods were called.
-        dummy_wm.restore.assert_called_once()
-        dummy_wm.add_finished_workflow.assert_called_once_with("resolved.xml")
-        dummy_workflow.jobloop.assert_called_once()
-        dummy_wm.backup_and_save.assert_called_once()
-        """
+            # Verify that the workflow's storage was checked and then updated.
+            dummy_workflow.get_field_value.assert_called_once_with("storage")
+            # Since get_field_value returns "relative_storage" (not starting with "/"),
+            # the code should update the storage field to be absolute by prepending Path.home()
+            dummy_workflow.set_field_value.assert_called_once_with(
+                "storage", str(pathlib.Path.home() / "relative_storage")
+            )
+
+            # Verify that the WorkflowManager instance was created and its methods were called.
+            dummy_wm.restore.assert_called_once()
+            dummy_wm.add_finished_workflow.assert_called_once_with("resolved.xml")
+            dummy_workflow.jobloop.assert_called_once()
+            dummy_wm.backup_and_save.assert_called_once()
 
 
 def test_recv_ack_message_success(cluster_manager):
