@@ -2,6 +2,7 @@ import copy
 import os
 import pathlib
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 import pytest
 from _pytest.python_api import raises
@@ -22,7 +23,7 @@ from SimStackServer.WaNo.WaNoModels import (
     MultipleOfModel,
     WaNoItemScriptFileModel,
     WaNoModelRoot,
-    WaNoParseError,
+    WaNoParseError, WaNoMatrixModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -240,6 +241,7 @@ def test_WaNoChoice():
     assert wm.get_data() == "Bash"
     wm.chosen = 1
     assert wm.get_type_str() == "String"
+    assert wm.__getitem__("someitem") is None
     wm.set_chosen(2)
     wm.update_xml()
     assert wm.get_data() == "Perl"
@@ -331,22 +333,25 @@ def test_WaNoSwitch():
 
 def test_WaNoModelDictLike():
     wm = WaNoModelDictLike()
+    #ToDo: I don't see why with the comments I don't get into line 97
     xml = fromstring(
         """
+        <!-- comment -->
         <WaNoDictBox name="ParentXML">
-            <!-- comment -->    
+            <!--comment-->
             <WaNoString name="test_string" >Hello</WaNoString>
             <WaNoFloat name="test_float" >2.0</WaNoFloat>
         </WaNoDictBox>
         """
     )
+
     wm = WaNoModelDictLike()
     wm.parse_from_xml(xml)
-    assert wm.wano_dict["test_string"].get_data() == 'Hello'
+    assert wm.wano_dict["test_string"].get_data() == "Hello"
     assert wm.wano_dict["test_float"].get_data() == 2.0
 
-    dict_keys = ['test_string', 'test_float']
-    dict_values = ['Hello', 2.0]
+    dict_keys = ["test_string", "test_float"]
+    dict_values = ["Hello", 2.0]
 
     assert wm.dictlike is True
     for key in wm.keys():
@@ -354,9 +359,304 @@ def test_WaNoModelDictLike():
 
     for value in wm.values():
         assert value.get_data() in dict_values
+    for value in wm.values():
+        assert value.get_data() in dict_values
 
     for item in wm.items():
         assert item[0] in dict_keys and item[1].get_data() in dict_values
+        assert wm.__getitem__(item[0]) == item[1]
+
+    it = wm.__iter__()
+    firstkey = next(it)
+    assert firstkey == dict_keys[0]
+
+    assert wm.changed_from_default() is False
+
+    mydict = wm.get_data()
+    for key in mydict.keys():
+        assert key in dict_keys
+
+
+    mydict["test_float_add"] = copy.deepcopy(wm.get_data()["test_float"])
+    wm.set_data(mydict)
+    assert len([key for key in wm.keys()]) == 3
+    prev_xml = wm.xml.text
+    wm.update_xml()
+    new_xml = wm.xml.text
+    assert prev_xml == new_xml # ToDo: Double check if this should do anything
+
+    sec_scheme = wm.get_secure_schema()
+    assert sec_scheme == {'ParentXML': {'additionalProperties': False, 'properties': {'test_float': {'type': 'number'}, 'test_string': {'type': 'string'}}, 'required': ['test_string', 'test_float', 'test_float_add'], 'type': 'object'}}
+
+    assert wm.get_type_str() == "Dict"
+
+    this_is_visible = copy.deepcopy(wm._isvisible)
+    wm.set_visible(not this_is_visible)
+    assert wm._isvisible is not this_is_visible
+
+    parent_xml = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+        </WaNoDictBox>
+        """
+    )
+    wm_parent = WaNoModelDictLike()
+    wm_parent.parse_from_xml(parent_xml)
+
+    wm.set_visible(True)
+    wm.set_parent(wm_parent)
+    assert wm._parent_visible is True
+    wm.set_parent_visible(False)
+    assert wm._parent_visible is False
+    wm.decommission()
+
+
+def test_WaNoModelDictLike_sec_schema():
+    xml_switches = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+            <WaNoSwitch switch_path="switch.path" name="MySwitch">
+                <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+            </WaNoSwitch>
+            <WaNoSwitch switch_path="switch.path.2" name="MySwitch2">
+                <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+            </WaNoSwitch>
+        </WaNoDictBox>
+        """
+    )
+
+    xml_switch_single = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+            <WaNoSwitch switch_path="switch.path" name="MySwitch">
+                <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+            </WaNoSwitch>
+        </WaNoDictBox>
+        """
+    )
+    wm_switch_single = WaNoModelDictLike()
+    wm_switch_single.parse_from_xml(xml_switch_single)
+    sec_scheme = wm_switch_single.get_secure_schema()
+    assert sec_scheme == {'ParentXML': {'additionalProperties': False, 'oneOf': [{'test_var': {'type': 'string'}}, {'test_var': {'type': 'number'}}], 'properties': {}, 'required': [], 'type': 'object'}}
+
+
+    wm_switches = WaNoModelDictLike()
+    wm_switches.parse_from_xml(xml_switches)
+    with pytest.raises(NotImplementedError):
+        wm_switches.get_secure_schema()
+
+
+@patch('SimStackServer.WaNo.WaNoModels.WaNoItemFloatModel.get_secure_schema', return_value=None)
+def test_WaNoModelDictLike_no_schema_child(mocK_get_secure_schema):
+    wm = WaNoModelDictLike()
+    #ToDo: I don't see why with the comments I don't get into line 97
+    xml = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+            <WaNoString name="test_string" >Hello</WaNoString>
+            <WaNoFloat name="test_float" >2.0</WaNoFloat>
+        </WaNoDictBox>
+        """
+    )
+    wm.parse_from_xml(xml)
+    with raises(NotImplementedError):
+        wm.get_secure_schema()
+
+
+@pytest.fixture
+def WaNoMatrixModel():
+    # You'd typically import it from your module:
+    from SimStackServer.WaNo.WaNoModels import WaNoMatrixModel
+    return WaNoMatrixModel
+
+def test_WaNoMatrixModel(WaNoMatrixModel):
+    wm = WaNoMatrixModel()
+
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
+        </WaNoMatrixModel>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+
+def test_WaNoMatrixModel_no_text(WaNoMatrixModel):
+    """
+    Verify that parse_from_xml correctly initializes storage with empty strings
+    when <WaNoMatrixModel> has no text content.
+    """
+    wm = WaNoMatrixModel()
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2"/>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+    # Basic checks
+    assert wm.rows == 2
+    assert wm.cols == 2
+
+    # With no text in the XML, the code sets up an empty matrix of "".
+    assert wm.storage == [["", ""], ["", ""]]
+    assert wm._default == [["", ""], ["", ""]]
+    assert wm.col_header is None
+    assert wm.row_header is None
+    assert not wm.changed_from_default()
+
+
+def test_WaNoMatrixModel_headers(WaNoMatrixModel):
+    """
+    Verify that row_header and col_header are parsed correctly.
+    """
+    wm = WaNoMatrixModel()
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2" 
+                         row_header="R1;R2" col_header="C1;C2">
+        </WaNoMatrixModel>
+        """
+    )
+    wm.parse_from_xml(xml)
+    assert wm.rows == 2
+    assert wm.cols == 2
+    # Should parse row_header and col_header from attributes
+    assert wm.row_header == ["R1", "R2"]
+    assert wm.col_header == ["C1", "C2"]
+    assert wm.storage[1][1] == ""
+
+def test_WaNoMatrixModel_with_text(WaNoMatrixModel):
+    """
+    Verify that parse_from_xml calls _fromstring if XML has text,
+    thus properly populating storage with typed values.
+    """
+    wm = WaNoMatrixModel()
+
+    # Example text: a 2x2 matrix with numeric and string data
+    matrix_text = "[ [1, \"Hello\"], [2.5, \"World\"] ]"
+
+    xml = fromstring(
+        f"""
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
+            {matrix_text}
+        </WaNoMatrixModel>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+    expected_storage = [[1.0, "Hello"], [2.5, "World"]]
+    assert wm.storage == expected_storage
+    assert wm._default == expected_storage  # after parse, _default is a deep copy
+
+    # Test that changed_from_default is false initially
+    assert not wm.changed_from_default()
+
+    assert wm.__getitem__("randomitem") == '[ [  1.0 , "Hello" ] , [  2.5 , "World" ] ] '
+    assert wm.get_data() == '[ [  1.0 , "Hello" ] , [  2.5 , "World" ] ] '
+    assert wm.get_type_str() is None
+
+def test_WaNoMatrixModel_set_data_and_delta(WaNoMatrixModel):
+    """
+    Check that set_data modifies the matrix, and that changed_from_default,
+    get_delta_to_default, and apply_delta behave correctly.
+    """
+    wm = WaNoMatrixModel()
+
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
+            [ [1, 2], [3, 4] ]
+        </WaNoMatrixModel>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+    # Initially, _default matches storage
+    assert wm.storage == [[1.0, 2.0], [3.0, 4.0]]
+    assert not wm.changed_from_default()
+
+    # Modify one cell
+    wm.set_data(0, 1, 99)
+    assert wm.storage == [[1.0, 99.0], [3.0, 4.0]]
+    # Now it should differ from _default
+    assert wm.changed_from_default()
+
+    # We can inspect the delta string
+    delta = wm.get_delta_to_default()
+    # e.g., "[ [ 1.0 , 99.0 ] , [ 3.0 , 4.0 ] ]"
+    # The exact formatting depends on _tostring logic
+    assert "99.0" in delta
+
+    # If we re-apply the old default (undo changes) => storage = default => no changes
+    default_str = wm._tostring(wm._default)  # The original matrix
+    wm.apply_delta(default_str)
+    assert not wm.changed_from_default()
+    assert wm.storage == wm._default
+
+
+def test_WaNoMatrixModel_update_xml(WaNoMatrixModel):
+    """
+    Verify that update_xml sets the underlying XML text to the string form of storage.
+    """
+    wm = WaNoMatrixModel()
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
+            [ [ "A", "B"], [3, 4.5] ]
+        </WaNoMatrixModel>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+    # Make a small change
+    wm.set_data(0, 0, "XYZ")
+    wm.update_xml()
+    # Now xml.text should reflect the new storage:
+    assert "XYZ" in xml.text
+    # Another check:
+    assert "B" in xml.text
+    assert "4.5" in xml.text
+
+
+def test_WaNoMatrixModel_secure_schema(WaNoMatrixModel):
+    """
+    Check that get_secure_schema returns the expected dictionary structure.
+    """
+    wm = WaNoMatrixModel()
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
+            [ [1, 2], [3, 4] ]
+        </WaNoMatrixModel>
+        """
+    )
+    wm.parse_from_xml(xml)
+
+    schema = wm.get_secure_schema()
+    assert isinstance(schema, dict)
+    # "name" attribute was "MyMatrix" => the schema key should match
+    assert "MyMatrix" in schema
+    # We expect something like: {"type": "string", "pattern": r"\[\s*\[.+\]\s*\]"}
+    assert schema["MyMatrix"]["type"] == "string"
+    assert "pattern" in schema["MyMatrix"]
+
+def test_WaNoModel_Syntaxerror(WaNoMatrixModel):
+    wm = WaNoMatrixModel()
+    xml = fromstring(
+        """
+        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
+            1
+        </WaNoMatrixModel>
+        """
+    )
+    with raises(SyntaxError):
+        wm.parse_from_xml(xml)
+
+
 
 def test_WaNoThreeRandomLetters():
     wism = WaNoThreeRandomLetters()
