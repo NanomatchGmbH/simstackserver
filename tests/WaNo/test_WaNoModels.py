@@ -1,7 +1,9 @@
 import copy
 import os
+import pathlib
 from pathlib import Path
 
+import pytest
 from _pytest.python_api import raises
 from jsonschema.exceptions import ValidationError
 
@@ -23,6 +25,19 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoParseError,
 )
 from xml.etree.ElementTree import fromstring
+
+from SimStackServer.WaNo.WaNoModels import mkdir_p
+
+
+def test_mkdir_p(tmpdir):
+    new_dir = tmpdir + "/" + "testdir"
+    mkdir_p(new_dir)
+    assert pathlib.Path(new_dir).exists()
+
+    mkdir_p(new_dir)
+
+    with pytest.raises(OSError):
+        mkdir_p("/norightstomkthis")
 
 
 def test_WaNoItemIntModel():
