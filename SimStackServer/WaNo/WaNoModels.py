@@ -467,6 +467,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         self.storage[i][j] = self._cast_to_correct_type(data)
 
     def _fromstring(self, stri):
+        stri = stri.strip()
         list_of_lists = ast.literal_eval(stri)
         if not isinstance(list_of_lists, list):
             raise SyntaxError("Expected list of lists")
