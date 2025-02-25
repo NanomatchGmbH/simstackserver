@@ -329,6 +329,35 @@ def test_WaNoSwitch():
     # wm.decommission()
 
 
+def test_WaNoModelDictLike():
+    wm = WaNoModelDictLike()
+    xml = fromstring(
+        """
+        <WaNoDictBox name="ParentXML">
+            <!-- comment -->    
+            <WaNoString name="test_string" >Hello</WaNoString>
+            <WaNoFloat name="test_float" >2.0</WaNoFloat>
+        </WaNoDictBox>
+        """
+    )
+    wm = WaNoModelDictLike()
+    wm.parse_from_xml(xml)
+    assert wm.wano_dict["test_string"].get_data() == 'Hello'
+    assert wm.wano_dict["test_float"].get_data() == 2.0
+
+    dict_keys = ['test_string', 'test_float']
+    dict_values = ['Hello', 2.0]
+
+    assert wm.dictlike is True
+    for key in wm.keys():
+        assert key in dict_keys
+
+    for value in wm.values():
+        assert value.get_data() in dict_values
+
+    for item in wm.items():
+        assert item[0] in dict_keys and item[1].get_data() in dict_values
+
 def test_WaNoThreeRandomLetters():
     wism = WaNoThreeRandomLetters()
     xml = fromstring(
