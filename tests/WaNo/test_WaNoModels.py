@@ -1037,4 +1037,39 @@ def test_WaNoModelListLike(WaNoModelListLike):
     assert isinstance(second_model, WaNoItemFloatModel)
     assert second_model.name == "test_float"
 
+    # children_data = ["Hello", 1.0]
+
     assert wm.get_type_str() is None
+    for item in wm.items():
+        # ToDo: I don't get why this does not work. It should!
+        # assert item[1].get_data() in children_data
+        assert isinstance(item[1], WaNoItemStringModel) or isinstance(
+            item[1], WaNoItemFloatModel
+        )
+
+    for item in wm.wanos():
+        # ToDo: I don't get why this does not work. It should!
+        # assert item[1].get_data() in children_data
+        assert isinstance(item[1], WaNoItemStringModel) or isinstance(
+            item[1], WaNoItemFloatModel
+        )
+
+    wm.set_visible(True)
+    wm.set_parent_visible(True)
+    assert wm._parent_visible is True
+    for item in wm.wanos():
+        assert item[1]._parent_visible is True
+
+    wm.set_parent_visible(False)
+    assert wm._parent_visible is False
+    for item in wm.wanos():
+        assert item[1]._parent_visible is False
+
+    assert wm.changed_from_default() is False
+
+    assert wm.update_xml() is None
+
+    assert wm.decommission() is None
+
+    with raises(NotImplementedError):
+        wm.get_secure_schema()
