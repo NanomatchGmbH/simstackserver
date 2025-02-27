@@ -831,6 +831,11 @@ def test_MultipleOf(tmpWaNoRoot):
     assert wm.listlike is True
     wm.set_parent(wm_parent)
 
+    mockroot = MagicMock()
+    wm.set_root(mockroot)
+    for child in wm.xml:
+        tmp_dict = wm.parse_one_child(child, build_view=True)
+
     assert wm.get_parent().get_secure_schema() == {
         "ParentXML": {
             "type": "object",
