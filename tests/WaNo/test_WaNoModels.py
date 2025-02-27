@@ -832,14 +832,16 @@ def test_MultipleOf(tmpWaNoRoot):
     wm.set_parent(wm_parent)
 
     mockroot = MagicMock()
-    mockroot.block_signals.return_value=True
+    mockroot.block_signals.return_value = True
     mockroot.detachanged_force.return_value = None
     wm.set_root(mockroot)
     dummy_model = MagicMock()
     dummy_model.set_parent.return_value = None
     dummy_root = MagicMock()
-    with patch("SimStackServer.WaNo.WaNoFactory.wano_constructor_helper",
-               return_value=(dummy_model, dummy_root)) as mock_helper:
+    with patch(
+        "SimStackServer.WaNo.WaNoFactory.wano_constructor_helper",
+        return_value=(dummy_model, dummy_root),
+    ):
         for child in wm.xml:
             wm.parse_one_child(child, build_view=True)
 
@@ -889,12 +891,14 @@ def test_MultipleOf(tmpWaNoRoot):
     assert wm.__len__() == 1
     this_child = None
 
-    with patch("SimStackServer.WaNo.WaNoFactory.wano_constructor_helper",
-               return_value=(dummy_model, dummy_root)) as mock_helper:
+    with patch(
+        "SimStackServer.WaNo.WaNoFactory.wano_constructor_helper",
+        return_value=(dummy_model, dummy_root),
+    ):
         for child in wm.xml:
             this_child = wm.parse_one_child(child, build_view=True)
             break
-        with patch.object(wm, "parse_one_child", return_value =this_child):
+        with patch.object(wm, "parse_one_child", return_value=this_child):
             wm.add_item()
 
     single_outdict = {}
