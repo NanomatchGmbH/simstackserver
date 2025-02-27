@@ -720,7 +720,7 @@ def test_WaNoNoneModel():
     assert wm.changed_from_default() is False
     assert wm.get_secure_schema() == {"key": {"type": "string"}}
     assert repr(wm) == ""
-
+    assert wm.__getitem__("someitem") is None
 
 def test_MultipleOf(tmpWaNoRoot):
     wm_with_switches = MultipleOfModel()
