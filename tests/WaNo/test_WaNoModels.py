@@ -899,7 +899,18 @@ def test_MultipleOf(tmpWaNoRoot):
             this_child = wm.parse_one_child(child, build_view=True)
             break
         with patch.object(wm, "parse_one_child", return_value=this_child):
+            mockview = MagicMock()
+            mockview.init_from_model.return_value = None
+            wm.set_view(mockview)
             wm.add_item()
+
+            wm.apply_delta(4)
+            assert wm.number_of_multiples() == 4
+            wm.set_view(None)
+            wm.apply_delta(6)
+            assert wm.number_of_multiples() == 6
+            wm.apply_delta(2)
+            assert wm.number_of_multiples() == 2
 
     single_outdict = {}
     wm.__getitem__(0).model_to_dict(single_outdict)
@@ -933,8 +944,9 @@ def test_MultipleOf(tmpWaNoRoot):
     # TODO: fix add_item()
     # wm.add_item()
     # assert wm.number_of_multiples() == 2
-    wm.delete_item()
+    assert wm.delete_item() is True
     assert wm.number_of_multiples() == 1
+    assert wm.delete_item() is False
     assert wm.get_type_str() == "MultipleOf"
     all_data = wm.get_data()
     all_data.append(all_data[0])
