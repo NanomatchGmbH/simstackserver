@@ -964,7 +964,7 @@ def test_MultipleOf(tmpWaNoRoot):
     wm.decommission()
 
 
-def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
+def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir, capsys):
     xml_root_string = """
         <WaNoTemplate>
             <WaNoRoot name="DummyRoot">
@@ -1006,6 +1006,10 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
 
     wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
 
+    wm.parse_from_xml(xml_root_string)
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "Fake Call"
+
     # ToDo The following does not work bc of simstack import in line 1006 not working. What is the correct import path for simstack.view?
     # mock_import_model = MagicMock()
     # mock_export_model = MagicMock()
@@ -1017,7 +1021,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     mock_object.make_default_list.return_value = None
     wm._exists_read_load(mock_object, pathlib.Path(tmpdir))
     mock_object.load.assert_called_once()
-    wm._exists_read_load(mock_object, pathlib.Path(tmpdir+"/some_not_existing_dir"))
+    wm._exists_read_load(mock_object, pathlib.Path(tmpdir + "/some_not_existing_dir"))
     mock_object.make_default_list.assert_called_once()
 
     mock_parent_wf = MagicMock()
@@ -1092,14 +1096,24 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     wm.export_model = mock_object
     wm._read_export(tmp_path)
 
+    validate_dict = {"dummy_int": 2}
+    with raises(ValueError):
+        wm.verify_output_against_schema(validate_dict)
+
     schema_file = tmp_path / "output_schema.json"
     schema_file.touch()
     with raises(JSONDecodeError):
         wm._read_output_schema(tmp_path)
-    with open(schema_file, 'w') as of:
+    with open(schema_file, "w") as of:
         json.dump(secure_schema, of)
     wm._read_output_schema(tmp_path)
     assert wm._output_schema == secure_schema
+
+    wm.verify_output_against_schema(validate_dict)
+    validate_dict["invalid_entry"] = "invalid"
+    with raises(ValidationError):
+        wm.verify_output_against_schema(validate_dict)
+
 
 @pytest.fixture
 def WaNoModelListLike():
