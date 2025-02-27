@@ -731,6 +731,7 @@ def test_WaNoNoneModel():
     assert repr(wm) == ""
     assert wm.__getitem__("someitem") is None
 
+
 def test_MultipleOf(tmpWaNoRoot):
     wm_with_switches = MultipleOfModel()
     xml_1_switch = fromstring(
