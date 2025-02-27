@@ -2,7 +2,7 @@ import copy
 import os
 import pathlib
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 from _pytest.python_api import raises
@@ -311,6 +311,9 @@ def test_WaNoSwitch():
     }
     assert wm.get_selected_id() == 0
     assert wm.get_type_str() == "String"
+    mockview = MagicMock()
+    mockview.init_from_model.return_value is None
+    wm.set_view(mockview)
     wm.apply_delta(1)
     assert wm.get_selected_id() == 1
     assert wm.get_type_str() == "Float"
@@ -326,6 +329,12 @@ def test_WaNoSwitch():
             "type": "object",
         }
     }
+    wano_list_iter = wm.__iter__()
+
+    data_list = ['"Hello"', 2.0]
+    for i in wano_list_iter:
+        assert i.get_data() in data_list
+
     # ToDo: set root to enable set_path and decommission
     # wm.set_root(res)
     # wm.set_path("update.path")
