@@ -1,6 +1,8 @@
 import copy
+import json
 import os
 import pathlib
+from json import JSONDecodeError
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -1003,11 +1005,30 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
         f.write(xml_root_string)
 
     wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
+
+    # ToDo The following does not work bc of simstack import in line 1006 not working. What is the correct import path for simstack.view?
+    # mock_import_model = MagicMock()
+    # mock_export_model = MagicMock()
+    # with patch("SimStack.view.PropertyListView.ImportTableModel", return_value=mock_import_model):
+    #   wm_2 = WaNoModelRoot(model_only=False, wano_dir_root=current_directory)
+
+    mock_object = MagicMock()
+    mock_object.load.return_value = None
+    mock_object.make_default_list.return_value = None
+    wm._exists_read_load(mock_object, pathlib.Path(tmpdir))
+    mock_object.load.assert_called_once()
+    wm._exists_read_load(mock_object, pathlib.Path(tmpdir+"/some_not_existing_dir"))
+    mock_object.make_default_list.assert_called_once()
+
+    mock_parent_wf = MagicMock()
+    wm.set_parent_wf(mock_parent_wf)
+    assert wm.get_parent_wf() == mock_parent_wf
+
     assert wm.get_name() == "DummyRoot"
     assert wm.get_type_str() == "WaNoRoot"
     assert wm.get_render_substitutions() == {}
     assert wm.get_new_resource_model().queue == "default"
-    assert wm.get_secure_schema() == {
+    secure_schema = {
         "$id": "https://example.com/product.schema.json",
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": False,
@@ -1017,6 +1038,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
         "title": "DummyRoot",
         "type": "object",
     }
+    assert wm.get_secure_schema() == secure_schema
     wm.block_signals(True)
     assert wm.block_signals(False) is True
     with raises(ValueError):
@@ -1054,8 +1076,30 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir):
     assert wm.get_metadata_dict() == {"folder": "WaNo", "name": "DummyRoot"}
     # ToDo: wano_walker_paths for dictlike and listlike
     assert wm.wano_walker_paths() == [("dummy_int", "Int")]
-    print()
 
+    # ToDo: Check if all these files need to be a fixture. Don't fully understand the difference
+    tmp_path = pathlib.Path(tmpdir)
+    importfile = tmp_path / "imports.yml"
+    exportfile = tmp_path / "exports.yml"
+    resourcesfile = tmp_path / "resources.yml"
+    importfile.touch()
+    exportfile.touch()
+    resourcesfile.touch()
+    mock_object = MagicMock()
+    mock_object.load.return_value = None
+    mock_object.make_default_list.return_value = None
+    wm.import_model = mock_object
+    wm.export_model = mock_object
+    wm._read_export(tmp_path)
+
+    schema_file = tmp_path / "output_schema.json"
+    schema_file.touch()
+    with raises(JSONDecodeError):
+        wm._read_output_schema(tmp_path)
+    with open(schema_file, 'w') as of:
+        json.dump(secure_schema, of)
+    wm._read_output_schema(tmp_path)
+    assert wm._output_schema == secure_schema
 
 @pytest.fixture
 def WaNoModelListLike():
