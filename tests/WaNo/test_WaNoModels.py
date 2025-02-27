@@ -268,7 +268,7 @@ def test_WaNoChoice():
     }
 
 
-def test_WaNoSwitch():
+def test_WaNoSwitch(capsys):
     wm = WaNoSwitchModel()
     xml = fromstring(
         """
@@ -335,10 +335,25 @@ def test_WaNoSwitch():
     for i in wano_list_iter:
         assert i.get_data() in data_list
 
-    # ToDo: set root to enable set_path and decommission
-    # wm.set_root(res)
-    # wm.set_path("update.path")
-    # wm.decommission()
+    mockroot = MagicMock()
+    mock_root_value = MagicMock()
+    mock_root_value.get_data.return_value = "switch_float"
+    mockroot.get_value.return_value = mock_root_value
+    mockroot.register_callback.return_value = None
+    mockroot.unregister_callback.return_value = None
+    wm.set_root(mockroot)
+
+    wm._evaluate_switch_condition("changed_path")
+    wm._evaluate_switch_condition("force")
+    # make throw key error
+    wm._switch_name_list = ["fake_key", "fake_data", "switch_string", "switch_float"]
+
+    wm._evaluate_switch_condition("force")
+    captured = capsys.readouterr()
+    assert captured.out.startswith("This will")
+
+    wm.set_path("update.path")
+    wm.decommission()
 
 
 def test_WaNoModelDictLike():
