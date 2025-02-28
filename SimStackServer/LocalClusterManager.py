@@ -33,9 +33,7 @@ from SimStackServer.MessageTypes import Message
 from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import filewalker
 
-
-class SSHExpectedDirectoryError(Exception):
-    pass
+from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
 
 class LocalClusterManager:
@@ -547,10 +545,8 @@ class LocalClusterManager:
         return messagetype, message
 
     def submit_wf(self, filename, basepath_override=None):
+        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
         if self._filegen_mode:
-            resolved_filename = self.resolve_file_in_basepath(
-                filename, basepath_override
-            )
             workflow = Workflow.new_instance_from_xml(resolved_filename)
             wf_storage = workflow.get_field_value("storage")
             if not wf_storage.startswith("/"):
@@ -561,9 +557,6 @@ class LocalClusterManager:
             workflow.jobloop()
             wm.backup_and_save()
         else:
-            resolved_filename = self.resolve_file_in_basepath(
-                filename, basepath_override
-            )
             self._socket.send(Message.submit_wf_message(resolved_filename))
             self._recv_ack_message()
 
