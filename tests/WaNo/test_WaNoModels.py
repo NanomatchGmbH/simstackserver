@@ -1229,8 +1229,22 @@ def test_WaNoModelRoot(
             )
 
             assert wm.render_and_write_input_files(tmpdir) is None
+            jsdl, wem_return = wm.render_and_write_input_files_newmodel(tmpdir)
+            assert jsdl is None
+            assert wem_return == "FakeExeModule"
 
     assert wm.render_exec_command({"dummy_int": 0}).strip() == "echo Hello"
+
+    assert wm.get_all_variable_paths() == ["dummy_int", "key1", "key2"]
+    assert wm.get_all_variable_paths(export=False) == ["dummy_int"]
+
+    wm.update_views_from_models()
+
+    mock_ndm = MagicMock()
+    mock_ndm.walker.return_value = {"skipdict_key": "skip_dict_val"}
+    with patch("SimStackServer.WaNo.WaNoModels.NestDictMod", return_value=mock_ndm):
+        wm.get_valuedict_with_aiida_types()
+        mock_ndm.walker.assert_called_once()
 
 
 @pytest.fixture
