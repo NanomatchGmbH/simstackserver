@@ -1339,7 +1339,7 @@ class WaNoModelRoot(WaNoModelDictLike):
     def save(self, outfolder):
         delta_json = Path(outfolder) / "wano_configuration.json"
         self.save_delta_json(delta_json)
-        self.save_resources_and_imports(outfolder)
+        self.save_resources_and_imports(Path(outfolder))
 
     def read_from_wano_delta(self, wd: WaNoDelta, infolder: pathlib.Path):
         self.apply_delta_dict(wd.command_dict)
