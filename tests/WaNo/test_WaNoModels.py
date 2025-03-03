@@ -1097,7 +1097,7 @@ def test_WaNoModelRoot(
     mock_object = MagicMock()
     mock_object.load.return_value = None
     mock_object.make_default_list.return_value = None
-    mock_object.get_contents.return_value = [["a"]]
+    mock_object.get_contents.return_value = [["a", "b", "c"]]
 
     wm.import_model = mock_object
     wm.export_model = mock_object
@@ -1208,6 +1208,18 @@ def test_WaNoModelRoot(
 
     for remote_file in ["deposit_init.sh", "report_template.body"]:
         assert os.path.exists(tmp_path / "inputs" / remote_file)
+
+    fvl = []
+
+    with patch("SimStackServer.WaNo.WaNoModels.Template", return_value=mock_template):
+        with patch(
+            "SimStackServer.WaNo.WaNoModels.WorkflowExecModule",
+            return_value="FakeExeModule",
+        ):
+            tmp, wem, local_files = wm.flat_variable_list_to_jsdl(fvl, tmpdir, tmpdir)
+            assert tmp is None
+            assert wem == "FakeExeModule"
+            assert len(local_files) == 0
 
 
 @pytest.fixture
