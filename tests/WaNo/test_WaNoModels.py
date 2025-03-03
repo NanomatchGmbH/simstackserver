@@ -964,7 +964,9 @@ def test_MultipleOf(tmpWaNoRoot):
     wm.decommission()
 
 
-def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpdir, capsys):
+def test_WaNoModelRoot(
+    tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpdir, capsys
+):
     xml_root_string = """
         <WaNoTemplate>
             <WaNoRoot name="DummyRoot">
@@ -974,6 +976,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
             <WaNoOutputFiles>
                 <WaNoOutputFile>output_config.ini</WaNoOutputFile>
                 <WaNoOutputFile>output_dict.yml</WaNoOutputFile>
+                <WaNoOutputFile>{{output_dict.yml}}</WaNoOutputFile>
             </WaNoOutputFiles>
             <WaNoInputFiles>
                <WaNoInputFile logical_filename="deposit_init.sh">deposit_init.sh</WaNoInputFile>
@@ -1006,7 +1009,10 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
         f.write(xml_root_string)
 
     rr_mock = MagicMock()
-    rr_mock.consolidate_export_dictionaries.return_value = {"key1": "value1", "key2": "value2"}
+    rr_mock.consolidate_export_dictionaries.return_value = {
+        "key1": "value1",
+        "key2": "value2",
+    }
     with patch("SimStackServer.WaNo.WaNoModels.ReportRenderer", return_value=rr_mock):
         wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
 
@@ -1023,6 +1029,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
     mock_object = MagicMock()
     mock_object.load.return_value = None
     mock_object.make_default_list.return_value = None
+
     wm._exists_read_load(mock_object, pathlib.Path(tmpdir))
     mock_object.load.assert_called_once()
     wm._exists_read_load(mock_object, pathlib.Path(tmpdir + "/some_not_existing_dir"))
@@ -1058,22 +1065,15 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
     with raises(ValidationError):
         wm.verify_against_secure_schema({"dummy_int_2": 1})
 
-    # ToDo: Fix simstack ModuleNotFoundError
-    # wm = WaNoModelRoot(model_only=False, wano_dir_root=current_directory)
-
-    # ToDo: Do we need to generate output_config.ini and output_dict.yml to test lines in _parse_from_xml ?
-
     assert wm.get_import_model() is None
     assert wm.get_export_model() is None
-    assert wm.get_output_files(only_static=True) == [
-        "output_config.ini",
-        "output_dict.yml",
-    ]
+
+    mock_template = MagicMock()
+    mock_template.render.return_value = "myfile.dat"
+
     with raises(NotImplementedError):
         wm.save_xml(None)
-    # ToDo: Do we need to change paths to seriously test those?
-    assert wm.get_changed_paths() == {}
-    assert wm.get_changed_command_paths() == {}
+
     assert wm.get_all_variable_paths() == ["dummy_int", "key1", "key2"]
     assert wm.get_all_variable_paths(export=False) == ["dummy_int"]
     assert wm.get_paths_and_data_dict() == {"dummy_int": "0"}
@@ -1096,8 +1096,11 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
     mock_object = MagicMock()
     mock_object.load.return_value = None
     mock_object.make_default_list.return_value = None
+    mock_object.get_contents.return_value = [["a"]]
+
     wm.import_model = mock_object
     wm.export_model = mock_object
+
     wm._read_export(tmp_path)
 
     validate_dict = {"dummy_int": 2}
@@ -1117,35 +1120,59 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
     validate_dict["invalid_entry"] = "invalid"
     with raises(ValidationError):
         wm.verify_output_against_schema(validate_dict)
-    #wm._unregister_list = [["mykey", "myfunc", "mydep"]]
-    #wm._register_list = [["mykey", "myfunc", "mydep"]]
+    # wm._unregister_list = [["mykey", "myfunc", "mydep"]]
+    # wm._register_list = [["mykey", "myfunc", "mydep"]]
 
-    def mock_callback(path):
+    def mock_callback_with_path(path):
         return None
+
     wm._notifying = True
-    wm.register_callback("cb_path", mock_callback, 1)
-    assert ("cb_path", mock_callback, 1) in wm._register_list
+    wm.register_callback("cb_path", mock_callback_with_path, 1)
+    assert ("cb_path", mock_callback_with_path, 1) in wm._register_list
     wm._notifying = False
-    wm.register_callback("cb_path_2", mock_callback, 1)
-    assert mock_callback in wm._datachanged_callbacks["cb_path_2"][1]
-    wm.unregister_callback("cb_path_2", mock_callback, 1)
-    assert ("cb_path_2", mock_callback, 1) not in wm._register_list
+    wm.register_callback("cb_path_2", mock_callback_with_path, 1)
+    assert mock_callback_with_path in wm._datachanged_callbacks["cb_path_2"][1]
+    wm.unregister_callback("cb_path_2", mock_callback_with_path, 1)
+    assert ("cb_path_2", mock_callback_with_path, 1) not in wm._register_list
     wm._notifying = True
     assert wm.notify_datachanged("unset") is None
     wm._block_signals = True
     assert wm.notify_datachanged("unset") is None
     wm._block_signals = False
     wm._notifying = False
-    wm.register_callback("cb_path_3", mock_callback, 1)
+    wm.register_callback("cb_path_3", mock_callback_with_path, 1)
     wm.notify_datachanged("unset")
     captured = capsys.readouterr()
     assert captured.out.strip() == "Found unset in path unset"
     wm.notify_datachanged("cb_path_3")
     wm.notify_datachanged("force")
-    with patch.object(wm, "register_callback", return_value=None) as mock_rc:
-        with patch.object(wm, "unregister_callback", return_value=None) as mock_urc:
+
+    wm.register_callback("cb_path_3", mock_callback_with_path, 1)
+    wm._notifying = False
+    wm.unregister_callback("cb_path_3", mock_callback_with_path, 1)
+
+    with patch.object(wm, "register_callback", return_value=None):
+        with patch.object(wm, "unregister_callback", return_value=None):
             wm._unregister_list = [["some", "thing", "tounregister"]]
             wm.notify_datachanged("unset")
+
+    def mock_callback():
+        return "None"
+
+    wm.register_outputfile_callback(mock_callback)
+    assert len(wm._outputfile_callbacks) == 1
+
+    with patch("SimStackServer.WaNo.WaNoModels.Template", return_value=mock_template):
+        assert wm.get_output_files(only_static=True) == [
+            "output_config.ini",
+            "output_dict.yml",
+            "myfile.dat",
+        ]
+        wm.get_output_files(only_static=False)
+
+    assert wm.get_changed_paths() == {}
+    assert wm.get_changed_command_paths() == {}
+
 
 @pytest.fixture
 def WaNoModelListLike():
