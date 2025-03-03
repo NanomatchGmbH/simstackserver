@@ -1142,7 +1142,10 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpd
     assert captured.out.strip() == "Found unset in path unset"
     wm.notify_datachanged("cb_path_3")
     wm.notify_datachanged("force")
-
+    with patch.object(wm, "register_callback", return_value=None) as mock_rc:
+        with patch.object(wm, "unregister_callback", return_value=None) as mock_urc:
+            wm._unregister_list = [["some", "thing", "tounregister"]]
+            wm.notify_datachanged("unset")
 
 @pytest.fixture
 def WaNoModelListLike():
