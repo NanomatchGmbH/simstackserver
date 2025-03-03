@@ -1221,6 +1221,13 @@ def test_WaNoModelRoot(
             assert wem == "FakeExeModule"
             assert len(local_files) == 0
 
+            assert wm.render_wano(tmpdir) == ({'dummy_int': 0}, None, 'FakeExeModule', [])
+
+            assert wm.render_and_write_input_files(tmpdir) is None
+
+    assert wm.render_exec_command({'dummy_int': 0}).strip() == 'echo Hello'
+
+
 
 @pytest.fixture
 def WaNoModelListLike():

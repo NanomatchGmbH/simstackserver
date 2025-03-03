@@ -1761,7 +1761,7 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     # @trace_to_logger
     def render_and_write_input_files(self, basefolder, stageout_basedir=""):
-        rendered_wano, jsdl, wem = self.render_wano(basefolder, stageout_basedir)
+        rendered_wano, jsdl, wem, local_stagein_files = self.render_wano(basefolder, stageout_basedir)
         self.prepare_files_submission(rendered_wano, basefolder)
         return jsdl
 
