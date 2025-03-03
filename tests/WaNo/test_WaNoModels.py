@@ -1174,6 +1174,18 @@ def test_WaNoModelRoot(
     assert wm.get_changed_command_paths() == {}
 
 
+    #wm.save_resources_and_imports(tmp_path)
+    wm.save(tmp_path)
+    assert os.path.exists(tmp_path / "resources.yml")
+    assert os.path.exists(tmp_path / "imports.yml")
+    assert os.path.exists(tmp_path / "exports.yml")
+    assert os.path.exists(tmp_path / "wano_configuration.json")
+
+
+
+
+
+
 @pytest.fixture
 def WaNoModelListLike():
     # You'd typically import it from your module:
