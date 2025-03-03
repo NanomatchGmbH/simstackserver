@@ -46,6 +46,7 @@ def tmpfileWaNoXml(tmp_path):
     # If you only need the path:
     yield xmlfile
 
+
 @pytest.fixture
 def tmpfileOutputIni(tmp_path):
     """Create a file named 'WaNo.xml' in a unique temp dir."""
@@ -65,6 +66,7 @@ def tmpfileOutputIni(tmp_path):
     # If you only need the path:
     yield inifile
 
+
 @pytest.fixture
 def tmpfileOutputYaml(tmp_path):
     """Create a file named 'WaNo.xml' in a unique temp dir."""
@@ -83,6 +85,7 @@ def tmpfileOutputYaml(tmp_path):
 
     # If you only need the path:
     yield yamlfile
+
 
 @pytest.fixture
 def temporary_file(tmp_path):

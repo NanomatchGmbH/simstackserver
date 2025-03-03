@@ -27,6 +27,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoModelRoot,
     WaNoParseError,
     WaNoMatrixModel,
+    FileNotFoundErrorSimStack,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -1173,17 +1174,40 @@ def test_WaNoModelRoot(
     assert wm.get_changed_paths() == {}
     assert wm.get_changed_command_paths() == {}
 
-
-    #wm.save_resources_and_imports(tmp_path)
+    # wm.save_resources_and_imports(tmp_path)
     wm.save(tmp_path)
     assert os.path.exists(tmp_path / "resources.yml")
     assert os.path.exists(tmp_path / "imports.yml")
     assert os.path.exists(tmp_path / "exports.yml")
     assert os.path.exists(tmp_path / "wano_configuration.json")
 
+    mock_wd = MagicMock()
+    mock_wd.command_dict.return_value = {}
+    mock_wd.value_dict.return_value = {}
 
+    with patch.object(wm, "apply_delta_dict", return_value=None) as mock_apdd:
+        wm.read_from_wano_delta(mock_wd, tmp_path)
+        mock_apdd.assert_called()
 
+    wm.read(tmp_path)
 
+    wm.set_wano_dir_root(tmp_path)
+    assert wm._wano_dir_root == tmp_path
+
+    rw = wm.get_rendered_wano_data()
+    assert wm.wano_walker_render_pass(rw) == {"dummy_int": 0}
+
+    with raises(FileNotFoundErrorSimStack):
+        wm.prepare_files_submission(rw, tmpdir)
+
+    for remote_file in ["deposit_init.sh", "report_template.body"]:
+        this_file = tmp_path / remote_file
+        this_file.touch()
+
+    wm.prepare_files_submission(rw, tmpdir)
+
+    for remote_file in ["deposit_init.sh", "report_template.body"]:
+        assert os.path.exists(tmp_path / "inputs" / remote_file)
 
 
 @pytest.fixture
