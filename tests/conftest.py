@@ -31,7 +31,8 @@ def tmpfile(tmp_path):
 def tmpfileWaNoXml(tmp_path):
     """Create a file named 'WaNo.xml' in a unique temp dir."""
     path = tmp_path / "WaNo"
-    path.mkdir()
+    if not os.path.exists(path):
+        path.mkdir()
 
     xmlfile = path / "WaNo.xml"
 
@@ -45,6 +46,43 @@ def tmpfileWaNoXml(tmp_path):
     # If you only need the path:
     yield xmlfile
 
+@pytest.fixture
+def tmpfileOutputIni(tmp_path):
+    """Create a file named 'WaNo.xml' in a unique temp dir."""
+    path = tmp_path / "WaNo"
+    if not os.path.exists(path):
+        path.mkdir()
+
+    inifile = path / "output_config.ini"
+
+    # Just touching the file ensures it exists; or you can open/write to it.
+    inifile.touch()
+
+    # If you need an open file handle:
+    # with path.open("w") as f:
+    #     yield f
+
+    # If you only need the path:
+    yield inifile
+
+@pytest.fixture
+def tmpfileOutputYaml(tmp_path):
+    """Create a file named 'WaNo.xml' in a unique temp dir."""
+    path = tmp_path / "WaNo"
+    if not os.path.exists(path):
+        path.mkdir()
+
+    yamlfile = path / "output_dict.yml"
+
+    # Just touching the file ensures it exists; or you can open/write to it.
+    yamlfile.touch()
+
+    # If you need an open file handle:
+    # with path.open("w") as f:
+    #     yield f
+
+    # If you only need the path:
+    yield yamlfile
 
 @pytest.fixture
 def temporary_file(tmp_path):

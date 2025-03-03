@@ -964,7 +964,7 @@ def test_MultipleOf(tmpWaNoRoot):
     wm.decommission()
 
 
-def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir, capsys):
+def test_WaNoModelRoot(tmpfileWaNoXml, tmpfileOutputIni, tmpfileOutputYaml, tmpdir, capsys):
     xml_root_string = """
         <WaNoTemplate>
             <WaNoRoot name="DummyRoot">
@@ -979,6 +979,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir, capsys):
                <WaNoInputFile logical_filename="deposit_init.sh">deposit_init.sh</WaNoInputFile>
                <WaNoInputFile logical_filename="report_template.body">report_template.body</WaNoInputFile>
             </WaNoInputFiles>
+            <WaNoMeta name="WaNoMeta"/>
         </WaNoTemplate>
     """
 
@@ -1004,7 +1005,10 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir, capsys):
     with tmpfileWaNoXml.open("w") as f:
         f.write(xml_root_string)
 
-    wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
+    rr_mock = MagicMock()
+    rr_mock.consolidate_export_dictionaries.return_value = {"key1": "value1", "key2": "value2"}
+    with patch("SimStackServer.WaNo.WaNoModels.ReportRenderer", return_value=rr_mock):
+        wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
 
     wm.parse_from_xml(xml_root_string)
     captured = capsys.readouterr()
@@ -1070,7 +1074,7 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir, capsys):
     # ToDo: Do we need to change paths to seriously test those?
     assert wm.get_changed_paths() == {}
     assert wm.get_changed_command_paths() == {}
-    assert wm.get_all_variable_paths() == ["dummy_int"]
+    assert wm.get_all_variable_paths() == ["dummy_int", "key1", "key2"]
     assert wm.get_all_variable_paths(export=False) == ["dummy_int"]
     assert wm.get_paths_and_data_dict() == {"dummy_int": "0"}
     assert wm.get_extra_inputs_aiida() == ["deposit_init.sh", "report_template.body"]
@@ -1113,6 +1117,31 @@ def test_WaNoModelRoot(tmpfileWaNoXml, tmpdir, capsys):
     validate_dict["invalid_entry"] = "invalid"
     with raises(ValidationError):
         wm.verify_output_against_schema(validate_dict)
+    #wm._unregister_list = [["mykey", "myfunc", "mydep"]]
+    #wm._register_list = [["mykey", "myfunc", "mydep"]]
+
+    def mock_callback(path):
+        return None
+    wm._notifying = True
+    wm.register_callback("cb_path", mock_callback, 1)
+    assert ("cb_path", mock_callback, 1) in wm._register_list
+    wm._notifying = False
+    wm.register_callback("cb_path_2", mock_callback, 1)
+    assert mock_callback in wm._datachanged_callbacks["cb_path_2"][1]
+    wm.unregister_callback("cb_path_2", mock_callback, 1)
+    assert ("cb_path_2", mock_callback, 1) not in wm._register_list
+    wm._notifying = True
+    assert wm.notify_datachanged("unset") is None
+    wm._block_signals = True
+    assert wm.notify_datachanged("unset") is None
+    wm._block_signals = False
+    wm._notifying = False
+    wm.register_callback("cb_path_3", mock_callback, 1)
+    wm.notify_datachanged("unset")
+    captured = capsys.readouterr()
+    assert captured.out.strip() == "Found unset in path unset"
+    wm.notify_datachanged("cb_path_3")
+    wm.notify_datachanged("force")
 
 
 @pytest.fixture
