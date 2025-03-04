@@ -139,13 +139,16 @@ def test_WaNoItemBoolModel():
     assert wibm.get_data() is False
 
 
-def test_WaNoItemStringModel():
+def test_WaNoItemStringModel(tmpfile):
     wism = WaNoItemStringModel()
     xml = fromstring(
         """
-        <WaNoString name="key">content</WaNoString>
+        <WaNoString name="key" dynamic_output="test %s">content</WaNoString>
     """
     )
+    mock_root = MagicMock()
+    mock_root.register_outputfile_callback.return_value = None
+    wism._root = mock_root
     wism.parse_from_xml(xml)
     assert wism.get_data() == "content"
     wism.set_data("newcontent")
@@ -161,6 +164,19 @@ def test_WaNoItemStringModel():
     assert repr(wism) == "'newcontent'"
     assert wism.changed_from_default() is True
     assert wism.get_type_str() == "String"
+
+    assert wism.__getitem__("dummy") is None
+
+    wism.set_import(tmpfile)
+    assert wism.get_delta_to_default() == f"import_from:{tmpfile}"
+
+    of = wism.get_extra_output_files()
+    assert "test newcontent" in of
+
+    wism.apply_delta("next_newcontent")
+    assert wism.get_data() == "next_newcontent"
+
+    assert wism.changed_from_default() is True
 
 
 def test_WaNoItemScriptFileModel(tmpdir, tmpfileOutputYaml):
@@ -731,7 +747,12 @@ def test_WaNoThreeRandomLetters():
 
     assert len(wism._generate_default_string()) == 3
 
+    mock_view = MagicMock()
+    mock_view.init_from_model.return_value = None
+    wism._view = mock_view
     wism.set_data("newcontent")
+    mock_view.init_from_model.assert_called_once()
+
     assert wism.get_data() == "new"
     assert wism.get_delta_to_default() == "new"
     # Check that existing content is not overwritten
