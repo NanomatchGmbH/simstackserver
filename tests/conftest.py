@@ -134,6 +134,55 @@ def tmpWaNoRoot(tmpfileWaNoXml, tmpdir):
 
 
 @pytest.fixture
+def tmpWaNoRootDynamicChoice(tmpfileWaNoXml, tmpdir):
+    xml_root_string = """
+    <WaNoTemplate>
+    <WaNoRoot name="lightforge2">
+        <WaNoTabs name="TABS">
+            <WaNoGroup name="IO">
+                <WaNoMultipleOf name="QP output file">
+                  <Element id="0">
+                     <WaNoString name="name">mol: A,B</WaNoString>
+                     <WaNoFile logical_filename="QP_output.zip" name="QP_output zip">Put file here</WaNoFile>
+                  </Element>
+                   <Element id="1">
+                     <WaNoString name="name">mol: C,D</WaNoString>
+                     <WaNoFile logical_filename="QP_output.zip" name="QP_output zip">Put file here</WaNoFile>
+                  </Element>
+                </WaNoMultipleOf>
+                <WaNoBool name="Override Settings" >False</WaNoBool>
+                <WaNoFile name="Override File" visibility_condition="%s == True" visibility_var_path="TABS.IO.Override Settings" logical_filename="override_settings.yml">YML file</WaNoFile>
+            </WaNoGroup>
+            <WaNoGroup name="DD">
+                <WaNoDynamicDropDown name="QP_output_excitonics" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
+            </WaNoGroup>
+        </WaNoTabs>
+    </WaNoRoot>
+    <WaNoExecCommand>echo Hello</WaNoExecCommand>
+            <WaNoOutputFiles>
+                <WaNoOutputFile>output_config.ini</WaNoOutputFile>
+                <WaNoOutputFile>output_dict.yml</WaNoOutputFile>
+            </WaNoOutputFiles>
+            <WaNoInputFiles>
+               <WaNoInputFile logical_filename="deposit_init.sh">deposit_init.sh</WaNoInputFile>
+               <WaNoInputFile logical_filename="report_template.body">report_template.body</WaNoInputFile>
+            </WaNoInputFiles>
+    </WaNoTemplate>
+  """
+    # Write the XML contents to the file
+    with tmpfileWaNoXml.open("w") as f:
+        f.write(xml_root_string)
+
+    # Initialize WaNoModelRoot
+    # wano_dir_root is the directory containing WaNo.xml
+    current_directory = tmpfileWaNoXml.parent
+    wm = WaNoModelRoot(model_only=True, wano_dir_root=current_directory)
+
+    # Yield the fully-initialized instance for use in tests
+    yield wm
+
+
+@pytest.fixture
 def workflow_exec_module_fixture(tmpdir):
     """
     Returns a WorkflowExecModule instance with minimal (but valid) defaults for pytest.

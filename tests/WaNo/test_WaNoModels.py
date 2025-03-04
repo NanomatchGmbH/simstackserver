@@ -28,6 +28,7 @@ from SimStackServer.WaNo.WaNoModels import (
     WaNoParseError,
     WaNoMatrixModel,
     FileNotFoundErrorSimStack,
+    WaNoDynamicChoiceModel,
 )
 from xml.etree.ElementTree import fromstring
 
@@ -45,7 +46,7 @@ def test_mkdir_p(tmpdir):
         mkdir_p("/norightstomkthis")
 
 
-def test_WaNoItemIntModel():
+def test_WaNoItemIntModel(tmpfile):
     wiim = WaNoItemIntModel()
     xml = fromstring(
         """
@@ -68,9 +69,13 @@ def test_WaNoItemIntModel():
     assert repr(wiim) == "13"
     wiim._do_import = True
     assert wiim.changed_from_default() is True
+    assert wiim.__getitem__("dummy") is None
+
+    wiim.set_import(tmpfile)
+    assert wiim.get_delta_to_default() == f"import_from:{tmpfile}"
 
 
-def test_WaNoItemFloatModel():
+def test_WaNoItemFloatModel(tmpfile):
     wifm = WaNoItemFloatModel()
     xml = fromstring(
         """
@@ -96,6 +101,10 @@ def test_WaNoItemFloatModel():
     assert repr(wifm) == "4.0"
     wifm._do_import = True
     assert wifm.changed_from_default() is True
+
+    wifm.set_import(tmpfile)
+    assert wifm.get_delta_to_default() == f"import_from:{tmpfile}"
+    assert wifm.__getitem__("dummy") is None
 
 
 def test_WaNoItemBoolModel():
@@ -137,6 +146,7 @@ def test_WaNoItemBoolModel():
     assert wibm.get_data() is True
     wibm.parse_from_xml(xml_lower_false)
     assert wibm.get_data() is False
+    assert wibm.__getitem__("dummy") is None
 
 
 def test_WaNoItemStringModel(tmpfile):
@@ -186,9 +196,25 @@ def test_WaNoItemScriptFileModel(tmpdir, tmpfileOutputYaml):
             <WaNoScriptV2 name="Script" logical_filename="input.script">input.script</WaNoScriptV2>
         """
     )
+    xml_local_true = fromstring(
+        """
+            <WaNoScriptV2 local="True" name="Script" logical_filename="input.script">input.script</WaNoScriptV2>
+        """
+    )
+    xml_local_false = fromstring(
+        """
+            <WaNoScriptV2 local="False" name="Script" logical_filename="input.script">input.script</WaNoScriptV2>
+        """
+    )
+    wm.parse_from_xml(xml_local_false)
+    assert wm.is_local_file is False
+    assert wm.get_delta_to_default() == "global://input.script"
+    wm.parse_from_xml(xml_local_true)
+    assert wm.is_local_file is True
+    assert wm.get_delta_to_default() == "local://input.script"
     wm.parse_from_xml(xml)
     assert wm.get_type_str() == "File"
-
+    assert wm.__getitem__("dummy") is None
     mock_root = MagicMock()
     mock_root.get_dir_root.return_value = tmpdir
     wm._root = mock_root
@@ -386,6 +412,21 @@ def test_WaNoSwitch(capsys):
 
     wm.set_path("update.path")
     wm.decommission()
+
+    wm_fail_sec = WaNoSwitchModel()
+    xml_fail_sec = fromstring(
+        """
+        <WaNoSwitch switch_path="switch.path" name="MySwitch">
+            <WaNoSwitch switch_path="switch.path" name="MySwitch_sub" switch_name="switch_switch">
+                <WaNoString name="test_var" switch_name="switch_string">"Hello"</WaNoString>
+                <WaNoFloat name="test_var" switch_name="switch_float">2.0</WaNoFloat>
+            </WaNoSwitch>
+        </WaNoSwitch>
+        """
+    )
+    wm_fail_sec.parse_from_xml(xml_fail_sec)
+    with raises(NotImplementedError):
+        wm_fail_sec.get_secure_schema()
 
 
 def test_WaNoModelDictLike():
@@ -925,6 +966,11 @@ def test_MultipleOf(tmpWaNoRoot):
         outlist.append(item)
     assert outlist == ["test_float"]
 
+    outlist = []
+    for i, item in wm.__iter__():
+        outlist.append(item)
+    assert outlist == ["test_float"]
+
     assert wm.__len__() == 1
     this_child = None
 
@@ -1367,3 +1413,29 @@ def test_WaNoModelListLike(WaNoModelListLike):
 
     with raises(NotImplementedError):
         wm.get_secure_schema()
+
+
+def test_WaNoDynamicChoiceModel(tmpWaNoRootDynamicChoice):
+    xml = fromstring(
+        """
+                    <WaNoDynamicDropDown name="QP_output_excitonics" collection_path="TABS.IO.QP output file" subpath="name" chosen="0" />
+      """
+    )
+    wm = WaNoDynamicChoiceModel()
+    wm._connected = False
+    assert wm._update_choices("dummy") is None
+    wm.parse_from_xml(xml)
+    assert wm.chosen == 0
+    assert wm._collection_path == "TABS.IO.QP output file"
+
+    wm.set_root(tmpWaNoRootDynamicChoice)
+    assert wm.get_data() == "uninitialized"
+
+    assert wm.get_secure_schema() == {"QP_output_excitonics": {"type": "string"}}
+
+    wm.set_chosen(1)
+    assert wm.chosen == 1
+    assert wm._registered is True
+    wm._update_choices("TABS.IO.QP output file 2")
+
+    wm.decommission()
