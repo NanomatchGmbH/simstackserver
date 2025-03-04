@@ -271,7 +271,6 @@ class WaNoChoiceModel(AbstractWanoModel):
         return schema
 
 
-# ToDo: Timo I could not find any usage of DynamicChoiceModel in any Nanomatch-WaNo
 class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def __init__(self, *args, **kwargs):
         super(WaNoDynamicChoiceModel, self).__init__(*args, **kwargs)
