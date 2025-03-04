@@ -163,7 +163,7 @@ def test_WaNoItemStringModel():
     assert wism.get_type_str() == "String"
 
 
-def test_WaNoItemScriptFileModel():
+def test_WaNoItemScriptFileModel(tmpdir, tmpfileOutputYaml):
     wm = WaNoItemScriptFileModel()
     xml = fromstring(
         """
@@ -172,10 +172,23 @@ def test_WaNoItemScriptFileModel():
     )
     wm.parse_from_xml(xml)
     assert wm.get_type_str() == "File"
-    # assert wm.get_as_text()
-    # wm.render()
-    # wm.save_text()
-    # wm.get_path()
+
+    mock_root = MagicMock()
+    mock_root.get_dir_root.return_value = tmpdir
+    wm._root = mock_root
+    assert wm.get_as_text() == ""
+
+    wm.save_text("test_text")
+    assert wm.get_as_text() == "test_text"
+
+    mock_template = MagicMock()
+    mock_template.render.return_value = "destfile.dat"
+    with patch("SimStackServer.WaNo.WaNoModels.Template", return_value=mock_template):
+        assert wm.render(tmpfileOutputYaml, tmpdir, tmpdir) == "destfile.dat"
+        absfile = pathlib.Path(tmpdir) / "inputs" / "destfile.dat"
+        with open(absfile, "r") as f:
+            content = f.read()
+        assert content == "test_text"
 
 
 def test_WaNoFileModel(tmpdir):
