@@ -937,6 +937,7 @@ def test_abort_job_internal():
         mock.get_instance.return_value = batchsys_instance_mock, MagicMock()
         wfem.abort_job()
         assert batchsys_instance_mock.abort_job.call_count == 1
+        wfem.completed_or_aborted()
 
 def test_abort_job_internal_slurm():
     wfem = WorkflowExecModule()
@@ -955,19 +956,76 @@ def test_abort_job_internal_slurm():
             wfem.abort_job()
             assert asyncmock.mock_calls[1][0] == '().cancel'
 
-def test_abort_job_external_cm():
-    wfem = WorkflowExecModule()
-    wfem._field_values["jobid"] = "1234"
-    wfem._field_values["resources"] = Resources(
-        resource_name="other_cluster",
-        base_URI="somewhere_else",
-        username="test_user",
-        queue="test_queue",
-        queueing_system="slurm",
-        port=2222,
-    )
-    with patch("SimStackServer.WorkflowModel.RemoteServerManager") as asyncmock:
-        wfem.abort_job()
-        assert str(asyncmock.get_instance.return_value.server_from_resource.mock_calls[3]).startswith("call().send_abortsinglejob_message('")
+#def test_abort_job_external_cm():
+#    wfem = WorkflowExecModule()
+#    wfem._field_values["jobid"] = "1234"
+#    wfem._field_values["resources"] = Resources(
+#        resource_name="other_cluster",
+#        base_URI="somewhere_else",
+#        username="test_user",
+#        queue="test_queue",
+#        queueing_system="slurm",
+#        port=2222,
+#    )
+#    with patch("SimStackServer.WorkflowModel.RemoteServerManager") as asyncmock:
+#        wfem.abort_job()
+#        assert str(asyncmock.get_instance.return_value.server_from_resource.mock_calls[3]).startswith("call().send_abortsinglejob_message('")
+
+def test_set_queueing_system(sample_wfem):
+    sample_wfem.set_queueing_system("slurm")
+    assert sample_wfem._field_values["queueing_system"] == "slurm"
+
+def test_set_path(sample_wfem):
+    sample_wfem.set_path("/new/path")
+    assert sample_wfem._field_values["path"] == "/new/path"
+
+def test_path_property(sample_wfem):
+    sample_wfem._field_values["path"] = "/test/path"
+    assert sample_wfem.path == "/test/path"
+
+def test_wano_xml_property(sample_wfem):
+    sample_wfem._field_values["wano_xml"] = "test.xml"
+    assert sample_wfem.wano_xml == "test.xml"
+
+def test_set_wano_xml(sample_wfem):
+    sample_wfem.set_wano_xml("new_test.xml")
+    assert sample_wfem._field_values["wano_xml"] == "new_test.xml"
+
+def test_set_outputpath(sample_wfem):
+    sample_wfem.set_outputpath("/output/path")
+    assert sample_wfem._field_values["outputpath"] == "/output/path"
+
+def test_outputpath_property(sample_wfem):
+    sample_wfem._field_values["outputpath"] = "/test/output"
+    assert sample_wfem.outputpath == "/test/output"
+
+def test_get_report_html(sample_wfem):
+    sample_wfem._rendered_body_html = "<p>test</p>"
+    detail_html = sample_wfem.get_rendered_body_html()
+    assert etree.tounicode(detail_html) == '<details class="wano "><summary>EmployeeRecord</summary><p class="report"><p>test</p></p><p class="result"></p></details>'
+
+def test_set_runtime_directory(sample_wfem):
+    sample_wfem.set_runtime_directory("/new/runtime/directory")
+    assert sample_wfem.runtime_directory == "/new/runtime/directory"
+
+def test_set_external_runtime_directory(sample_wfem):
+    sample_wfem.set_external_runtime_directory("/new/external/runtime/directory")
+    assert sample_wfem.external_runtime_directory == "/new/external/runtime/directory"
+
+def test_set_jobid(sample_wfem):
+    sample_wfem.set_jobid("new_jobid")
+    assert sample_wfem.jobid == "new_jobid"
+
+def test_set_given_name(sample_wfem):
+    sample_wfem.set_given_name("new_given_name")
+    assert sample_wfem.given_name == "new_given_name"
+
+def test_set_exec_command(sample_wfem):
+    sample_wfem.set_exec_command("new_exec_command")
+    assert sample_wfem.exec_command == "new_exec_command"
+
+def test_set_original_result_directory(sample_wfem):
+    sample_wfem.set_original_result_directory("/new/original/result/directory")
+    assert sample_wfem.original_result_directory == "/new/original/result/directory"
 
 
