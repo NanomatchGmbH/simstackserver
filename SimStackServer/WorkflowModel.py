@@ -1304,8 +1304,6 @@ fi
                 return True
             return False
         else:
-            from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
-
             batchsys, _ = InternalBatchSystem.get_instance()
             status = batchsys.jobstatus(self.jobid)
             # self._logger.info(f"BATCHSYSTEM STATUS WAS {status}")
@@ -2106,10 +2104,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
     @property
     def finish_uid(self) -> str:
         return self._field_values["finish_uid"]
-
-    # @property
-    # def parent_ids(self) -> str:
-    #    return self._field_values["parent_ids"]
 
     def rename(self, renamedict):
         # First we rename our own uid:
