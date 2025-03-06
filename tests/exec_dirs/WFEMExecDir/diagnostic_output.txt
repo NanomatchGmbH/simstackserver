@@ -7,4 +7,4 @@ localhost
 -- HOSTFILE END --
 DOING CPU binding benchmark
 CPU binding benchmark done.
-QP binary location: 
+QP binary location:

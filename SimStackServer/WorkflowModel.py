@@ -24,7 +24,6 @@ from lxml import etree
 import lxml.html
 
 
-
 from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
 from SimStackServer.ClusterManager import ClusterManager
 from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
@@ -953,7 +952,7 @@ fi
         timestring += "%02d" % seconds
         return timestring
 
-    def run_jobfile(self, external_cluster_manager: ClusterManager=None):
+    def run_jobfile(self, external_cluster_manager: ClusterManager = None):
         actual_resources = self.resources
         queueing_system = actual_resources.queueing_system
         temphandler = StringLoggingHandler()
@@ -964,7 +963,6 @@ fi
         self.set_runtime_directory(abs_resolve_file(self.runtime_directory))
 
         if external_cluster_manager is not None:
-
             with external_cluster_manager.connection_context():
                 ext_dir_name = (
                     external_cluster_manager.mkdir_random_singlejob_exec_directory(
@@ -1000,7 +998,6 @@ fi
         rootlogger = logging.getLogger("")
         rootlogger.addHandler(temphandler)
         try:
-
             # Sanity checks
             # check if runtime directory is not unset
             queue = actual_resources.queue
@@ -1235,14 +1232,12 @@ fi
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
 
-
         if len(JobScript._backends) == 0:
             JobScript("DummyJob")
             assert len(JobScript._backends) > 0
 
         ar = AsyncResult(JobScript._backends[actual_resources.queueing_system])
         ar.job_id = self.jobid
-
 
         ar._status = PENDING
         return ar

@@ -70,7 +70,8 @@ def wfem_exec_dir():
 
 
 def SampleWFEM(wfem_exec_dir):
-    xml = """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord${var}">
+    xml = (
+        """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord${var}">
   <inputs>
     <Ele_2 id="2" type="StringList">
       <Ele_0 id="0" type="str">test.png</Ele_0>
@@ -93,15 +94,19 @@ def SampleWFEM(wfem_exec_dir):
   <jobid>0</jobid>
   <queueing_system>Internal</queueing_system>
 </WorkflowExecModule>
-"""%wfem_exec_dir
+"""
+        % wfem_exec_dir
+    )
     test_xml = etree.parse(StringIO(xml)).getroot()
     wfem = WorkflowExecModule()
     wfem.from_xml(test_xml)
     return wfem
 
+
 @pytest.fixture
 def sample_wfem(wfem_exec_dir):
     return SampleWFEM(wfem_exec_dir)
+
 
 # Test for _is_basetype function
 def test_is_basetype():
@@ -230,11 +235,11 @@ class TestXMLYMLInstantiationBase:
         assert instance.get_field_value("test_field") == "test_value"
 
 
-
 def test_wfem_fill_in_variables(sample_wfem):
     sample_wfem.fill_in_variables({"${var}": "teststr2"})
     assert sample_wfem.outputs[0][1] == "teststr2"
     assert sample_wfem.outputpath == "EmployeeRecordteststr2"
+
 
 @pytest.fixture
 def exec_directory():
@@ -695,6 +700,7 @@ def test_workflow_element_factory_raises():
     with pytest.raises(NotImplementedError):
         workflow_element_factory("UnknownClass")
 
+
 def test_check_if_job_is_local(monkeypatch):
     # Create a mock WorkflowExecModule instance
     resources = Resources(resource_name="localhost")
@@ -727,6 +733,7 @@ def test_check_if_job_is_local(monkeypatch):
     monkeypatch.setattr("SimStackServer.WorkflowModel.is_localhost", lambda x: False)
     assert wfem.check_if_job_is_local() is False
 
+
 def test_wfem_rename(sample_wfem):
     rename_dict = {sample_wfem.uid: "replacement_for_testing"}
     sample_wfem.rename(rename_dict)
@@ -735,15 +742,19 @@ def test_wfem_rename(sample_wfem):
     with pytest.raises(KeyError):
         sample_wfem.rename(rename_dict)
 
+
 def test_wfem__get_clustermanager_from_job(sample_wfem):
-    sample_wfem._field_values["resources"] = Resources(resource_name="localhost",
-                                                       base_URI="localhost")
-    assert sample_wfem._get_clustermanager_from_job()._url == 'localhost'
+    sample_wfem._field_values["resources"] = Resources(
+        resource_name="localhost", base_URI="localhost"
+    )
+    assert sample_wfem._get_clustermanager_from_job()._url == "localhost"
+
 
 def test_get_prolog_unicore_compatibility(sample_wfem, conda_prefix_tmpdir):
     resources = Resources()
     result = sample_wfem._get_prolog_unicore_compatibility(resources)
-    expected =  """
+    expected = (
+        """
 UC_NODES=1; export UC_NODES;
 UC_PROCESSORS_PER_NODE=1; export UC_PROCESSORS_PER_NODE;
 UC_TOTAL_PROCESSORS=1; export UC_TOTAL_PROCESSORS;
@@ -793,10 +804,13 @@ then
 fi
 ###########################################################
 
-"""%conda_prefix_tmpdir
+"""
+        % conda_prefix_tmpdir
+    )
     assert result == expected
 
-def test_wefem_run_jobfile(sample_wfem):
+
+def test_wfem_run_jobfile(sample_wfem):
     sample_wfem.do_internal = False
     sample_wfem.do_aiida = False
     resource = Resources(
@@ -805,16 +819,27 @@ def test_wefem_run_jobfile(sample_wfem):
         username="test_user",
         queue="test_queue",
         queueing_system="slurm",
-        port=2222)
+        port=2222,
+    )
     sample_wfem._field_values["resources"] = resource
     with patch("SimStackServer.WorkflowModel.JobScript") as mock:
-        result = sample_wfem.run_jobfile()
+        sample_wfem.run_jobfile()
         calls = mock.call_args_list
-        assert calls[0].kwargs == {'backend': 'slurm', 'jobname': 'EmployeeRecord', 'mem': 4096, 'nodes': 1, 'ppn': 1, 'queue': 'test_queue',
-         'stderr': 'EmployeeRecord.stderr', 'stdout': 'EmployeeRecord.stdout', 'time': '23:59:59',
-         'workdir': ANY}
+        assert calls[0].kwargs == {
+            "backend": "slurm",
+            "jobname": "EmployeeRecord",
+            "mem": 4096,
+            "nodes": 1,
+            "ppn": 1,
+            "queue": "test_queue",
+            "stderr": "EmployeeRecord.stderr",
+            "stdout": "EmployeeRecord.stdout",
+            "time": "23:59:59",
+            "workdir": ANY,
+        }
 
-def test_wefem_run_jobfile_external_clustermanager(sample_wfem):
+
+def test_wfem_run_jobfile_external_clustermanager(sample_wfem):
     sample_wfem.do_internal = False
     sample_wfem.do_aiida = False
     resource = Resources(
@@ -823,37 +848,20 @@ def test_wefem_run_jobfile_external_clustermanager(sample_wfem):
         username="test_user",
         queue="test_queue",
         queueing_system="slurm",
-        port=2222)
+        port=2222,
+    )
     sample_wfem._field_values["resources"] = resource
     external_cluster_manager_mock = MagicMock()
     sample_wfem.run_jobfile(external_cluster_manager=external_cluster_manager_mock)
-    call_args = external_cluster_manager_mock.call_args
     assert external_cluster_manager_mock.put_directory.call_count == 1
-    assert external_cluster_manager_mock.mkdir_random_singlejob_exec_directory.call_count == 1
+    assert (
+        external_cluster_manager_mock.mkdir_random_singlejob_exec_directory.call_count
+        == 1
+    )
     assert external_cluster_manager_mock.submit_single_job.call_count == 1
     localhost_wfem = external_cluster_manager_mock.submit_single_job.call_args[0][0]
     # Check that the wfem sent to the other clustermanager runs on localhost then:
     assert localhost_wfem.resources._field_values["base_URI"] == "localhost"
-
-def test_wefem_run_jobfile(sample_wfem):
-    sample_wfem.do_internal = False
-    sample_wfem.do_aiida = False
-    resource = Resources(
-        resource_name="test_cluster",
-        base_URI="test_host.example.com",
-        username="test_user",
-        queue="test_queue",
-        queueing_system="slurm",
-        port=2222)
-    sample_wfem._field_values["resources"] = resource
-    with patch("SimStackServer.WorkflowModel.JobScript") as mock:
-        result = sample_wfem.run_jobfile()
-        calls = mock.call_args_list
-        assert calls[0].kwargs == {'backend': 'slurm', 'jobname': 'EmployeeRecord', 'mem': 4096, 'nodes': 1, 'ppn': 1, 'queue': 'test_queue',
-         'stderr': 'EmployeeRecord.stderr', 'stdout': 'EmployeeRecord.stdout', 'time': '23:59:59',
-         'workdir': ANY}
-
-
 
 
 def test_wefem_run_jobfile_internalbatch(sample_wfem):
@@ -865,7 +873,8 @@ def test_wefem_run_jobfile_internalbatch(sample_wfem):
         username="test_user",
         queue="test_queue",
         queueing_system="Internal",
-        port=2222)
+        port=2222,
+    )
     sample_wfem._field_values["resources"] = resource
     with patch("SimStackServer.WorkflowModel.InternalBatchSystem") as mock:
         batchsys_instance_mock = MagicMock()
@@ -887,10 +896,12 @@ def test_wefem_run_jobfile_onlyscript(sample_wfem):
         username="test_user",
         queue="test_queue",
         queueing_system="OnlyScript",
-        port=2222)
+        port=2222,
+    )
     sample_wfem._field_values["resources"] = resource
     sample_wfem.run_jobfile()
     assert sample_wfem.jobid == 1
+
 
 def test_wefem_run_jobfile_error_write_stderr(sample_wfem, wfem_exec_dir):
     sample_wfem.do_internal = False
@@ -901,9 +912,9 @@ def test_wefem_run_jobfile_error_write_stderr(sample_wfem, wfem_exec_dir):
         username="test_user",
         queue="test_queue",
         queueing_system="I DO NOT EXIST",
-        port=2222
+        port=2222,
     )
     sample_wfem._field_values["resources"] = resource
     with pytest.raises(ValueError):
         sample_wfem.run_jobfile()
-    assert (pathlib.Path(wfem_exec_dir) / "submission_failed.stderr" ).is_file()
+    assert (pathlib.Path(wfem_exec_dir) / "submission_failed.stderr").is_file()

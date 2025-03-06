@@ -62,10 +62,10 @@ fi
     #!/bin/bash
 echo "Shell was set to: $SHELL" > diagnostic_output.txt
 echo "NANOMATCH variable was set to - $NANOMATCH -" >> diagnostic_output.txt
-       
+
 export NANOVER=V4
 source $NANOMATCH/$NANOVER/configs/quantumpatch.config
-       
+
 if [ "AA$HOSTFILE" == "AA" ]
 then
     echo "HOSTFILE variable was not set. Please check customer_config.sh for the correct setting of the HOSTFILE variable. Exiting." >> diagnostic_output.txt
@@ -93,5 +93,3 @@ echo "CPU binding benchmark done." >> diagnostic_output.txt
 
 echo "QP binary location: " >> diagnostic_output.txt
 which QuantumPatchNG.py >> diagnostic_output.txt
-
-
