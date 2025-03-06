@@ -23,7 +23,12 @@ import yaml
 from lxml import etree
 import lxml.html
 
+
+
 from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
+from SimStackServer.ClusterManager import ClusterManager
+from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
+
 from SimStackServer.Util.Exceptions import SecurityError
 from SimStackServer.Util.localhost_checker import is_localhost
 from nestdictmod.nestdictmod import NestDictMod
@@ -43,7 +48,7 @@ from SimStackServer.Util.FileUtilities import (
     abs_resolve_file,
 )
 from SimStackServer.Util.ResultRepo import ResultRepo
-from clusterjob import FAILED
+from clusterjob import AsyncResult, JobScript, PENDING, FAILED
 from nestdictmod.flatten_dict import flatten_dict
 from jinja2 import Template
 
@@ -948,7 +953,7 @@ fi
         timestring += "%02d" % seconds
         return timestring
 
-    def run_jobfile(self, external_cluster_manager=None):
+    def run_jobfile(self, external_cluster_manager: ClusterManager=None):
         actual_resources = self.resources
         queueing_system = actual_resources.queueing_system
         temphandler = StringLoggingHandler()
@@ -959,9 +964,7 @@ fi
         self.set_runtime_directory(abs_resolve_file(self.runtime_directory))
 
         if external_cluster_manager is not None:
-            from SimStackServer.ClusterManager import ClusterManager
 
-            external_cluster_manager: ClusterManager
             with external_cluster_manager.connection_context():
                 ext_dir_name = (
                     external_cluster_manager.mkdir_random_singlejob_exec_directory(
@@ -997,7 +1000,6 @@ fi
         rootlogger = logging.getLogger("")
         rootlogger.addHandler(temphandler)
         try:
-            import clusterjob
 
             # Sanity checks
             # check if runtime directory is not unset
@@ -1047,7 +1049,7 @@ fi
             if queueing_system == "sge":
                 kwargs["sge_pe"] = actual_resources.sge_pe
             try:
-                jobscript = clusterjob.JobScript(
+                jobscript = JobScript(
                     toexec,
                     backend=queueing_system,
                     jobname=self.given_name,
@@ -1084,7 +1086,8 @@ fi
                         )
                     # self._async_result_workaround = asyncresult
                     self.set_jobid(asyncresult.job_id)
-                elif do_aiida:
+                # Aiida deprecated therefore no coverage
+                elif do_aiida:  # pragma: no cover
                     from aiida.orm import load_code
                     from aiida.plugins import CalculationFactory
                     from aiida.engine import submit
@@ -1157,10 +1160,6 @@ fi
                         for i in range(0, actual_resources.cpus_per_node):
                             hoststream.write("localhost\n")
                     if not dont_run:
-                        from SimStackServer.Util.InternalBatchSystem import (
-                            InternalBatchSystem,
-                        )
-
                         batchsys, _ = InternalBatchSystem.get_instance()
                         jobid = batchsys.add_work_to_current_bracket(
                             int(actual_resources.cpus_per_node), "smp", runscript
@@ -1235,7 +1234,7 @@ fi
         ), "Recreating asyncresult from jobid not supported for Internal queueing system"
         # This function is a placeholder still. We need to generate the asyncresult just from the jobid.
         # It will require a modified clusterjob
-        from clusterjob import AsyncResult, JobScript
+
 
         if len(JobScript._backends) == 0:
             JobScript("DummyJob")
@@ -1243,7 +1242,7 @@ fi
 
         ar = AsyncResult(JobScript._backends[actual_resources.queueing_system])
         ar.job_id = self.jobid
-        from clusterjob.status import PENDING
+
 
         ar._status = PENDING
         return ar

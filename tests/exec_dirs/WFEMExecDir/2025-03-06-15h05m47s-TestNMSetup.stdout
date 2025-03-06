@@ -1,0 +1,12 @@
+/home/strunk/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup/jobscript.sh: line 67: /V4/configs/quantumpatch.config: No such file or directory
+/home/strunk/micromamba/envs/simstack_server_v6/bin/python: No module named mpi4py
+/home/strunk/micromamba/envs/simstack_server_v6/bin/python: No module named mpi4py
+/home/strunk/micromamba/envs/simstack_server_v6/bin/python: No module named mpi4py
+--------------------------------------------------------------------------
+prte detected that one or more processes exited with non-zero status,
+thus causing the job to be terminated. The first process to do so was:
+
+   Process name: [prte-bastille-56756@1,0]
+   Exit code:    1
+--------------------------------------------------------------------------
+which: no QuantumPatchNG.py in (/home/strunk/micromamba/envs/simstack_server_v6/bin:/home/strunk/.local/bin:/home/strunk/micromamba/condabin:/home/strunk/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/lib/jvm/default/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:/home/strunk/.pixi/bin)
