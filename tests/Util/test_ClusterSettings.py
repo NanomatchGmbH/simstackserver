@@ -6,16 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add SimStackServer to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
 from SimStackServer.Util.ClusterSettings import (
     get_clustersettings_filename_from_folder,
     remove_clustersettings_from_folder,
     get_cluster_settings_from_folder,
     save_cluster_settings_to_folder,
 )
-from SimStackServer.WorkflowModel import Resources
+
+# Add SimStackServer to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 
 @pytest.fixture
@@ -54,23 +53,31 @@ def emptypath(tmppath):
         os.mkdir(targetdir)
     yield targetdir
 
+
 def test_get_clustersettings_filename_from_folder(tmppath, cluster_settings):
     clustername = [key for key in cluster_settings.keys()][0]
     result = get_clustersettings_filename_from_folder(tmppath, clustername)
     assert result == tmppath / f"{clustername}.clustersettings"
 
+
 def test_remove_clustersettings_from_folder(tmppath, cluster_settings):
     clustername = [key for key in cluster_settings.keys()][0]
     mock_gcfff = MagicMock()
     mock_gcfff.unlink.return_value = None
-    with patch("SimStackServer.Util.ClusterSettings.get_clustersettings_filename_from_folder", return_value = mock_gcfff):
+    with patch(
+        "SimStackServer.Util.ClusterSettings.get_clustersettings_filename_from_folder",
+        return_value=mock_gcfff,
+    ):
         remove_clustersettings_from_folder(tmppath, clustername)
     mock_gcfff.unlink.assert_called_once()
 
 
-def test_get_cluster_settings_from_folder(tmppath,emptypath,cluster_settings):
+def test_get_cluster_settings_from_folder(tmppath, emptypath, cluster_settings):
     assert get_cluster_settings_from_folder(emptypath) == {}
-    assert [k for k in get_cluster_settings_from_folder(tmppath).keys()] == [k for k in cluster_settings.keys()]
+    assert [k for k in get_cluster_settings_from_folder(tmppath).keys()] == [
+        k for k in cluster_settings.keys()
+    ]
+
 
 def test_save_cluster_settings_to_folder(tmppath, cluster_settings):
     loaded_cluster_settings = get_cluster_settings_from_folder(tmppath)
