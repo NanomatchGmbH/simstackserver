@@ -1,4 +1,5 @@
-from SimStackServer import ClusterManager
+from SimStackServer.ClusterManager import ClusterManager
+from SimStackServer.WorkflowModel import Resources
 
 
 class RemoteServerManager:
@@ -13,19 +14,13 @@ class RemoteServerManager:
             cls.instance = RemoteServerManager()
         return cls.instance
 
-    def _get_key_from_resource(self, resource) -> str:
-        from SimStackServer.WorkflowModel import Resources
-
-        resource: Resources
+    def _get_key_from_resource(self, resource :Resources ) -> str:
         return f"{resource.username}@{resource.base_URI}:{resource.port}"
 
-    def server_from_resource(self, resource):
-        from SimStackServer.WorkflowModel import Resources
-
-        resource: Resources
+    def server_from_resource(self, resource: Resources):
         key = self._get_key_from_resource(resource)
         if key not in self._other_servers:
-            cm = ClusterManager.ClusterManager(
+            cm = ClusterManager(
                 url=resource.base_URI,
                 port=resource.port,
                 calculation_basepath=resource.basepath,
