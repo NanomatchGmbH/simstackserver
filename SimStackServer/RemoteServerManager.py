@@ -14,7 +14,7 @@ class RemoteServerManager:
             cls.instance = RemoteServerManager()
         return cls.instance
 
-    def _get_key_from_resource(self, resource :Resources ) -> str:
+    def _get_key_from_resource(self, resource: Resources) -> str:
         return f"{resource.username}@{resource.base_URI}:{resource.port}"
 
     def server_from_resource(self, resource: Resources):
