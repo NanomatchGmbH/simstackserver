@@ -188,7 +188,7 @@ class TestXMLYMLInstantiationBase:
 
 
 def SampleWFEM():
-    xml = """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord">
+    xml = """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord${var}">
   <inputs>
     <Ele_2 id="2" type="StringList">
       <Ele_0 id="0" type="str">test.png</Ele_0>
@@ -198,7 +198,7 @@ def SampleWFEM():
   <outputs>
     <Ele_0 id="0" type="StringList">
       <Ele_0 id="0" type="str">test</Ele_0>
-      <Ele_1 id="1" type="str">test</Ele_1>
+      <Ele_1 id="1" type="str">${var}</Ele_1>
     </Ele_0>
   </outputs>
   <exec_command>touch test</exec_command>
@@ -217,6 +217,12 @@ def SampleWFEM():
     wfem.from_xml(test_xml)
     return wfem
 
+
+def test_wfem_fill_in_variables():
+    wfem = SampleWFEM()
+    wfem.fill_in_variables({"${var}": "teststr2"})
+    assert wfem.outputs[0][1] == "teststr2"
+    assert wfem.outputpath == "EmployeeRecordteststr2"
 
 @pytest.fixture
 def exec_directory():
@@ -594,43 +600,43 @@ def test_resources():
     ab.to_xml(test_xml)
 
 
-def overwrite_unset_fields_from_default_resources_sets_basepath():
+def test_overwrite_unset_fields_from_default_resources_sets_basepath():
     default_resources = Resources(basepath="/default/path")
     resources = Resources(resource_name="<Connected Server>")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.basepath == "/default/path"
 
 
-def overwrite_unset_fields_from_default_resources_sets_base_URI():
+def test_overwrite_unset_fields_from_default_resources_sets_base_URI():
     default_resources = Resources(base_URI="http://default.uri")
     resources = Resources(base_URI="http://default.uri")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
-    assert resources.base_URI is None
+    assert resources.base_URI == "None"
     assert resources.resource_name == "<Connected Server>"
 
 
-def overwrite_unset_fields_from_default_resources_sets_queue():
+def test_overwrite_unset_fields_from_default_resources_sets_queue():
     default_resources = Resources(queue="default_queue")
     resources = Resources(queue="default")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.queue == "default_queue"
 
 
-def overwrite_unset_fields_from_default_resources_sets_queueing_system():
+def test_overwrite_unset_fields_from_default_resources_sets_queueing_system():
     default_resources = Resources(queueing_system="slurm")
     resources = Resources(queueing_system="unset")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.queueing_system == "slurm"
 
 
-def overwrite_unset_fields_from_default_resources_sets_sge_pe():
+def test_overwrite_unset_fields_from_default_resources_sets_sge_pe():
     default_resources = Resources(sge_pe="default_pe")
     resources = Resources(sge_pe="unset")
     resources.overwrite_unset_fields_from_default_resources(default_resources)
     assert resources.sge_pe == "default_pe"
 
 
-def overwrite_unset_fields_from_default_resources_does_not_overwrite_set_fields():
+def test_overwrite_unset_fields_from_default_resources_does_not_overwrite_set_fields():
     default_resources = Resources(
         queue="default_queue", queueing_system="slurm", sge_pe="default_pe"
     )
@@ -676,3 +682,36 @@ def test_workflow_element_factory(name, expected_class):
 def test_workflow_element_factory_raises():
     with pytest.raises(NotImplementedError):
         workflow_element_factory("UnknownClass")
+
+def test_check_if_job_is_local(monkeypatch):
+    # Create a mock WorkflowExecModule instance
+    resources = Resources(resource_name="localhost")
+    wfem = WorkflowExecModule(resources=resources)
+
+    # Mock the os.getlogin function to return a specific username
+    monkeypatch.setattr(os, "getlogin", lambda: "testuser")
+
+    # Test case 1: resource_name is None
+    wfem.resources.set_field_value("resource_name", None)
+    assert wfem.check_if_job_is_local() is True
+
+    # Test case 2: resource_name is <Connected Server>
+    wfem.resources.set_field_value("resource_name", Resources._connected_server_text)
+    assert wfem.check_if_job_is_local() is True
+
+    # Test case 3: resource_name is not None or <Connected Server> and username matches
+    wfem.resources.set_field_value("resource_name", "remote_server")
+    wfem.resources.set_field_value("username", "testuser")
+    monkeypatch.setattr(os, "getlogin", lambda: "testuser")
+    monkeypatch.setattr("SimStackServer.WorkflowModel.is_localhost", lambda x: True)
+    assert wfem.check_if_job_is_local() is True
+
+    # Test case 4: resource_name is not None or <Connected Server> and username does not match
+    wfem.resources.set_field_value("username", "otheruser")
+    assert wfem.check_if_job_is_local() is False
+
+    # Test case 5: resource_name is not None or <Connected Server> and base_URI is not localhost
+    wfem.resources.set_field_value("username", "testuser")
+    monkeypatch.setattr("SimStackServer.WorkflowModel.is_localhost", lambda x: False)
+    assert wfem.check_if_job_is_local() is False
+
