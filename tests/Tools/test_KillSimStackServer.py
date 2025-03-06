@@ -11,9 +11,7 @@ class TestKillSimStackServer:
     @patch("os.fork")
     @patch("os.geteuid")
     @patch("SimStackServer.Tools.KillSimStackServer.subprocess.Popen")
-    def test_main_parent_process(
-        self, mock_popen, mock_geteuid, mock_fork
-    ):
+    def test_main_parent_process(self, mock_popen, mock_geteuid, mock_fork):
         # Simulate parent process
         mock_fork.return_value = 42  # Non-zero PID means parent
 
@@ -34,9 +32,7 @@ class TestKillSimStackServer:
     @patch("os.fork")
     @patch("os.geteuid")
     @patch("SimStackServer.Tools.KillSimStackServer.subprocess.Popen")
-    def test_main_child_process_as_root(
-        self, mock_popen, mock_geteuid, mock_fork
-    ):
+    def test_main_child_process_as_root(self, mock_popen, mock_geteuid, mock_fork):
         # Simulate child process
         mock_fork.return_value = 0  # Zero PID means child
 
@@ -52,5 +48,3 @@ class TestKillSimStackServer:
         # Verify proper script was executed with correct parameters
         mock_popen.assert_called_once()
         mock_proc.communicate.assert_called_once()
-
-
