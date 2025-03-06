@@ -271,7 +271,6 @@ class WaNoChoiceModel(AbstractWanoModel):
         return schema
 
 
-# ToDo: Timo I could not find any usage of DynamicChoiceModel in any Nanomatch-WaNo
 class WaNoDynamicChoiceModel(WaNoChoiceModel):
     def __init__(self, *args, **kwargs):
         super(WaNoDynamicChoiceModel, self).__init__(*args, **kwargs)
@@ -467,6 +466,7 @@ class WaNoMatrixModel(AbstractWanoModel):
         self.storage[i][j] = self._cast_to_correct_type(data)
 
     def _fromstring(self, stri):
+        stri = stri.strip()
         list_of_lists = ast.literal_eval(stri)
         if not isinstance(list_of_lists, list):
             raise SyntaxError("Expected list of lists")
@@ -1338,7 +1338,7 @@ class WaNoModelRoot(WaNoModelDictLike):
     def save(self, outfolder):
         delta_json = Path(outfolder) / "wano_configuration.json"
         self.save_delta_json(delta_json)
-        self.save_resources_and_imports(outfolder)
+        self.save_resources_and_imports(Path(outfolder))
 
     def read_from_wano_delta(self, wd: WaNoDelta, infolder: pathlib.Path):
         self.apply_delta_dict(wd.command_dict)
@@ -1760,7 +1760,9 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     # @trace_to_logger
     def render_and_write_input_files(self, basefolder, stageout_basedir=""):
-        rendered_wano, jsdl, wem = self.render_wano(basefolder, stageout_basedir)
+        rendered_wano, jsdl, wem, local_stagein_files = self.render_wano(
+            basefolder, stageout_basedir
+        )
         self.prepare_files_submission(rendered_wano, basefolder)
         return jsdl
 
