@@ -918,3 +918,56 @@ def test_wefem_run_jobfile_error_write_stderr(sample_wfem, wfem_exec_dir):
     with pytest.raises(ValueError):
         sample_wfem.run_jobfile()
     assert (pathlib.Path(wfem_exec_dir) / "submission_failed.stderr").is_file()
+
+
+
+def test_abort_job_internal():
+    wfem = WorkflowExecModule()
+    wfem._field_values["jobid"] = "1234"
+    wfem._field_values["resources"] = Resources(
+        resource_name="<Connected Server>",
+        base_URI="localhost",
+        username="test_user",
+        queue="test_queue",
+        queueing_system="Internal",
+        port=2222,
+    )
+    with patch("SimStackServer.WorkflowModel.InternalBatchSystem") as mock:
+        batchsys_instance_mock = MagicMock()
+        mock.get_instance.return_value = batchsys_instance_mock, MagicMock()
+        wfem.abort_job()
+        assert batchsys_instance_mock.abort_job.call_count == 1
+
+def test_abort_job_internal_slurm():
+    wfem = WorkflowExecModule()
+    wfem._field_values["jobid"] = "1234"
+    wfem._field_values["resources"] = Resources(
+        resource_name="<Connected Server>",
+        base_URI="localhost",
+        username="test_user",
+        queue="test_queue",
+        queueing_system="slurm",
+        port=2222,
+    )
+    with patch("SimStackServer.WorkflowModel.AsyncResult") as asyncmock:
+        with patch("SimStackServer.WorkflowModel.JobScript") as clusterjobmock:
+            clusterjobmock._backends = {"slurm": MagicMock()}
+            wfem.abort_job()
+            assert asyncmock.mock_calls[1][0] == '().cancel'
+
+def test_abort_job_external_cm():
+    wfem = WorkflowExecModule()
+    wfem._field_values["jobid"] = "1234"
+    wfem._field_values["resources"] = Resources(
+        resource_name="other_cluster",
+        base_URI="somewhere_else",
+        username="test_user",
+        queue="test_queue",
+        queueing_system="slurm",
+        port=2222,
+    )
+    with patch("SimStackServer.WorkflowModel.RemoteServerManager") as asyncmock:
+        wfem.abort_job()
+        assert str(asyncmock.get_instance.return_value.server_from_resource.mock_calls[3]).startswith("call().send_abortsinglejob_message('")
+
+

@@ -23,7 +23,7 @@ import yaml
 from lxml import etree
 import lxml.html
 
-
+from SimStackServer.RemoteServerManager import RemoteServerManager
 from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
 from SimStackServer.ClusterManager import ClusterManager
 from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
@@ -867,8 +867,6 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._field_values["uid"] = newuid
 
     def _get_clustermanager_from_job(self):
-        from SimStackServer.RemoteServerManager import RemoteServerManager
-
         remote_server_manager = RemoteServerManager.get_instance()
         return remote_server_manager.server_from_resource(self.resources)
 
@@ -1191,13 +1189,11 @@ fi
         actual_resources = self.resources
         if not self.check_if_job_is_local():
             self._logger.info("Aborting job in non-local server.")
-            from SimStackServer.ClusterManager import ClusterManager
-
             cm: ClusterManager = self._get_clustermanager_from_job()
             with cm.connection_context():
                 cm.send_abortsinglejob_message(self.uid)
 
-        elif actual_resources.queueing_system == "AiiDA":
+        elif actual_resources.queueing_system == "AiiDA":  # pragma: no cover
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 
             myjob = AiiDAJob(self.jobid)
@@ -1219,8 +1215,6 @@ fi
                     return True
                 raise
         else:
-            from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
-
             batchsys, _ = InternalBatchSystem.get_instance()
             batchsys.abort_job(self.jobid)
 
@@ -1269,7 +1263,6 @@ fi
     def completed_or_aborted(self):
         actual_resources = self.resources
         if self._my_external_cluster_manager is not None:
-            from SimStackServer.ClusterManager import ClusterManager
 
             self._my_external_cluster_manager: ClusterManager
             with self._my_external_cluster_manager.connection_context():
@@ -1295,7 +1288,7 @@ fi
                     return True
                 raise
 
-        elif actual_resources.queueing_system == "AiiDA":
+        elif actual_resources.queueing_system == "AiiDA":   # pragma: no cover
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 
             myjob = AiiDAJob(self.jobid)
@@ -1458,10 +1451,10 @@ fi
     def external_runtime_directory(self):
         return self._field_values["external_runtime_directory"]
 
-    def set_aiida_valuedict(self, aiida_valuedict):
+    def set_aiida_valuedict(self, aiida_valuedict):  # pragma: no cover
         self._aiida_valuedict = aiida_valuedict
 
-    def get_aiida_valuedict(self, aiida_valuedict):
+    def get_aiida_valuedict(self, aiida_valuedict):  # pragma: no cover
         assert (
             self._aiida_valuedict is not None
         ), "AiiDA value dict was not generated before query."
@@ -2913,7 +2906,7 @@ class Workflow(XMLYMLInstantiationBase):
             runtime_variables=wfem.get_runtime_variables(),
         )
         render_substitutions = wmr.get_render_substitutions()
-        if queueing_system == "AiiDA":
+        if queueing_system == "AiiDA":   # pragma: no cover
             do_aiida = True
             from aiida.orm import load_node, SinglefileData
             import aiida.orm as orm
@@ -2950,24 +2943,6 @@ class Workflow(XMLYMLInstantiationBase):
                 with (Path(jobdirectory) / "security_error.log").open("w") as outfile:
                     outfile.write(message)
                 raise SecurityError(message)
-
-        # Debug dump
-        if False:
-            # Plan:
-            """
-                1.) Take care of fi1es. Check provenance graph of running simulation for their namespaces
-                 # Record dict mapping stageout filename to AiiDA uuid.
-                 # When staging in files, overwrite
-                 # Stagein Filename has to be considered in WaNoCalcJob still. Right now we use filename
-                2.) Write translation layer: FILESYSTEM Path -> AiiDA output variable name
-                3.) Input variables are still missing in the aiida path to uuid dict
-
-            """
-            with open(join(jobdirectory, "inputvardb.yml"), "wt") as outfile:
-                yaml.safe_dump(self._input_variables, outfile)
-
-            with open(join(jobdirectory, "outputvardb.yml"), "wt") as outfile:
-                yaml.safe_dump(self._output_variables, outfile)
 
         """ Sanity check to check if all files are there """
         for myinput in wfem.inputs:
@@ -3044,7 +3019,7 @@ class Workflow(XMLYMLInstantiationBase):
                         % (absfile, e)
                     )
                     shutil.copyfile(absfile, tofile)
-                if do_aiida:
+                if do_aiida:  # pragma: no cover
                     if absfile in self._filepath_to_aiida_uuid:
                         myuuid = self._filepath_to_aiida_uuid[absfile]
                         afile = load_node(myuuid)
@@ -3112,7 +3087,6 @@ class Workflow(XMLYMLInstantiationBase):
         secure_mode = SecureModeGlobal.get_secure_mode()
 
         if not wfem.check_if_job_is_local():
-            from SimStackServer.ClusterManager import ClusterManager
 
             mycm: ClusterManager = self._get_clustermanager_from_job(wfem)
             runtime_dir = wfem.runtime_directory
@@ -3241,7 +3215,7 @@ class Workflow(XMLYMLInstantiationBase):
             topath = wfem.outputpath.replace("/", ".")
             for key, value in flattened_output_variables.items():
                 self._output_variables["%s.%s" % (topath, key)] = value
-            if queueing_system == "AiiDA":
+            if queueing_system == "AiiDA":  # pragma: no cover
                 for sims_path, my_uuid in simstack_path_to_aiida_uuid.items():
                     self._path_to_aiida_uuid["%s.%s" % (topath, sims_path)] = my_uuid
 
