@@ -1,0 +1,10 @@
+Shell was set to: /usr/bin/bash
+NANOMATCH variable was set to -  -
+HOSTFILE was set to /home/strunk/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup/HOSTFILE
+HOSTFILE was set to /home/strunk/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup/HOSTFILE. Contents were:
+-- HOSTFILE BEGIN --
+localhost
+-- HOSTFILE END --
+DOING CPU binding benchmark
+CPU binding benchmark done.
+QP binary location: 
