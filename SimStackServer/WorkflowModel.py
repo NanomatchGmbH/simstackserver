@@ -841,6 +841,7 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
     def check_if_job_is_local(self):
         trivial_local = self.resources.resource_name in [
             None,
+            "None",
             Resources._connected_server_text,
         ]
         if trivial_local:
