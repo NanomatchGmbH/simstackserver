@@ -45,9 +45,10 @@ from SimStackServer.WorkflowModel import XMLYMLInstantiationBase
 @pytest.fixture(autouse=True)
 def conda_prefix_tmpdir():
     with tempfile.TemporaryDirectory() as tmpdirname:
-        with mock.patch.dict(os.environ, {"CONDA_PREFIX": tmpdirname}):
+        prefix = pathlib.Path(tmpdirname) / "envs" / "simstack_server_v6"
+        with mock.patch.dict(os.environ, {"CONDA_PREFIX": str(prefix)}):
             os.makedirs(os.path.join(tmpdirname, "envs"), exist_ok=True)
-            yield
+            yield tmpdirname
 
 
 @pytest.fixture
@@ -59,6 +60,41 @@ def temp_xml_file():
             xml_file.write(xml_str)
         yield xml_file_path
 
+
+
+def SampleWFEM():
+    xml = """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord${var}">
+  <inputs>
+    <Ele_2 id="2" type="StringList">
+      <Ele_0 id="0" type="str">test.png</Ele_0>
+      <Ele_1 id="1" type="str">workflow_data/EmployeeRecord/inputs/test.png</Ele_1>
+    </Ele_2>
+  </inputs>
+  <outputs>
+    <Ele_0 id="0" type="StringList">
+      <Ele_0 id="0" type="str">test</Ele_0>
+      <Ele_1 id="1" type="str">${var}</Ele_1>
+    </Ele_0>
+  </outputs>
+  <exec_command>touch test</exec_command>
+  <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
+    <queue>None</queue>
+    <host>localhost</host>
+    <custom_requests>None</custom_requests>
+  </resources>
+  <runtime_directory>/home/unittest_testuser/simstack_workspace/2022-02-01-15h43m23s-rmo/exec_directories/2022-02-01-15h43m23s-EmployeeRecord</runtime_directory>
+  <jobid>0</jobid>
+  <queueing_system>Internal</queueing_system>
+</WorkflowExecModule>
+"""
+    test_xml = etree.parse(StringIO(xml)).getroot()
+    wfem = WorkflowExecModule()
+    wfem.from_xml(test_xml)
+    return wfem
+
+@pytest.fixture
+def sample_wfem():
+    return SampleWFEM()
 
 # Test for _is_basetype function
 def test_is_basetype():
@@ -186,36 +222,6 @@ class TestXMLYMLInstantiationBase:
         instance = TestClass.new_instance_from_xml(temp_xml_file)
         assert instance.get_field_value("test_field") == "test_value"
 
-
-def SampleWFEM():
-    xml = """    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="653895b9-4a4b-4a14-b2ca-ba7aaf12e8f6" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord${var}">
-  <inputs>
-    <Ele_2 id="2" type="StringList">
-      <Ele_0 id="0" type="str">test.png</Ele_0>
-      <Ele_1 id="1" type="str">workflow_data/EmployeeRecord/inputs/test.png</Ele_1>
-    </Ele_2>
-  </inputs>
-  <outputs>
-    <Ele_0 id="0" type="StringList">
-      <Ele_0 id="0" type="str">test</Ele_0>
-      <Ele_1 id="1" type="str">${var}</Ele_1>
-    </Ele_0>
-  </outputs>
-  <exec_command>touch test</exec_command>
-  <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
-    <queue>None</queue>
-    <host>localhost</host>
-    <custom_requests>None</custom_requests>
-  </resources>
-  <runtime_directory>/home/unittest_testuser/simstack_workspace/2022-02-01-15h43m23s-rmo/exec_directories/2022-02-01-15h43m23s-EmployeeRecord</runtime_directory>
-  <jobid>0</jobid>
-  <queueing_system>Internal</queueing_system>
-</WorkflowExecModule>
-"""
-    test_xml = etree.parse(StringIO(xml)).getroot()
-    wfem = WorkflowExecModule()
-    wfem.from_xml(test_xml)
-    return wfem
 
 
 def test_wfem_fill_in_variables():
@@ -715,3 +721,79 @@ def test_check_if_job_is_local(monkeypatch):
     monkeypatch.setattr("SimStackServer.WorkflowModel.is_localhost", lambda x: False)
     assert wfem.check_if_job_is_local() is False
 
+def test_wfem_rename(sample_wfem):
+    rename_dict = {sample_wfem.uid: "replacement_for_testing"}
+    sample_wfem.rename(rename_dict)
+    assert sample_wfem.uid == "replacement_for_testing"
+
+    with pytest.raises(KeyError):
+        sample_wfem.rename(rename_dict)
+
+def test_wfem__get_clustermanager_from_job(sample_wfem):
+    sample_wfem._field_values["resources"] = Resources(resource_name="localhost",
+                                                       base_URI="localhost")
+    assert sample_wfem._get_clustermanager_from_job()._url == 'localhost'
+
+def test_get_prolog_unicore_compatibility(sample_wfem, conda_prefix_tmpdir):
+    resources = Resources()
+    result = sample_wfem._get_prolog_unicore_compatibility(resources)
+    expected =  """
+UC_NODES=1; export UC_NODES;
+UC_PROCESSORS_PER_NODE=1; export UC_PROCESSORS_PER_NODE;
+UC_TOTAL_PROCESSORS=1; export UC_TOTAL_PROCESSORS;
+UC_MEMORY_PER_NODE=4096; export UC_MEMORY_PER_NODE;
+BASEFOLDER="%s"
+
+# The following are exports to resolve previous and future
+# versions of the SimStackServer conda / python interpreters
+###########################################################
+
+simstack_server_mamba_source () {{
+    MICROMAMBA_BIN="$BASEFOLDER/envs/simstack_server_v6/bin/micromamba"
+    if [ -f "$MICROMAMBA_BIN" ]
+    then
+        export MAMBA_ROOT_PREFIX=$BASEFOLDER
+        eval "$($MICROMAMBA_BIN shell hook -s posix)"
+        export MAMBA_EXE=micromamba
+    else
+        if [ -d "$BASEFOLDER/../local_anaconda" ]
+        then
+            source $BASEFOLDER/../local_anaconda/etc/profile.d/conda.sh
+        else
+            source $BASEFOLDER/etc/profile.d/conda.sh
+        fi
+        export MAMBA_EXE=conda
+    fi
+}}
+
+# Following are the legacy exports:
+if [ -d "$BASEFOLDER/../local_anaconda" ]
+then
+    # In this case we are in legacy installation mode:
+    export NANOMATCH="$BASEFOLDER/../.."
+fi
+
+if [ -f "$BASEFOLDER/nanomatch_environment_config.sh" ]
+then
+    source "$BASEFOLDER/nanomatch_environment_config.sh"
+fi
+if [ -f "$BASEFOLDER/simstack_environment_config.sh" ]
+then
+    source "$BASEFOLDER/simstack_environment_config.sh"
+fi
+if [ -f "/etc/simstack/simstack_environment_config.sh" ]
+then
+    source "/etc/simstack/simstack_environment_config.sh"
+fi
+###########################################################
+
+"""%conda_prefix_tmpdir
+    assert result == expected
+
+
+def test_wefem_run_jobfile(sample_wfem):
+
+    sample_wfem.do_internal = False
+    sample_wfem.do_aiida = False
+
+    result = sample_wfem.run_jobfile()
