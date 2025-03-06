@@ -165,46 +165,34 @@ class TestResultRepo:
                 assert b == str(output_dir)
 
 
+    def test_store_results(self):
+        mock_wfem = MagicMock()
+        mock_resources = MagicMock()
+        mock_resources.basepath = self.test_dir
+        mock_wfem.resources = mock_resources
+        mock_wfem.runtime_directory = self.test_dir
 
-
-    @patch("SimStackServer.Util.ResultRepo.sqlalchemy")
-    @patch("SimStackServer.Util.ResultRepo.os.path.exists")
-    @patch("SimStackServer.Util.ResultRepo.shutil.copytree")
-    def test_store_results(self, mock_copytree, mock_exists, mock_sqlalchemy):
-        # Mock database engine and create tables
-        mock_engine = MagicMock()
-        mock_sqlalchemy.create_engine.return_value = mock_engine
-
-        # Mock the metadata and table
-        mock_metadata = MagicMock()
-        mock_sqlalchemy.MetaData.return_value = mock_metadata
-
-        # Mock Table and Column
-        mock_sqlalchemy.Table = MagicMock()
-        mock_sqlalchemy.Column = MagicMock()
-        mock_sqlalchemy.String = MagicMock()
-
-        # Configure connection for insert
-        mock_conn = MagicMock()
-        mock_engine.connect.return_value = mock_conn
-
-        # Mock execution module
         mock_module = MagicMock()
         mock_module.get_name.return_value = "test_module"
         mock_module.get_configuration.return_value = {"param1": "value1"}
         mock_module.get_inpath.return_value = self.test_dir
-        mock_module.get_outpath.return_value = os.path.join(self.test_dir, "output")
+        mock_engine = MagicMock()
+        output_dir = self.test_dir / "output_dir"
+        with patch("SimStackServer.Util.ResultRepo.Session") as MockSession:
+            mock_session_factory = MockSession.return_value
+            mock_session = mock_session_factory.__enter__.return_value
 
-        # Make the test directories exist
-        os.makedirs(os.path.join(self.test_dir, "output"), exist_ok=True)
-        mock_exists.return_value = True
+            mock_solution=MagicMock()
+            mock_solution.output_directory="output_dir"
+            mock_solution.output_hash = compute_dir_hash(output_dir).hexdigest()
+            mock_session.scalar.return_value = mock_solution
 
-        # Store results
-        with patch("builtins.open", mock_open()):
-            result_dir = self.rm.store_results(mock_module)
 
-        # Verify results were stored and operations performed
-        assert result_dir is not None
-        mock_copytree.assert_called_once()
-        # Verify that insert was called
-        assert mock_conn.execute.call_count >= 1
+            with patch.object(self.rm, "_get_engine", return_value = mock_engine):
+                self.rm.store_results("ladida", mock_wfem)
+
+                mock_session.merge.assert_called_once()
+                mock_session.commit.assert_called_once()
+
+                newfile = self.test_dir / "original_job.txt"
+                assert newfile.exists()
