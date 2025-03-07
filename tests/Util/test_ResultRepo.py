@@ -1,20 +1,21 @@
-import hashlib
 import os
 import pathlib
 import sys
 import tempfile
 import shutil
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 
 from SimStackServer.Util.ResultRepo import (
     compute_files_hash,
     list_files,
-    compute_dir_hash, ResultRepo
+    compute_dir_hash,
+    ResultRepo,
 )
 
 # Add SimStackServer to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 
 class TestResultRepo:
     def setup_method(self):
@@ -54,8 +55,14 @@ class TestResultRepo:
         # Verify all files are listed
         assert len(file_list) == 5
         assert pathlib.Path(os.path.join(self.test_dir, "file1.txt")) in file_list
-        assert pathlib.Path(os.path.join(self.test_dir, "subdir1", "file2.txt")) in file_list
-        assert pathlib.Path(os.path.join(self.test_dir, "subdir2", "file3.txt")) in file_list
+        assert (
+            pathlib.Path(os.path.join(self.test_dir, "subdir1", "file2.txt"))
+            in file_list
+        )
+        assert (
+            pathlib.Path(os.path.join(self.test_dir, "subdir2", "file3.txt"))
+            in file_list
+        )
 
     def test_compute_files_hash(self):
         # Test hashing a list of files
@@ -68,17 +75,18 @@ class TestResultRepo:
         file_hash = compute_files_hash(file_list, pathlib.Path(self.test_dir))
 
         # Verify it's a non-empty string
-        #assert isinstance(file_hash, hashlib.md5)
+        # assert isinstance(file_hash, hashlib.md5)
         a = file_hash.hexdigest()
         assert len(a) == 32
-
 
         # Verify different files produce different hashes
         different_file_list = [
             pathlib.Path(os.path.join(self.test_dir, "file1.txt")),
             pathlib.Path(os.path.join(self.test_dir, "subdir2", "file3.txt")),
         ]
-        different_hash = compute_files_hash(different_file_list, pathlib.Path(self.test_dir))
+        different_hash = compute_files_hash(
+            different_file_list, pathlib.Path(self.test_dir)
+        )
         assert file_hash != different_hash
 
     def test_compute_dir_hash(self):
@@ -90,9 +98,6 @@ class TestResultRepo:
         assert len(a) == 32
 
     def test_compute_input_hash(self):
-
-
-
         # Create a mock execution module
         mock_module = MagicMock()
         mock_module.get_name.return_value = "test_module"
@@ -110,8 +115,6 @@ class TestResultRepo:
         # Verify it's deterministic
         second_hash = self.rm.compute_input_hash(mock_module)
         assert input_hash == second_hash
-
-
 
     def test_load_results(self):
         # Mock database engine and query result
@@ -131,19 +134,21 @@ class TestResultRepo:
             mock_session_factory = MockSession.return_value
             mock_session = mock_session_factory.__enter__.return_value
             mock_session.scalar.return_value = None
-            a,b = self.rm.load_results(mock_module, mock_wfem)
+            a, b = self.rm.load_results(mock_module, mock_wfem)
 
             assert a is False
             assert b is None
 
             mock_shutil = MagicMock()
             mock_shutil.copytree.return_value = None
-            mock_solution=MagicMock()
-            mock_solution.output_directory="output_dir"
+            mock_solution = MagicMock()
+            mock_solution.output_directory = "output_dir"
             mock_session.scalar.return_value = mock_solution
             output_dir = self.test_dir / "output_dir"
-            with patch("SimStackServer.Util.ResultRepo.shutil", return_value=mock_shutil):
-                a,b = self.rm.load_results(mock_module, mock_wfem)
+            with patch(
+                "SimStackServer.Util.ResultRepo.shutil", return_value=mock_shutil
+            ):
+                a, b = self.rm.load_results(mock_module, mock_wfem)
                 # Verify no results were found
                 assert a is False
                 assert b is None
@@ -153,17 +158,17 @@ class TestResultRepo:
                 assert a is False
                 assert b is None
 
-
-            mock_solution=MagicMock()
-            mock_solution.output_directory="output_dir"
+            mock_solution = MagicMock()
+            mock_solution.output_directory = "output_dir"
             mock_solution.output_hash = compute_dir_hash(output_dir).hexdigest()
             mock_session.scalar.return_value = mock_solution
-            with patch("SimStackServer.Util.ResultRepo.shutil", return_value=mock_shutil):
-                a,b = self.rm.load_results(mock_module, mock_wfem)
+            with patch(
+                "SimStackServer.Util.ResultRepo.shutil", return_value=mock_shutil
+            ):
+                a, b = self.rm.load_results(mock_module, mock_wfem)
                 # Verify no results were found
                 assert a is True
                 assert b == str(output_dir)
-
 
     def test_store_results(self):
         mock_wfem = MagicMock()
@@ -182,13 +187,12 @@ class TestResultRepo:
             mock_session_factory = MockSession.return_value
             mock_session = mock_session_factory.__enter__.return_value
 
-            mock_solution=MagicMock()
-            mock_solution.output_directory="output_dir"
+            mock_solution = MagicMock()
+            mock_solution.output_directory = "output_dir"
             mock_solution.output_hash = compute_dir_hash(output_dir).hexdigest()
             mock_session.scalar.return_value = mock_solution
 
-
-            with patch.object(self.rm, "_get_engine", return_value = mock_engine):
+            with patch.object(self.rm, "_get_engine", return_value=mock_engine):
                 self.rm.store_results("ladida", mock_wfem)
 
                 mock_session.merge.assert_called_once()
