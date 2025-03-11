@@ -1,8 +1,12 @@
 import os
 import pathlib
 import tempfile
+from contextlib import nullcontext
+
+import lockfile
 import pytest
 from unittest.mock import patch, MagicMock
+import logging
 
 # Add SimStackServer to path
 
@@ -11,6 +15,7 @@ from SimStackServer.SimStackServerEntryPoint import (
     setup_pid,
     flush_port_and_password_to_stdout,
     InputFileError,
+    main,
 )
 
 
@@ -94,8 +99,56 @@ class TestSimStackServerEntryPoint:
             # Clean up the temporary file
             os.unlink(temp_file_path)
 
-    """
-    def test_main_secure_mode(self):
+    def test_main_secure_mode(self, tmpdir, caplog, capsys):
+        tmppath = pathlib.Path(tmpdir)
+        mock_lock = MagicMock()
+        mock_lock.acquire.return_value = None
+        with patch(
+            "SimStackServer.Util.NoEnterPIDLockFile.NoEnterPIDLockFile",
+            return_value=mock_lock,
+        ):
+            mock_zmq = MagicMock()
+            mock_zmq.zmp_version.return_value = "1.0.2"
+            appdir = MagicMock()
+            appdir.user_config_dir = tmpdir
+            tmpfile = tmppath / "portconfig.txt"
+            appdir.user_log_dir = tmppath / "logs"
+
+            with patch(
+                "SimStackServer.SimStackServerEntryPoint.zmq", return_value=mock_zmq
+            ), patch("sys.stdout"), patch(
+                "daemon.DaemonContext", return_value=nullcontext()
+            ), patch(
+                "SimStackServer.SimStackServerMain.SimStackServer.get_appdirs",
+                return_value=appdir,
+            ) as mock_get_appdirs:
+                mock_pid = MagicMock()
+                mock_pid.acquire.side_effect = lockfile.AlreadyLocked
+                with patch(
+                    "SimStackServer.SimStackServerEntryPoint.setup_pid",
+                    return_value=mock_pid,
+                ), patch("sys.exit") as mock_exit:
+                    with pytest.raises(InputFileError):
+                        main()
+                        output = capsys.readouterr()
+                        assert "App Lock was found" in output
+                        assert "Please check logs" in output
+                        mock_exit.assert_called_once_with(0)
+
+                os.mkdir(appdir.user_log_dir)
+                tmpfile.touch()
+                with caplog.at_level(logging.DEBUG, logger="Startup"):
+                    main()
+                    pass
+
+                    # assert "SimStackServer Daemon Startup" in caplog.text
+                    # assert "PID written" in caplog.text
+                    # ToDo open tmpfile and check content
+
+                    mock_get_appdirs.assert_called()
+        mock_lock.acquire.assert_called()
+
+        """
         # Test main function with secure mode argument
         with patch("sys.argv", ["script.py", "--secure"]):
             with patch("SimStackServer.SimStackServerEntryPoint.setup_pid"):
@@ -111,7 +164,15 @@ class TestSimStackServerEntryPoint:
                             with patch(
                                 "SimStackServer.SimStackServerEntryPoint.SimStackServer"
                             ):
-                                main()
+                                appdir = MagicMock()
+                                appdir.user_config_dir = tmpdir
+                                tmpfile = pathlib.Path(tmpdir) / "portconfig.txt"
+                                tmpfile.touch()
+                                with patch("SimStackServer.SimStackServerEntryPoint.SimStackServer", "get_appdirs", return_value=appdir):
+
+
+                                    main()
+
                                 mock_secure.set_secure_mode.assert_called_once_with(
                                     True
                                 )

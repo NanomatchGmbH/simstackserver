@@ -79,7 +79,7 @@ def main():
     except lockfile.AlreadyLocked:
         try:
             flush_port_and_password_to_stdout(appdirs, True)
-        except FileNotFoundError as e:
+        except InputFileError as e:
             if "portconfig.txt" in str(e):
                 print(
                     "App Lock was found, but no portconfig. Most probably SimStackServer start process was interupted."
@@ -144,7 +144,7 @@ def main():
             )
         with cm:
             logger = logging.getLogger("Startup")
-
+            print()
             # Set secure mode global asap
             if "--secure_mode" in sys.argv:
                 SecureModeGlobal.set_secure_mode()
