@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-import sys
 import tempfile
 import shutil
 from unittest.mock import patch, MagicMock
@@ -13,7 +12,6 @@ from SimStackServer.Util.Exceptions import SecurityError
 
 
 class TestSecureModeGlobal:
-
     def setup_method(self):
         # Reset secure mode for each test
         SecureModeGlobal._secure_mode = False
@@ -37,7 +35,6 @@ class TestSecureWaNos:
     @pytest.fixture
     def tmppath(self, tmpdir):
         yield pathlib.Path(tmpdir)
-
 
     def setup_method(self):
         # Reset singleton state
@@ -76,12 +73,12 @@ class TestSecureWaNos:
         with open(os.path.join(test_wano_dir, "TestWaNo.xml"), "w") as f:
             f.write(wano_xml)
 
-
     def test_singleton_pattern(self, tmpdir, capsys, caplog):
         # Test that instances are the same
-        #with patch("SimStackServer.SecureWaNos.Config") as mock_config:
+        # with patch("SimStackServer.SecureWaNos.Config") as mock_config:
         with pytest.raises(SecurityError):
             instance1 = SecureWaNos.get_instance()
+            assert isinstance(instance1, SecureWaNos)
         mock_appdirs = MagicMock()
         mock_appdirs.user_config_dir = tmpdir
 
@@ -91,14 +88,18 @@ class TestSecureWaNos:
         os.mkdir(subpath)
 
         mock_root = MagicMock()
-        with patch("SimStackServer.SimStackServerMain.SimStackServer.get_appdirs") as mock_SSS,\
-            patch("SimStackServer.SecureWaNos.WaNoListEntry_from_folder_or_zip", return_value="tada"),\
-            patch("SimStackServer.SecureWaNos.wano_constructor", return_value=(mock_root, None)):
-
+        with patch(
+            "SimStackServer.SimStackServerMain.SimStackServer.get_appdirs"
+        ) as mock_SSS, patch(
+            "SimStackServer.SecureWaNos.WaNoListEntry_from_folder_or_zip",
+            return_value="tada",
+        ), patch(
+            "SimStackServer.SecureWaNos.wano_constructor",
+            return_value=(mock_root, None),
+        ):
             mock_SSS.return_value = mock_appdirs
 
-            captured = capsys.readouterr()
             with caplog.at_level(logging.INFO):
                 instance2 = SecureWaNos.get_instance()
+                assert isinstance(instance2, SecureWaNos)
             assert "Parsing secure" in caplog.text
-
