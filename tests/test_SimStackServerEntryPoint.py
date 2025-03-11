@@ -10,7 +10,7 @@ from SimStackServer.SimStackServerEntryPoint import (
     get_my_runtime,
     setup_pid,
     flush_port_and_password_to_stdout,
-    main, InputFileError,
+    InputFileError,
 )
 
 
@@ -28,10 +28,9 @@ def tmpfile(tmp_path):
     tmpfile.touch()
 
     yield tmpfile
+
+
 class TestSimStackServerEntryPoint:
-
-
-
     def test_none(self):
         pass
 
@@ -52,8 +51,6 @@ class TestSimStackServerEntryPoint:
             lock = setup_pid()
             assert lock == mock_lock
 
-
-
     def test_flush_port_and_password_to_stdout(self, tmpdir, capsys):
         # Create a temporary file for testing
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -65,17 +62,24 @@ class TestSimStackServerEntryPoint:
             mock_zmq = MagicMock()
             mock_zmq.zmp_version.return_value = "1.0.2"
             with patch(
-                "SimStackServer.SimStackServerEntryPoint.zmq", return_value = mock_zmq
+                "SimStackServer.SimStackServerEntryPoint.zmq", return_value=mock_zmq
             ):
                 with patch("sys.stdout") as mock_stdout:
                     appdir = MagicMock()
                     appdir.user_config_dir = tmpdir
+
+                    # file does not exist, go into time.sleep()
+                    with pytest.raises(InputFileError):
+                        flush_port_and_password_to_stdout(
+                            appdir, other_process_setup=True
+                        )
+
                     tmpfile = pathlib.Path(tmpdir) / "portconfig.txt"
                     tmpfile.touch()
                     with pytest.raises(InputFileError):
                         flush_port_and_password_to_stdout(appdir)
 
-                    with open(tmpfile, 'w') as of:
+                    with open(tmpfile, "w") as of:
                         of.write("Name name2 12345 mypass some")
 
                     # Check that stdout received the expected data
@@ -84,11 +88,12 @@ class TestSimStackServerEntryPoint:
                     write_calls = [
                         call[0][0] for call in mock_stdout.write.call_args_list
                     ]
-                    assert  write_calls[0].startswith("Port Pass 12345 mypass")
+                    assert write_calls[0].startswith("Port Pass 12345 mypass")
 
         finally:
             # Clean up the temporary file
             os.unlink(temp_file_path)
+
     """
     def test_main_secure_mode(self):
         # Test main function with secure mode argument
@@ -110,6 +115,7 @@ class TestSimStackServerEntryPoint:
                                 mock_secure.set_secure_mode.assert_called_once_with(
                                     True
                                 )
+
 
     def test_main_normal_mode(self):
         # Test main function in normal mode
