@@ -139,14 +139,23 @@ class TestSimStackServerEntryPoint:
                 tmpfile.touch()
                 with caplog.at_level(logging.DEBUG, logger="Startup"):
                     main()
-                    pass
-
-                    # assert "SimStackServer Daemon Startup" in caplog.text
-                    # assert "PID written" in caplog.text
-                    # ToDo open tmpfile and check content
-
                     mock_get_appdirs.assert_called()
-        mock_lock.acquire.assert_called()
+                    mock_lock.acquire.assert_called()
+
+                with open(tmpfile, "w") as of:
+                    of.write("Name name2 12345 mypass some")
+
+                mock_pid = MagicMock()
+                mock_pid.acquire.side_effect = lockfile.AlreadyLocked
+
+                with patch(
+                    "SimStackServer.SimStackServerEntryPoint.SimStackServer.register_pidfile",
+                    return_value=mock_pid,
+                ), patch("sys.exit", side_effect=SystemExit) as mock_exit:
+                    with pytest.raises(SystemExit):
+                        main()
+                        # Assert that sys.exit was called with 0.
+                    mock_exit.assert_called_once_with(0)
 
         """
         # Test main function with secure mode argument
