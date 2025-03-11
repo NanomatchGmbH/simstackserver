@@ -1,23 +1,25 @@
 import os
 import sys
+import unittest
 from unittest.mock import MagicMock, patch
 
 from SimStackServer.WaNo.AbstractWaNoModel import OrderedDictIterHelper
 from SimStackServer.WaNo.WaNoModels import WaNoModelDictLike, WaNoModelListLike
 
-# Add SimStackServer to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from SimStackServer.WaNo.WaNoTreeWalker import (
     PathCollector,
     WaNoTreeWalker,
-    ViewCollector, subdict_skiplevel, subdict_skiplevel_to_type, subdict_skiplevel_path_version,
+    ViewCollector,
+    subdict_skiplevel,
+    subdict_skiplevel_to_type,
+    subdict_skiplevel_path_version,
     subdict_skiplevel_to_aiida_type,
 )
 
 
-import unittest
-from unittest.mock import MagicMock
+# Add SimStackServer to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 # Import the class under test.
 # Adjust the import path to match where PathCollector actually lives.
@@ -88,7 +90,6 @@ class TestPathCollector(unittest.TestCase):
         self.assertEqual(self.collector.path_to_value["section.item.42"], "type_info")
 
 
-
 class TestViewCollector(unittest.TestCase):
     def setUp(self):
         self.collector = ViewCollector()
@@ -116,7 +117,7 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=None),
-            "nestdictmod": MagicMock(name="MockNestDictMod")
+            "nestdictmod": MagicMock(name="MockNestDictMod"),
         }
         mypath, tw = self.collector._get_mypath_treewalker(call_info)
         self.assertEqual(mypath, ())
@@ -128,12 +129,11 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["root", "child"]),
-            "nestdictmod": MagicMock(name="MockNestDictMod")
+            "nestdictmod": MagicMock(name="MockNestDictMod"),
         }
         mypath, tw = self.collector._get_mypath_treewalker(call_info)
         self.assertEqual(mypath, ("root", "child"))
         self.assertIs(tw, call_info["nestdictmod"])
-
 
     def test_root_setter_subdict_with_set_root_attr(self):
         """If subdict has set_root, call it with our _wano_model_root."""
@@ -163,7 +163,7 @@ class TestViewCollector(unittest.TestCase):
         subdict = MagicMock(spec=[])  # no set_path
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=None),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         self.collector.path_setter_subdict(subdict, call_info)
         # No calls expected
@@ -175,7 +175,7 @@ class TestViewCollector(unittest.TestCase):
         subdict = MagicMock()
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["level1", "level2"]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         self.collector.path_setter_subdict(subdict, call_info)
         subdict.set_path.assert_called_once_with("prefix.level1.level2")
@@ -190,7 +190,6 @@ class TestViewCollector(unittest.TestCase):
 
         assert self.collector.assemble_views(subdict, call_info) is None
 
-
     def test_assemble_views_normal_subdict(self):
         """
         If subdict is not an OrderedDictIterHelper, we create a view, store it,
@@ -199,7 +198,7 @@ class TestViewCollector(unittest.TestCase):
         # Make sure abspath is not None so _get_mypath_treewalker returns something
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["root", 123]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
 
         # subdict mocks
@@ -216,8 +215,7 @@ class TestViewCollector(unittest.TestCase):
         # We expect the key in _views_by_path to be ("root", 123)
         self.assertIn(("root", 123), self.collector.get_views_by_path())
         self.assertIs(
-            self.collector.get_views_by_path()[("root", 123)],
-            mock_view_instance
+            self.collector.get_views_by_path()[("root", 123)], mock_view_instance
         )
         # Check calls
         subdict.set_view.assert_called_once_with(mock_view_instance)
@@ -236,9 +234,14 @@ class TestViewCollector(unittest.TestCase):
         """
         If subdict is an OrderedDictIterHelper, return None immediately.
         """
-        with patch("SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True) as mock_iter_helper:
+        with patch(
+            "SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True
+        ) as mock_iter_helper:
             subdict = mock_iter_helper()
-            call_info = {"nestdictmod_paths": MagicMock(abspath=["root"]), "nestdictmod": MagicMock()}
+            call_info = {
+                "nestdictmod_paths": MagicMock(abspath=["root"]),
+                "nestdictmod": MagicMock(),
+            }
 
             result = self.collector.assemble_views_parenter(subdict, call_info)
             self.assertIsNone(result)
@@ -249,7 +252,7 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["root", "child"]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         # subdict mock
         subdict = MagicMock()
@@ -269,7 +272,10 @@ class TestViewCollector(unittest.TestCase):
         Return data immediately if it is an OrderedDictIterHelper.
         """
         data = OrderedDictIterHelper()
-        call_info = {"nestdictmod_paths": MagicMock(abspath=["abc"]), "nestdictmod": MagicMock()}
+        call_info = {
+            "nestdictmod_paths": MagicMock(abspath=["abc"]),
+            "nestdictmod": MagicMock(),
+        }
         result = self.collector.data_visitor_view_assembler(data, call_info)
         self.assertIs(result, data)
         self.assertEqual(self.collector.get_views_by_path(), {})
@@ -280,7 +286,7 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["abc"]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         data = MagicMock()
         mock_view_class = MagicMock(name="MockViewClass")
@@ -291,18 +297,20 @@ class TestViewCollector(unittest.TestCase):
         result = self.collector.data_visitor_view_assembler(data, call_info)
         self.assertIs(result, data)
         self.assertIn(("abc",), self.collector.get_views_by_path())
-        self.assertIs(
-            self.collector.get_views_by_path()[("abc",)],
-            mock_view_instance
-        )
+        self.assertIs(self.collector.get_views_by_path()[("abc",)], mock_view_instance)
         data.set_view.assert_called_once_with(mock_view_instance)
         mock_view_instance.set_model.assert_called_once_with(data)
 
     def test_data_visitor_view_parenter_ordered_dict_iter_helper(self):
         """If data is OrderedDictIterHelper, return it immediately."""
-        with patch("SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True) as mock_iter_helper:
+        with patch(
+            "SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True
+        ) as mock_iter_helper:
             data = mock_iter_helper()
-            call_info = {"nestdictmod_paths": MagicMock(abspath=["one"]), "nestdictmod": MagicMock()}
+            call_info = {
+                "nestdictmod_paths": MagicMock(abspath=["one"]),
+                "nestdictmod": MagicMock(),
+            }
             result = self.collector.data_visitor_view_parenter(data, call_info)
             self.assertIs(result, data)
 
@@ -313,7 +321,7 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["root", "child"]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         data = MagicMock()
         data.view = MagicMock(name="DataView")
@@ -328,9 +336,14 @@ class TestViewCollector(unittest.TestCase):
 
     def test_data_visitor_model_parenter_ordered_dict_iter_helper(self):
         """If data is OrderedDictIterHelper, return it."""
-        with patch("SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True) as mock_iter_helper:
+        with patch(
+            "SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True
+        ) as mock_iter_helper:
             data = mock_iter_helper()
-            call_info = {"nestdictmod_paths": MagicMock(abspath=["root"]), "nestdictmod": MagicMock()}
+            call_info = {
+                "nestdictmod_paths": MagicMock(abspath=["root"]),
+                "nestdictmod": MagicMock(),
+            }
             result = self.collector.data_visitor_model_parenter(data, call_info)
             self.assertIs(result, data)
 
@@ -340,7 +353,7 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["root", "child"]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         data = MagicMock()
         fake_parent = MagicMock(name="Parent")
@@ -352,9 +365,14 @@ class TestViewCollector(unittest.TestCase):
 
     def test_assemble_model_parenter_skip_ordereddictiterhelper(self):
         """Return None if subdict is an OrderedDictIterHelper."""
-        with patch("SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True) as mock_iter_helper:
+        with patch(
+            "SimStackServer.WaNo.WaNoTreeWalker.OrderedDictIterHelper", create=True
+        ) as mock_iter_helper:
             subdict = mock_iter_helper()
-            call_info = {"nestdictmod_paths": MagicMock(abspath=["any"]), "nestdictmod": MagicMock()}
+            call_info = {
+                "nestdictmod_paths": MagicMock(abspath=["any"]),
+                "nestdictmod": MagicMock(),
+            }
             result = self.collector.assemble_model_parenter(subdict, call_info)
             self.assertIsNone(result)
 
@@ -364,7 +382,7 @@ class TestViewCollector(unittest.TestCase):
         """
         call_info = {
             "nestdictmod_paths": MagicMock(abspath=["foo", "bar"]),
-            "nestdictmod": MagicMock()
+            "nestdictmod": MagicMock(),
         }
         subdict = MagicMock()
         fake_parent = MagicMock(name="Parent")
@@ -390,8 +408,8 @@ class TestWaNoTreeWalker(unittest.TestCase):
         assert WaNoTreeWalker._islist(mock_dict) is True
         assert WaNoTreeWalker._islist(WaNoModelListLike()) is True
 
-class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
 
+class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
     def test_subdict_skiplevel_none_found(self):
         """If subdict has no 'content' or 'TABS', return None immediately."""
         subdict = {"some_other_key": 42}
@@ -460,10 +478,7 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         If 'Type' is one of the base types, we override newsubdict with subdict['Type'].
         For example, subdict['Type'] = 'String' => newsubdict = 'String' (the string itself).
         """
-        subdict = {
-            "content": {"a": 1},
-            "Type": "String"
-        }
+        subdict = {"content": {"a": 1}, "Type": "String"}
         call_info = {
             "path_visitor_function": MagicMock(),
             "subdict_visitor_function": MagicMock(),
@@ -503,22 +518,34 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         """Test the simple string replacement logic."""
         # e.g. if inpath starts with "TABS.", we remove that
 
-        self.assertEqual(subdict_skiplevel_path_version("TABS.root.child"), "root.child")
+        self.assertEqual(
+            subdict_skiplevel_path_version("TABS.root.child"), "root.child"
+        )
 
-        self.assertEqual(subdict_skiplevel_path_version("root.content.child"), "rootchild")
+        self.assertEqual(
+            subdict_skiplevel_path_version("root.content.child"), "rootchild"
+        )
         # If both appear
-        self.assertEqual(subdict_skiplevel_path_version("TABS.root.content.child"), "rootchild")
+        self.assertEqual(
+            subdict_skiplevel_path_version("TABS.root.content.child"), "rootchild"
+        )
         # If neither appear
-        self.assertEqual(subdict_skiplevel_path_version("something.else"), "something.else")
+        self.assertEqual(
+            subdict_skiplevel_path_version("something.else"), "something.else"
+        )
 
     @patch("SimStackServer.WaNo.WaNoTreeWalker.NestDictMod")
     @patch("SimStackServer.WaNo.WaNoTreeWalker.orm", create=True)
-    def test_subdict_skiplevel_to_aiida_type_none_found(self, mock_orm, mock_nestdictmod):
+    def test_subdict_skiplevel_to_aiida_type_none_found(
+        self, mock_orm, mock_nestdictmod
+    ):
         """If we find neither 'content' nor 'TABS' nor do we match a known Type => return None."""
         subdict = {}
         call_info = {}
         aiida_files_by_relpath = {}
-        result = subdict_skiplevel_to_aiida_type(subdict, call_info, aiida_files_by_relpath)
+        result = subdict_skiplevel_to_aiida_type(
+            subdict, call_info, aiida_files_by_relpath
+        )
         self.assertIsNone(result)
         mock_nestdictmod.assert_not_called()
 
@@ -536,10 +563,7 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         mock_orm.Int = MagicMock(name="AiiDAInt")
         mock_orm.SinglefileData = MagicMock(name="AiiDASinglefileData")
 
-        subdict = {
-            "Type": "Float",
-            "content": 3.14
-        }
+        subdict = {"Type": "Float", "content": 3.14}
         call_info = {
             "path_visitor_function": MagicMock(),
             "subdict_visitor_function": MagicMock(),
@@ -555,7 +579,9 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         mock_aiida.orm = mock_orm
 
         with patch.dict(sys.modules, {"aiida": mock_aiida}):
-            result = subdict_skiplevel_to_aiida_type(subdict, call_info, aiida_files_by_relpath)
+            result = subdict_skiplevel_to_aiida_type(
+                subdict, call_info, aiida_files_by_relpath
+            )
 
         # We expect to have called Float(3.14)
         mock_orm.Float.assert_called_once_with(3.14)
@@ -570,10 +596,7 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         mock_orm = MagicMock()
         mock_orm.SinglefileData = MagicMock(name="AiiDASinglefileData")
 
-        subdict = {
-            "Type": "File",
-            "logical_name": "example.txt"
-        }
+        subdict = {"Type": "File", "logical_name": "example.txt"}
         call_info = {
             "path_visitor_function": MagicMock(),
             "subdict_visitor_function": MagicMock(),
@@ -581,9 +604,7 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         }
         # Suppose we have a pre-stored file object in the dictionary
         file_mock = MagicMock(name="ExampleFileObj")
-        aiida_files_by_relpath = {
-            "example.txt": file_mock
-        }
+        aiida_files_by_relpath = {"example.txt": file_mock}
 
         mock_tw_instance = MagicMock()
         mock_nestdictmod.return_value = mock_tw_instance
@@ -593,8 +614,9 @@ class TestWaNoTreeWalkerFileFunctions(unittest.TestCase):
         mock_aiida.orm = mock_orm
 
         with patch.dict(sys.modules, {"aiida": mock_aiida}):
-
-            result = subdict_skiplevel_to_aiida_type(subdict, call_info, aiida_files_by_relpath)
+            result = subdict_skiplevel_to_aiida_type(
+                subdict, call_info, aiida_files_by_relpath
+            )
 
         # Because Type == 'File', we pick up the object from aiida_files_by_relpath
         # instead of calling SinglefileData(...) with subdict["content"].
