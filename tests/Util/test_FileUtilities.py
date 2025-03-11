@@ -10,8 +10,18 @@ import zipfile
 
 import pytest
 
-from SimStackServer.Util.FileUtilities import mkdir_p, split_directory_in_subdirectories, PathSplitError, \
-    abs_resolve_file, xml_to_file, file_to_xml, trace_to_logger, StringLoggingHandler, copytree, copytree_pathlib
+from SimStackServer.Util.FileUtilities import (
+    mkdir_p,
+    split_directory_in_subdirectories,
+    PathSplitError,
+    abs_resolve_file,
+    xml_to_file,
+    file_to_xml,
+    trace_to_logger,
+    StringLoggingHandler,
+    copytree,
+    copytree_pathlib,
+)
 
 
 @pytest.fixture
@@ -30,8 +40,7 @@ def tmpfile(tmpdir):
     yield tmpfile
 
 
-class TestDataRegistry():
-
+class TestDataRegistry:
     def test_mkdir_p(self, tmpdir):
         mypath = path.join(tmpdir, "testdir/othertestdir")
         mkdir_p(mypath)
@@ -40,9 +49,19 @@ class TestDataRegistry():
     def test_split_directory_in_subdirectories(self):
         mydir = "/a/b/c/d/"
         print(split_directory_in_subdirectories(mydir))
-        assert split_directory_in_subdirectories(mydir) == ["/a", "/a/b", "/a/b/c", "/a/b/c/d"]
+        assert split_directory_in_subdirectories(mydir) == [
+            "/a",
+            "/a/b",
+            "/a/b/c",
+            "/a/b/c/d",
+        ]
         mydir = "/a/b/c/d"
-        assert split_directory_in_subdirectories(mydir) == ["/a", "/a/b", "/a/b/c", "/a/b/c/d"]
+        assert split_directory_in_subdirectories(mydir) == [
+            "/a",
+            "/a/b",
+            "/a/b/c",
+            "/a/b/c/d",
+        ]
 
         mydir = "/"
         assert split_directory_in_subdirectories(mydir) == []
@@ -63,8 +82,7 @@ class TestDataRegistry():
         mydir = "/a/test.txt"
         assert abs_resolve_file(mydir) == mydir
 
-    def test_xml_to_file(self,tmpfile):
-
+    def test_xml_to_file(self, tmpfile):
         root = etree.Element("root")
         child = etree.SubElement(root, "child")
         child.text = "content"
@@ -79,14 +97,16 @@ class TestDataRegistry():
         loaded_root = file_to_xml(tmpfile)
         loaded_xml_bytes = etree.tostring(loaded_root)
 
-        assert original_xml_bytes == loaded_xml_bytes, "The reloaded XML does not match the original."
+        assert (
+            original_xml_bytes == loaded_xml_bytes
+        ), "The reloaded XML does not match the original."
 
     @trace_to_logger
-    def dummy_success(self,x):
+    def dummy_success(self, x):
         return x * 2
 
     @trace_to_logger
-    def dummy_fail(self,x):
+    def dummy_fail(self, x):
         raise ValueError("Test exception")
 
     def test_trace_to_logger_success(self):
@@ -97,12 +117,14 @@ class TestDataRegistry():
     def test_trace_to_logger_exception(self):
         # Patch logging.getLogger so we can inspect calls to logger.exception.
         mock_logger = MagicMock()
-        with patch("SimStackServer.Util.FileUtilities.logging.getLogger", return_value=mock_logger) as get_logger:
+        with patch(
+            "SimStackServer.Util.FileUtilities.logging.getLogger",
+            return_value=mock_logger,
+        ):
             with pytest.raises(ValueError, match="Test exception"):
                 self.dummy_fail(3)
         # Check that logger.exception was called once with the expected message.
         mock_logger.exception.assert_called_once_with("Exception occured:")
-
 
     def test_StringLoggingHandler(self):
         my_logging_handler = StringLoggingHandler()
@@ -120,9 +142,7 @@ class TestDataRegistry():
             this_file = targetpath / f"{i}.dat"
             assert os.path.exists(this_file)
 
-
-
-    def test_copytree_pathlib_directory(self,tmpdir):
+    def test_copytree_pathlib_directory(self, tmpdir):
         tmp_path = pathlib.Path(tmpdir)
         # Create some dummy files in a source directory.
         src_dir = tmp_path / "src"
@@ -160,13 +180,15 @@ class TestDataRegistry():
             for file in src_dir.iterdir():
                 zf.write(file, arcname=file.name)
 
-
         target_dir = tmp_path / "target_zip"
         target_dir.mkdir()
 
         copytree_pathlib(zipfile.Path(zip_path), target_dir)
 
         extracted_file = target_dir / file_name
-        assert extracted_file.exists(), "The file was not extracted from the zip archive."
-        assert extracted_file.read_text() == file_content, "Extracted file content does not match."
-
+        assert (
+            extracted_file.exists()
+        ), "The file was not extracted from the zip archive."
+        assert (
+            extracted_file.read_text() == file_content
+        ), "Extracted file content does not match."
