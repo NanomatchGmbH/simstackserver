@@ -17,11 +17,14 @@ dummy_orm.Float = float
 
 # Dummy aiida.common.datastructures module
 dummy_datastructures = types.ModuleType("aiida.common.datastructures")
+
+
 # Create simple dummy classes for CalcInfo and CodeInfo:
 @dataclass
 class DummyCalcInfo:
     codes_info: list = None
     retrieve_list: list = None
+
 
 @dataclass
 class DummyCodeInfo:
@@ -29,17 +32,22 @@ class DummyCodeInfo:
     stdin_name: str = None
     stdout_name: str = None
 
+
 dummy_datastructures.CalcInfo = DummyCalcInfo
 dummy_datastructures.CodeInfo = DummyCodeInfo
 
 # Dummy aiida.engine module
 dummy_engine = types.ModuleType("aiida.engine")
+
+
 # Provide dummy classes for CalcJob and CalcJobProcessSpec.
 class DummyCalcJob:
     pass
 
+
 class DummyCalcJobProcessSpec:
     pass
+
 
 dummy_engine.CalcJob = DummyCalcJob
 dummy_engine.CalcJobProcessSpec = DummyCalcJobProcessSpec
@@ -55,24 +63,27 @@ sys.modules["aiida.common.datastructures"] = dummy_datastructures
 sys.modules["aiida.common.folders"] = dummy_folder
 sys.modules["aiida.engine"] = dummy_engine
 
-# --- Now import the class under test ---
-from SimStackServer.WaNoCalcJob import WaNoCalcJob
 
 # --- Create a dummy Folder class to mimic AiiDA's Folder interface ---
 class DummyFolder:
     def __init__(self, path):
         self.path = pathlib.Path(path)
+
     def open(self, filename, mode, encoding):
         return open(self.path / filename, mode, encoding=encoding)
+
 
 @pytest.fixture
 def dummy_folder(tmp_path):
     # tmp_path is a pathlib.Path provided by pytest's tmp_path fixture.
     return DummyFolder(tmp_path)
 
+
 # --- Now write a test for prepare_for_submission ---
 def test_prepare_for_submission(dummy_folder, tmp_path):
-    # Create an instance of WaNoCalcJob.
+    # Create an instance of WaNoCalcJob. Import here to have patch of sys.modules
+    from SimStackServer.WaNoCalcJob import WaNoCalcJob
+
     job = WaNoCalcJob()
 
     # Set up the inputs that prepare_for_submission() expects.
@@ -80,12 +91,11 @@ def test_prepare_for_submission(dummy_folder, tmp_path):
     job.inputs = SimpleNamespace(
         x=SimpleNamespace(value=5),
         y=SimpleNamespace(value=3),
-        code=SimpleNamespace(uuid="dummy-code-uuid")
+        code=SimpleNamespace(uuid="dummy-code-uuid"),
     )
     # Set up the options as expected by prepare_for_submission().
     job.options = SimpleNamespace(
-        input_filename="aiida.in",
-        output_filename="aiida.out"
+        input_filename="aiida.in", output_filename="aiida.out"
     )
 
     # Call prepare_for_submission with our dummy folder.
@@ -97,7 +107,9 @@ def test_prepare_for_submission(dummy_folder, tmp_path):
     with open(input_file, "r", encoding="utf8") as f:
         content = f.read()
     expected_content = "echo $((5 + 3))\n"
-    assert content == expected_content, f"Expected '{expected_content}' but got '{content}'"
+    assert (
+        content == expected_content
+    ), f"Expected '{expected_content}' but got '{content}'"
 
     # Verify that calcinfo is a DummyCalcInfo (our dummy version of CalcInfo) instance.
     assert isinstance(calcinfo, DummyCalcInfo)
@@ -143,12 +155,15 @@ class DummyOption:
     def __init__(self):
         self.default = None
 
+
 # Create a dummy specification object that mimics CalcJobProcessSpec.
+
 
 def test_define_spec():
     spec = DummySpec()
-    #ToDo @Timo: super() does not have define attribute
-    #WaNoCalcJob.define(spec)
+    print(spec)
+    # ToDo @Timo: super() does not have define attribute
+    # WaNoCalcJob.define(spec)
     """
     # Check that the inputs "x" and "y" have been defined correctly.
     assert "x" in spec.inputs_set, "Input 'x' was not defined."
