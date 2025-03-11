@@ -43,18 +43,21 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
         # In this case another process might just be in the process of writing this file.
         # We have to wait 5 seconds for it to appear
         time.sleep(5.0)
-    with open(myfile, "rt") as infile:
-        line = infile.read()
-        splitline = line.split()
-        if not len(splitline) == 5:
-            raise InputFileError(
-                "Input of portconfig was expected to be four fields, got <%s>" % line
-            )
-        port = int(splitline[2])
-        mypass = splitline[3].strip()
-        print("Port Pass %d %s %s" % (port, mypass, zmq.zmq_version()))
-        return
-    raise InputFileError("Inputfile %s did not contain lines." % myfile)
+    try:
+        with open(myfile, "rt") as infile:
+            line = infile.read()
+            splitline = line.split()
+            if not len(splitline) == 5:
+                raise InputFileError(
+                    "Input of portconfig was expected to be four fields, got <%s>"
+                    % line
+                )
+            port = int(splitline[2])
+            mypass = splitline[3].strip()
+            print("Port Pass %d %s %s" % (port, mypass, zmq.zmq_version()))
+            return
+    except FileNotFoundError:
+        raise InputFileError("Inputfile %s did not contain lines." % myfile)
 
 
 def main():
