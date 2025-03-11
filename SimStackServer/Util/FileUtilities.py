@@ -74,7 +74,7 @@ def xml_to_file(xml_element, path):
     :param path (str): Path to a file in an existing folder
     :return: Nothing
     """
-    with sserver_open(path, "w") as out:
+    with sserver_open(path, "wb") as out:
         out.write(etree.tostring(xml_element))
 
 
