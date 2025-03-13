@@ -48,8 +48,7 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
         splitline = line.split()
         if not len(splitline) == 5:
             raise InputFileError(
-                "Input of portconfig was expected to be four fields, got <%s>"
-                % line
+                "Input of portconfig was expected to be four fields, got <%s>" % line
             )
         port = int(splitline[2])
         mypass = splitline[3].strip()
