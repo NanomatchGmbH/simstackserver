@@ -137,6 +137,7 @@ pythonbuild = "python3 -m build"
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q"
+python_files = "test_*.py"
 testpaths = [
     "tests",
 ]
@@ -147,6 +148,10 @@ omit = [
 "SimStackServer/third_party/boolexp/__init__.py",
 "SimStackServer/WaNoCalcJob.py"
 ]
+
+[tool.ruff]
+extend-exclude = ["tests/input_dirs"]
+force-exclude = true
 
 [tool.ruff.lint.per-file-ignores]
 "SimStackServer/third_party/*" = ["D", "E", "F"]

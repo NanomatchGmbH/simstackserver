@@ -6,6 +6,7 @@ from unittest import mock
 
 import pytest
 
+from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.WorkflowModel import (
     _is_basetype,
     _str_to_bool,
@@ -15,7 +16,8 @@ from SimStackServer.WorkflowModel import (
     VariableElement,
     WhileGraph,
     SubGraph,
-    workflow_element_factory, WorkflowAbort,
+    workflow_element_factory,
+    WorkflowAbort,
 )
 
 import copy
@@ -67,6 +69,14 @@ def temp_xml_file():
 def wfem_exec_dir():
     with tempfile.TemporaryDirectory() as tmpdirname:
         mydir = pathlib.Path(__file__).parent / "exec_dirs" / "WFEMExecDir"
+        shutil.copytree(mydir, tmpdirname, dirs_exist_ok=True)
+        yield tmpdirname
+
+
+@pytest.fixture
+def randomflow_dir(input_directory):
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        mydir = pathlib.Path(input_directory) / "RandomFlow"
         shutil.copytree(mydir, tmpdirname, dirs_exist_ok=True)
         yield tmpdirname
 
@@ -413,9 +423,10 @@ def test_DigraphTravseral():
     expected = ["0", 3, 4444, 983, 12]
     assert report_order == expected
 
-    ooommmm.add_new_unstarted_connection((12,14))
+    ooommmm.add_new_unstarted_connection((12, 14))
     assert 14 in ooommmm._graph.nodes
     assert ooommmm._graph.nodes[14]["status"] == "unstarted"
+
 
 def test_Digraph_rename():
     dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
@@ -425,6 +436,7 @@ def test_Digraph_rename():
         # this would raise if it was not a uuid
         UUID(node, version=4)
 
+
 def test_Digraph_get_running_jobs():
     dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
     outnodes = dg.get_next_ready()
@@ -432,13 +444,15 @@ def test_Digraph_get_running_jobs():
     running_jobs = dg.get_running_jobs()
     assert running_jobs == [3]
 
+
 def test_Digraph_get_success_jobs():
     dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
     outnodes = dg.get_next_ready()
     dg.start(outnodes[0])
     dg.finish(outnodes[0])
     success_jobs = dg.get_success_jobs()
-    assert success_jobs == ['0',3]
+    assert success_jobs == ["0", 3]
+
 
 def test_Digraph_get_failed_jobs():
     dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
@@ -448,8 +462,9 @@ def test_Digraph_get_failed_jobs():
     success_jobs = dg.get_failed_jobs()
     assert success_jobs == [3]
 
+
 def test_Digraph_get_success_fail_running_jobs():
-    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12), (4444,14)])
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12), (4444, 14)])
     outnodes = dg.get_next_ready()
     dg.start(outnodes[0])
     dg.finish(outnodes[0])
@@ -457,7 +472,8 @@ def test_Digraph_get_success_fail_running_jobs():
     dg.start(outnodes[0])
     dg.start(outnodes[1])
     dg.fail(outnodes[1])
-    assert dg.get_success_failed_running_jobs() == (['0',3],[983],[4444])
+    assert dg.get_success_failed_running_jobs() == (["0", 3], [983], [4444])
+
 
 def test_Digraph_is_workflow_finished():
     dg = DirectedGraph([("0", 3)])
@@ -467,12 +483,10 @@ def test_Digraph_is_workflow_finished():
     dg.finish(outnodes[0])
     assert dg.is_workflow_finished()
 
+
 def test_Digraph_report_order_generator():
-    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12), (4444,14)])
-    assert ['0', 3, 4444, 983, 14, 12] == [*dg.report_order_generator()]
-
-
-
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12), (4444, 14)])
+    assert ["0", 3, 4444, 983, 14, 12] == [*dg.report_order_generator()]
 
 
 def test_time_from_seconds_to_clusterjob_timestring():
@@ -624,7 +638,6 @@ def test_WorkflowElementList():
     other_xml = etree.fromstring(other_xml)
     g.from_xml(other_xml)
     assert g._uid_to_seqnum["4"] == 0
-
 
 
 def test_WFE_fill_in_variables():
@@ -984,7 +997,6 @@ def test_wefem_run_jobfile_error_write_stderr(sample_wfem, wfem_exec_dir):
     assert (pathlib.Path(wfem_exec_dir) / "submission_failed.stderr").is_file()
 
 
-
 def test_abort_job_internal():
     wfem = WorkflowExecModule()
     wfem._field_values["jobid"] = "1234"
@@ -1003,6 +1015,7 @@ def test_abort_job_internal():
         assert batchsys_instance_mock.abort_job.call_count == 1
         wfem.completed_or_aborted()
 
+
 def test_abort_job_internal_slurm():
     wfem = WorkflowExecModule()
     wfem._field_values["jobid"] = "1234"
@@ -1018,9 +1031,10 @@ def test_abort_job_internal_slurm():
         with patch("SimStackServer.WorkflowModel.JobScript") as clusterjobmock:
             clusterjobmock._backends = {"slurm": MagicMock()}
             wfem.abort_job()
-            assert asyncmock.mock_calls[1][0] == '().cancel'
+            assert asyncmock.mock_calls[1][0] == "().cancel"
 
-#def test_abort_job_external_cm():
+
+# def test_abort_job_external_cm():
 #    wfem = WorkflowExecModule()
 #    wfem._field_values["jobid"] = "1234"
 #    wfem._field_values["resources"] = Resources(
@@ -1035,58 +1049,75 @@ def test_abort_job_internal_slurm():
 #        wfem.abort_job()
 #        assert str(asyncmock.get_instance.return_value.server_from_resource.mock_calls[3]).startswith("call().send_abortsinglejob_message('")
 
+
 def test_set_queueing_system(sample_wfem):
     sample_wfem.set_queueing_system("slurm")
     assert sample_wfem._field_values["queueing_system"] == "slurm"
+
 
 def test_set_path(sample_wfem):
     sample_wfem.set_path("/new/path")
     assert sample_wfem._field_values["path"] == "/new/path"
 
+
 def test_path_property(sample_wfem):
     sample_wfem._field_values["path"] = "/test/path"
     assert sample_wfem.path == "/test/path"
+
 
 def test_wano_xml_property(sample_wfem):
     sample_wfem._field_values["wano_xml"] = "test.xml"
     assert sample_wfem.wano_xml == "test.xml"
 
+
 def test_set_wano_xml(sample_wfem):
     sample_wfem.set_wano_xml("new_test.xml")
     assert sample_wfem._field_values["wano_xml"] == "new_test.xml"
+
 
 def test_set_outputpath(sample_wfem):
     sample_wfem.set_outputpath("/output/path")
     assert sample_wfem._field_values["outputpath"] == "/output/path"
 
+
 def test_outputpath_property(sample_wfem):
     sample_wfem._field_values["outputpath"] = "/test/output"
     assert sample_wfem.outputpath == "/test/output"
 
+
 def test_get_report_html(sample_wfem):
     sample_wfem._rendered_body_html = "<p>test</p>"
     detail_html = sample_wfem.get_rendered_body_html()
-    assert etree.tounicode(detail_html) == '<details class="wano "><summary>EmployeeRecord</summary><p class="report"><p>test</p></p><p class="result"></p></details>'
+    assert (
+        etree.tounicode(detail_html)
+        == '<details class="wano "><summary>EmployeeRecord</summary><p class="report"><p>test</p></p><p class="result"></p></details>'
+    )
+
 
 def test_set_runtime_directory(sample_wfem):
     sample_wfem.set_runtime_directory("/new/runtime/directory")
     assert sample_wfem.runtime_directory == "/new/runtime/directory"
 
+
 def test_set_external_runtime_directory(sample_wfem):
     sample_wfem.set_external_runtime_directory("/new/external/runtime/directory")
     assert sample_wfem.external_runtime_directory == "/new/external/runtime/directory"
+
 
 def test_set_jobid(sample_wfem):
     sample_wfem.set_jobid("new_jobid")
     assert sample_wfem.jobid == "new_jobid"
 
+
 def test_set_given_name(sample_wfem):
     sample_wfem.set_given_name("new_given_name")
     assert sample_wfem.given_name == "new_given_name"
 
+
 def test_set_exec_command(sample_wfem):
     sample_wfem.set_exec_command("new_exec_command")
     assert sample_wfem.exec_command == "new_exec_command"
+
 
 def test_set_original_result_directory(sample_wfem):
     sample_wfem.set_original_result_directory("/new/original/result/directory")
@@ -1105,12 +1136,13 @@ def variable_element():
 def test_variable_element_fields(variable_element):
     assert variable_element.equation == "a + b + 4"
     assert variable_element.variable_name == "B"
-    assert variable_element.evaluate_equation({"a": 6},{"b": 3}) == 13
+    assert variable_element.evaluate_equation({"a": 6}, {"b": 3}) == 13
     with pytest.raises(WorkflowAbort):
-        variable_element.evaluate_equation({"a": "cat"},{"b": 3})
+        variable_element.evaluate_equation({"a": "cat"}, {"b": 3})
     with pytest.raises(WorkflowAbort):
-        assert variable_element.evaluate_equation({},{})
+        assert variable_element.evaluate_equation({}, {})
     UUID(variable_element.uid, version=4)
+
 
 def test_WFPass():
     wfp = WFPass()
@@ -1170,21 +1202,28 @@ def advanced_for():
     fg.from_xml(etree.fromstring(xmlstring))
     return fg
 
+
 def test_advanced_for_fill_in(advanced_for):
     advanced_for.fill_in_variables({"{testvar}": "testval"})
-    wfe :WorkflowExecModule = advanced_for.subgraph.elements[0]
+    wfe: WorkflowExecModule = advanced_for.subgraph.elements[0]
     assert wfe.inputs[0][0] == "testval"
+
 
 def test_advanced_for_getters(advanced_for):
     assert advanced_for.iterator_name == "a,b"
     assert len(advanced_for.iterator_files._storage) == 0
-    assert advanced_for.iterator_definestring =="zip([1,2],[3,4])"
+    assert advanced_for.iterator_definestring == "zip([1,2],[3,4])"
     assert len(advanced_for.iterator_variables._storage) == 0
-    assert advanced_for.subgraph_final_ids._storage == ["331c29b8-eaf2-4711-a5bd-2d55d07518ac"]
+    assert advanced_for.subgraph_final_ids._storage == [
+        "331c29b8-eaf2-4711-a5bd-2d55d07518ac"
+    ]
+
 
 def test_advanced_for_multiply_connect_subgraph(advanced_for):
     with tempfile.TemporaryDirectory() as tmpdir:
-        new_connections, new_activities, new_graphs = advanced_for.resolve_connect(tmpdir, {}, {})
+        new_connections, new_activities, new_graphs = advanced_for.resolve_connect(
+            tmpdir, {}, {}
+        )
         assert len(new_connections) == 2
         assert len(new_activities) == 2
         assert len(new_graphs) == 2
@@ -1213,7 +1252,7 @@ date {myvar}
               <base_URI>None</base_URI>
               <port>22</port>
               <username>None</username>
-              <basepath>/home/strunk/nanoscope/calculations</basepath>
+              <basepath>/home/example_user/nanoscope/calculations</basepath>
               <queueing_system>Internal</queueing_system>
               <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
               <extra_config>None Required (default)</extra_config>
@@ -1237,21 +1276,406 @@ date {myvar}
     wg.from_xml(etree.fromstring(xml_string))
     return wg
 
+
 def test_wg_getters(while_graph):
     assert while_graph.iterator_name == "While_iterator"
     assert while_graph.condition == "A == 5"
     assert while_graph.current_id == 0
-    assert while_graph.subgraph_final_ids._storage == ["3863f699-06c4-4d04-b2e1-75d8ac8841fd"]
+    assert while_graph.subgraph_final_ids._storage == [
+        "3863f699-06c4-4d04-b2e1-75d8ac8841fd"
+    ]
+
 
 def test_wg_fill_in_variables(while_graph):
     while_graph.fill_in_variables({"{myvar}": "cpu_usage_test.py"})
-    wfe :WorkflowExecModule = while_graph.subgraph.elements[1]
+    wfe: WorkflowExecModule = while_graph.subgraph.elements[1]
     assert wfe.inputs[0][0] == "cpu_usage_test.py"
+
 
 def test_wg_resolve_connect(while_graph):
     with tempfile.TemporaryDirectory() as tmpdir:
-        new_connections, new_activity_elementlists, new_graphs = while_graph.resolve_connect(base_storage=tmpdir, input_variables={"A":7, "{myvar}": "cpu_usage_test.py"}, output_variables={})
+        (
+            new_connections,
+            new_activity_elementlists,
+            new_graphs,
+        ) = while_graph.resolve_connect(
+            base_storage=tmpdir,
+            input_variables={"A": 7, "{myvar}": "cpu_usage_test.py"},
+            output_variables={},
+        )
         assert len(new_connections) == 1
         assert len(new_activity_elementlists) == 0
         assert len(new_graphs) == 0
 
+
+@pytest.fixture
+def random_workflow(randomflow_dir):
+    xml_string = (
+        """<Workflow wfname="RandomFlow" storage="%s" name="RandomFlow" submit_name="2025-03-13-15h27m49s-RandomFlow" status="2" queueing_system="Internal">
+      <elements>
+        <VariableElement id="0" type="VariableElement" variable_name="a" equation="5" uid="c0cc66af-7434-4b31-bd83-373826b11f55"/>
+        <WorkflowExecModule id="1" type="WorkflowExecModule" uid="c107717d-9b11-45b2-b967-3ed464f968d4" given_name="TestNMSetup" path="TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="TestNMSetup" original_result_directory="">
+          <inputs>
+            <Ele_0 id="0" type="StringList">
+              <Ele_0 id="0" type="str">cpu_usage_test.py</Ele_0>
+              <Ele_1 id="1" type="str">workflow_data/TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+            </Ele_0>
+          </inputs>
+          <outputs/>
+          <exec_command>#!/bin/bash
+                date
+    </exec_command>
+          <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+            <queue>default</queue>
+            <custom_requests>None</custom_requests>
+            <base_URI>None</base_URI>
+            <port>22</port>
+            <username>None</username>
+            <basepath>/home/example_user/nanoscope/calculations</basepath>
+            <queueing_system>Internal</queueing_system>
+            <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+            <extra_config>None Required (default)</extra_config>
+            <ssh_private_key>UseSystemDefault</ssh_private_key>
+            <sge_pe>None</sge_pe>
+          </resources>
+          <runtime_directory>None</runtime_directory>
+          <jobid>0</jobid>
+          <external_runtime_directory>None</external_runtime_directory>
+        </WorkflowExecModule>
+        <ForEachGraph id="2" type="ForEachGraph" iterator_name="a,b" finish_uid="463119dd-7bed-4b71-822a-1fb36983ff6c" uid="997a6544-24c1-43e7-a1a1-ed4753921a0d">
+          <subgraph>
+            <elements>
+              <WorkflowExecModule id="0" type="WorkflowExecModule" uid="f50473ef-b0a9-4561-8ca4-2a939f713a58" given_name="TestNMSetup" path="AdvancedForEach/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="AdvancedForEach/${a,b_ITER}/TestNMSetup" original_result_directory="">
+                <inputs>
+                  <Ele_0 id="0" type="StringList">
+                    <Ele_0 id="0" type="str">cpu_usage_test.py</Ele_0>
+                    <Ele_1 id="1" type="str">workflow_data/AdvancedForEach/TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+                  </Ele_0>
+                </inputs>
+                <outputs/>
+                <exec_command>#!/bin/bash
+  date
+           </exec_command>
+                <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+                  <queue>default</queue>
+                  <custom_requests>None</custom_requests>
+                  <base_URI>None</base_URI>
+                  <port>22</port>
+                  <username>None</username>
+                  <basepath>/home/example_user/nanoscope/calculations</basepath>
+                  <queueing_system>Internal</queueing_system>
+                  <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+                  <extra_config>None Required (default)</extra_config>
+                  <ssh_private_key>UseSystemDefault</ssh_private_key>
+                  <sge_pe>None</sge_pe>
+                </resources>
+                <runtime_directory>unstarted</runtime_directory>
+                <jobid>unstarted</jobid>
+                <external_runtime_directory>None</external_runtime_directory>
+              </WorkflowExecModule>
+            </elements>
+            <graph>
+              <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="temporary_connector">      <data key="d0">unstarted</data>    </node>    <node id="f50473ef-b0a9-4561-8ca4-2a939f713a58">      <data key="d0">unstarted</data>    </node>    <edge source="temporary_connector" target="f50473ef-b0a9-4561-8ca4-2a939f713a58"/>  </graph></graphml>
+            </graph>
+          </subgraph>
+          <iterator_files/>
+          <iterator_variables/>
+          <iterator_definestring>zip([1,2],[3,4])</iterator_definestring>
+          <subgraph_final_ids>
+            <Ele_0 id="0" type="str">f50473ef-b0a9-4561-8ca4-2a939f713a58</Ele_0>
+          </subgraph_final_ids>
+        </ForEachGraph>
+        <WFPass id="3" type="WFPass" uid="463119dd-7bed-4b71-822a-1fb36983ff6c"/>
+        <WorkflowExecModule id="4" type="WorkflowExecModule" uid="9064a0c3-e74d-4a56-bfc8-243d53b0fc74" given_name="TestNMSetup" path="Parallel/0/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="Parallel/0/TestNMSetup" original_result_directory="">
+          <inputs>
+            <Ele_0 id="0" type="StringList">
+              <Ele_0 id="0" type="str">cpu_usage_test.py</Ele_0>
+              <Ele_1 id="1" type="str">workflow_data/Parallel/0/TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+            </Ele_0>
+          </inputs>
+          <outputs/>
+          <exec_command>#!/bin/bash
+    echo "Shell was set to: $SHELL" &gt; diagnostic_output.txt
+    echo "NANOMATCH variable was set to - $NANOMATCH -" &gt;&gt; diagnostic_output.txt
+
+    export NANOVER=V4
+    source $NANOMATCH/$NANOVER/configs/quantumpatch.config
+
+    if [ "AA$HOSTFILE" == "AA" ]
+    then
+        echo "HOSTFILE variable was not set. Please check customer_config.sh for the correct setting of the HOSTFILE variable. Exiting." &gt;&gt; diagnostic_output.txt
+        exit 0
+    else
+        echo "HOSTFILE was set to $HOSTFILE" &gt;&gt; diagnostic_output.txt
+    fi
+    if [ ! -f "$HOSTFILE" ]
+    then
+        echo "HOSTFILE was set to $HOSTFILE but not found." &gt;&gt; diagnostic_output.txt
+        exit 0
+    else
+        echo "HOSTFILE was set to $HOSTFILE. Contents were:" &gt;&gt; diagnostic_output.txt
+        echo "-- HOSTFILE BEGIN --" &gt;&gt; diagnostic_output.txt
+        cat $HOSTFILE &gt;&gt; diagnostic_output.txt
+        echo "-- HOSTFILE END --" &gt;&gt; diagnostic_output.txt
+    fi
+
+
+    echo "DOING CPU binding benchmark" &gt;&gt; diagnostic_output.txt
+
+
+    $OPENMPI_PATH/bin/mpirun --bind-to none $NMMPIARGS --hostfile $HOSTFILE --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,virbr0,docker0 python -m mpi4py 2&gt;&amp;1 ./cpu_usage_test.py &gt;&gt; diagnostic_output.txt
+    echo "CPU binding benchmark done." &gt;&gt; diagnostic_output.txt
+
+    echo "QP binary location: " &gt;&gt; diagnostic_output.txt
+    which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
+           </exec_command>
+          <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+            <queue>default</queue>
+            <custom_requests>None</custom_requests>
+            <base_URI>None</base_URI>
+            <port>22</port>
+            <username>None</username>
+            <basepath>/home/example_user/nanoscope/calculations</basepath>
+            <queueing_system>Internal</queueing_system>
+            <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+            <extra_config>None Required (default)</extra_config>
+            <ssh_private_key>UseSystemDefault</ssh_private_key>
+            <sge_pe>None</sge_pe>
+          </resources>
+          <runtime_directory>unstarted</runtime_directory>
+          <jobid>unstarted</jobid>
+          <external_runtime_directory>None</external_runtime_directory>
+        </WorkflowExecModule>
+        <WorkflowExecModule id="5" type="WorkflowExecModule" uid="e5ce41d5-6057-468c-b0e4-d456c19e34f4" given_name="TestNMSetup" path="Parallel/1/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="Parallel/1/TestNMSetup" original_result_directory="">
+          <inputs>
+            <Ele_0 id="0" type="StringList">
+              <Ele_0 id="0" type="str">cpu_usage_test.py</Ele_0>
+              <Ele_1 id="1" type="str">workflow_data/Parallel/1/TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+            </Ele_0>
+          </inputs>
+          <outputs/>
+          <exec_command>#!/bin/bash
+    echo "Shell was set to: $SHELL" &gt; diagnostic_output.txt
+    echo "NANOMATCH variable was set to - $NANOMATCH -" &gt;&gt; diagnostic_output.txt
+
+    export NANOVER=V4
+    source $NANOMATCH/$NANOVER/configs/quantumpatch.config
+
+    if [ "AA$HOSTFILE" == "AA" ]
+    then
+        echo "HOSTFILE variable was not set. Please check customer_config.sh for the correct setting of the HOSTFILE variable. Exiting." &gt;&gt; diagnostic_output.txt
+        exit 0
+    else
+        echo "HOSTFILE was set to $HOSTFILE" &gt;&gt; diagnostic_output.txt
+    fi
+    if [ ! -f "$HOSTFILE" ]
+    then
+        echo "HOSTFILE was set to $HOSTFILE but not found." &gt;&gt; diagnostic_output.txt
+        exit 0
+    else
+        echo "HOSTFILE was set to $HOSTFILE. Contents were:" &gt;&gt; diagnostic_output.txt
+        echo "-- HOSTFILE BEGIN --" &gt;&gt; diagnostic_output.txt
+        cat $HOSTFILE &gt;&gt; diagnostic_output.txt
+        echo "-- HOSTFILE END --" &gt;&gt; diagnostic_output.txt
+    fi
+
+
+    echo "DOING CPU binding benchmark" &gt;&gt; diagnostic_output.txt
+
+
+    $OPENMPI_PATH/bin/mpirun --bind-to none $NMMPIARGS --hostfile $HOSTFILE --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,virbr0,docker0 python -m mpi4py 2&gt;&amp;1 ./cpu_usage_test.py &gt;&gt; diagnostic_output.txt
+    echo "CPU binding benchmark done." &gt;&gt; diagnostic_output.txt
+
+    echo "QP binary location: " &gt;&gt; diagnostic_output.txt
+    which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
+           </exec_command>
+          <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+            <queue>default</queue>
+            <custom_requests>None</custom_requests>
+            <base_URI>None</base_URI>
+            <port>22</port>
+            <username>None</username>
+            <basepath>/home/example_user/nanoscope/calculations</basepath>
+            <queueing_system>Internal</queueing_system>
+            <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+            <extra_config>None Required (default)</extra_config>
+            <ssh_private_key>UseSystemDefault</ssh_private_key>
+            <sge_pe>None</sge_pe>
+          </resources>
+          <runtime_directory>unstarted</runtime_directory>
+          <jobid>unstarted</jobid>
+          <external_runtime_directory>None</external_runtime_directory>
+        </WorkflowExecModule>
+      </elements>
+      <graph>
+        <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="0">      <data key="d0">success</data>    </node>    <node id="c0cc66af-7434-4b31-bd83-373826b11f55">      <data key="d0">success</data>    </node>    <node id="c107717d-9b11-45b2-b967-3ed464f968d4">      <data key="d0">unstarted</data>    </node>    <node id="997a6544-24c1-43e7-a1a1-ed4753921a0d">      <data key="d0">unstarted</data>    </node>    <node id="463119dd-7bed-4b71-822a-1fb36983ff6c">      <data key="d0">unstarted</data>    </node>    <node id="9064a0c3-e74d-4a56-bfc8-243d53b0fc74">      <data key="d0">unstarted</data>    </node>    <node id="e5ce41d5-6057-468c-b0e4-d456c19e34f4">      <data key="d0">unstarted</data>    </node>    <edge source="0" target="c0cc66af-7434-4b31-bd83-373826b11f55"/>    <edge source="c0cc66af-7434-4b31-bd83-373826b11f55" target="c107717d-9b11-45b2-b967-3ed464f968d4"/>    <edge source="c107717d-9b11-45b2-b967-3ed464f968d4" target="997a6544-24c1-43e7-a1a1-ed4753921a0d"/>    <edge source="463119dd-7bed-4b71-822a-1fb36983ff6c" target="9064a0c3-e74d-4a56-bfc8-243d53b0fc74"/>    <edge source="463119dd-7bed-4b71-822a-1fb36983ff6c" target="e5ce41d5-6057-468c-b0e4-d456c19e34f4"/>  </graph></graphml>
+      </graph>
+    </Workflow>
+
+    """
+        % randomflow_dir
+    )
+    wf = Workflow()
+    wf.from_xml(etree.fromstring(xml_string))
+    return wf
+
+
+def test_workflow_inits(random_workflow):
+    assert len(random_workflow.elements) == 6
+    assert random_workflow.queueing_system == "Internal"
+
+
+def test_workflow__get_template_dir(random_workflow):
+    assert random_workflow._get_template_dir().endswith("/Templates")
+
+
+def test_workflow_finalize(random_workflow, randomflow_dir):
+    random_workflow.finalize()
+    assert (pathlib.Path(randomflow_dir) / "workflow_report.html").is_file()
+
+
+def test_workflow_set_states(random_workflow):
+    random_workflow.abort()
+    assert random_workflow.status == JobStatus.ABORTED
+    random_workflow.delete()
+    assert random_workflow.status == JobStatus.MARKED_FOR_DELETION
+    random_workflow.delete()
+    assert random_workflow.status == JobStatus.MARKED_FOR_DELETION
+
+
+def test_workflow_jobloop(random_workflow):
+    with patch(
+        "SimStackServer.WorkflowModel.WorkflowExecModule.run_jobfile"
+    ) as mock_run_jobfile:
+        random_workflow.jobloop()
+        assert mock_run_jobfile.call_count > 0  # We expect at least one job to be run
+        format_list = random_workflow.get_running_finished_job_list_formatted()
+        assert format_list[0]["name"] == "TestNMSetup"
+        random_workflow.graph.get_running_jobs()[0]
+        with patch(
+            "SimStackServer.WorkflowModel.WorkflowExecModule.completed_or_aborted",
+        ) as mock_run_jobfile:
+            mock_run_jobfile.return_value = True
+            random_workflow.jobloop()
+            assert len(random_workflow.get_jobs()) == 2
+
+
+@pytest.fixture
+def ifgraph():
+    xml_string = """    <IfGraph id="1" type="IfGraph" finish_uid="1b00f8ce-2e9b-468c-829a-f396b36904b1" condition="A == 6" uid="d79d0ee4-bb40-44b5-b9d2-e72715d4df40">
+      <truegraph>
+        <elements>
+          <WorkflowExecModule id="0" type="WorkflowExecModule" uid="91a6eefa-a6aa-479e-9ba7-0b9f085c0110" given_name="TestNMSetup" path="Branch/True/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="Branch/True/TestNMSetup" original_result_directory="">
+            <inputs>
+              <Ele_0 id="0" type="StringList">
+                <Ele_0 id="0" type="str">cpu_usage_test.py</Ele_0>
+                <Ele_1 id="1" type="str">workflow_data/Branch/True//TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+              </Ele_0>
+            </inputs>
+            <outputs/>
+            <exec_command>#!/bin/bash
+date
+       </exec_command>
+            <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+              <queue>default</queue>
+              <custom_requests>None</custom_requests>
+              <base_URI>None</base_URI>
+              <port>22</port>
+              <username>None</username>
+              <basepath>/home/example_user/nanoscope/calculations</basepath>
+              <queueing_system>Internal</queueing_system>
+              <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+              <extra_config>None Required (default)</extra_config>
+              <ssh_private_key>UseSystemDefault</ssh_private_key>
+              <sge_pe>None</sge_pe>
+            </resources>
+            <runtime_directory>unstarted</runtime_directory>
+            <jobid>unstarted</jobid>
+            <external_runtime_directory>None</external_runtime_directory>
+          </WorkflowExecModule>
+        </elements>
+        <graph>
+          <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="temporary_connector">      <data key="d0">unstarted</data>    </node>    <node id="91a6eefa-a6aa-479e-9ba7-0b9f085c0110">      <data key="d0">unstarted</data>    </node>    <edge source="temporary_connector" target="91a6eefa-a6aa-479e-9ba7-0b9f085c0110"/>  </graph></graphml>
+        </graph>
+      </truegraph>
+      <falsegraph>
+        <elements>
+          <WorkflowExecModule id="0" type="WorkflowExecModule" uid="0d638765-ecf6-49ed-875e-5026a8a21d02" given_name="TestNMSetup" path="Branch/False/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="Branch/False/TestNMSetup" original_result_directory="">
+            <inputs>
+              <Ele_0 id="0" type="StringList">
+                <Ele_0 id="0" type="str">cpu_usage_test.py</Ele_0>
+                <Ele_1 id="1" type="str">workflow_data/Branch/False//TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+              </Ele_0>
+            </inputs>
+            <outputs/>
+            <exec_command>#!/bin/bash
+date
+       </exec_command>
+            <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+              <queue>default</queue>
+              <custom_requests>None</custom_requests>
+              <base_URI>None</base_URI>
+              <port>22</port>
+              <username>None</username>
+              <basepath>/home/example_user/nanoscope/calculations</basepath>
+              <queueing_system>Internal</queueing_system>
+              <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+              <extra_config>None Required (default)</extra_config>
+              <ssh_private_key>UseSystemDefault</ssh_private_key>
+              <sge_pe>None</sge_pe>
+            </resources>
+            <runtime_directory>unstarted</runtime_directory>
+            <jobid>unstarted</jobid>
+            <external_runtime_directory>None</external_runtime_directory>
+          </WorkflowExecModule>
+        </elements>
+        <graph>
+          <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="temporary_connector">      <data key="d0">unstarted</data>    </node>    <node id="0d638765-ecf6-49ed-875e-5026a8a21d02">      <data key="d0">unstarted</data>    </node>    <edge source="temporary_connector" target="0d638765-ecf6-49ed-875e-5026a8a21d02"/>  </graph></graphml>
+        </graph>
+      </falsegraph>
+      <true_final_ids>
+        <Ele_0 id="0" type="str">91a6eefa-a6aa-479e-9ba7-0b9f085c0110</Ele_0>
+      </true_final_ids>
+      <false_final_ids>
+        <Ele_0 id="0" type="str">0d638765-ecf6-49ed-875e-5026a8a21d02</Ele_0>
+      </false_final_ids>
+    </IfGraph>"""
+    ig = IfGraph()
+    ig.from_xml(etree.fromstring(xml_string))
+    return ig
+
+
+def test_ifgraph(ifgraph):
+    assert ifgraph.condition == "A == 6"
+    assert ifgraph.true_final_ids._storage == ["91a6eefa-a6aa-479e-9ba7-0b9f085c0110"]
+    assert ifgraph.false_final_ids._storage == ["0d638765-ecf6-49ed-875e-5026a8a21d02"]
+    assert isinstance(ifgraph.truegraph, SubGraph)
+    assert isinstance(ifgraph.falsegraph, SubGraph)
+    assert ifgraph.finish_uid == "1b00f8ce-2e9b-468c-829a-f396b36904b1"
+
+
+def test_ifgraph_fill_in(ifgraph):
+    ifgraph._field_values["condition"] = "${A} == 6"
+    ifgraph.fill_in_variables({"${A}": "a"})
+    assert ifgraph.condition == "a == 6"
+
+
+def test_ifgraph_rename(ifgraph):
+    before_uid = ifgraph.uid
+    ifgraph.rename({before_uid: "new_uid"})
+    assert ifgraph.uid == "new_uid"
+    with pytest.raises(KeyError):
+        ifgraph.rename({before_uid: "new_uid"})
+
+
+def test_ifgraph_resolve_connect(ifgraph, randomflow_dir):
+    new_connections, elements, graph = ifgraph.resolve_connect(
+        randomflow_dir, {"A": 6}, {}
+    )
+
+
+def test_ifgraph_resolve_connect_raise(ifgraph, randomflow_dir):
+    with pytest.raises(WorkflowAbort):
+        new_connections, elements, graph = ifgraph.resolve_connect(
+            randomflow_dir, {}, {}
+        )

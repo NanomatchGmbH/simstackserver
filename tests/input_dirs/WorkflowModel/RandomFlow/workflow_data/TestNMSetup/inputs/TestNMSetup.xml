@@ -1,0 +1,45 @@
+<WaNoTemplate>
+   <WaNoRoot name="TestNMSetup">
+     <WaNoString name="Test">This is a test wano.</WaNoString>
+   </WaNoRoot>
+   <WaNoExecCommand>#!/bin/bash
+echo "Shell was set to: $SHELL" &gt; diagnostic_output.txt
+echo "NANOMATCH variable was set to - $NANOMATCH -" &gt;&gt; diagnostic_output.txt
+
+export NANOVER=V4
+source $NANOMATCH/$NANOVER/configs/quantumpatch.config
+
+if [ "AA$HOSTFILE" == "AA" ]
+then
+    echo "HOSTFILE variable was not set. Please check customer_config.sh for the correct setting of the HOSTFILE variable. Exiting." &gt;&gt; diagnostic_output.txt
+    exit 0
+else
+    echo "HOSTFILE was set to $HOSTFILE" &gt;&gt; diagnostic_output.txt
+fi
+if [ ! -f "$HOSTFILE" ]
+then
+    echo "HOSTFILE was set to $HOSTFILE but not found." &gt;&gt; diagnostic_output.txt
+    exit 0
+else
+    echo "HOSTFILE was set to $HOSTFILE. Contents were:" &gt;&gt; diagnostic_output.txt
+    echo "-- HOSTFILE BEGIN --" &gt;&gt; diagnostic_output.txt
+    cat $HOSTFILE &gt;&gt; diagnostic_output.txt
+    echo "-- HOSTFILE END --" &gt;&gt; diagnostic_output.txt
+fi
+
+
+echo "DOING CPU binding benchmark" &gt;&gt; diagnostic_output.txt
+
+
+$OPENMPI_PATH/bin/mpirun --bind-to none $NMMPIARGS --hostfile $HOSTFILE --mca btl self,vader,tcp --mca btl_tcp_if_exclude lo,virbr0,docker0 python -m mpi4py 2&gt;&amp;1 ./cpu_usage_test.py &gt;&gt; diagnostic_output.txt
+echo "CPU binding benchmark done." &gt;&gt; diagnostic_output.txt
+
+echo "QP binary location: " &gt;&gt; diagnostic_output.txt
+which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
+       </WaNoExecCommand>
+   <WaNoInputFiles>
+     <WaNoInputFile logical_filename="cpu_usage_test.py">cpu_usage_test.py</WaNoInputFile>
+   </WaNoInputFiles>
+   <WaNoOutputFiles>
+   </WaNoOutputFiles>
+</WaNoTemplate>
