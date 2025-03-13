@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from unittest.mock import ANY, patch, MagicMock
 
 from unittest import mock
@@ -13,7 +15,7 @@ from SimStackServer.WorkflowModel import (
     VariableElement,
     WhileGraph,
     SubGraph,
-    workflow_element_factory,
+    workflow_element_factory, WorkflowAbort,
 )
 
 import copy
@@ -411,6 +413,67 @@ def test_DigraphTravseral():
     expected = ["0", 3, 4444, 983, 12]
     assert report_order == expected
 
+    ooommmm.add_new_unstarted_connection((12,14))
+    assert 14 in ooommmm._graph.nodes
+    assert ooommmm._graph.nodes[14]["status"] == "unstarted"
+
+def test_Digraph_rename():
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
+    dg.rename_all_nodes()
+    # uuid after:
+    for node in dg._graph.nodes:
+        # this would raise if it was not a uuid
+        UUID(node, version=4)
+
+def test_Digraph_get_running_jobs():
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
+    outnodes = dg.get_next_ready()
+    dg.start(outnodes[0])
+    running_jobs = dg.get_running_jobs()
+    assert running_jobs == [3]
+
+def test_Digraph_get_success_jobs():
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
+    outnodes = dg.get_next_ready()
+    dg.start(outnodes[0])
+    dg.finish(outnodes[0])
+    success_jobs = dg.get_success_jobs()
+    assert success_jobs == ['0',3]
+
+def test_Digraph_get_failed_jobs():
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12)])
+    outnodes = dg.get_next_ready()
+    dg.start(outnodes[0])
+    dg.fail(outnodes[0])
+    success_jobs = dg.get_failed_jobs()
+    assert success_jobs == [3]
+
+def test_Digraph_get_success_fail_running_jobs():
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12), (4444,14)])
+    outnodes = dg.get_next_ready()
+    dg.start(outnodes[0])
+    dg.finish(outnodes[0])
+    outnodes = dg.get_next_ready()
+    dg.start(outnodes[0])
+    dg.start(outnodes[1])
+    dg.fail(outnodes[1])
+    assert dg.get_success_failed_running_jobs() == (['0',3],[983],[4444])
+
+def test_Digraph_is_workflow_finished():
+    dg = DirectedGraph([("0", 3)])
+    assert not dg.is_workflow_finished()
+    outnodes = dg.get_next_ready()
+    dg.start(outnodes[0])
+    dg.finish(outnodes[0])
+    assert dg.is_workflow_finished()
+
+def test_Digraph_report_order_generator():
+    dg = DirectedGraph([("0", 3), (3, [4444, 983]), (983, 12), (4444,14)])
+    assert ['0', 3, 4444, 983, 14, 12] == [*dg.report_order_generator()]
+
+
+
+
 
 def test_time_from_seconds_to_clusterjob_timestring():
     mytime = 5 * 86400 + 3 * 3600 + 12 * 60 + 14
@@ -561,6 +624,7 @@ def test_WorkflowElementList():
     other_xml = etree.fromstring(other_xml)
     g.from_xml(other_xml)
     assert g._uid_to_seqnum["4"] == 0
+
 
 
 def test_WFE_fill_in_variables():
@@ -1027,5 +1091,102 @@ def test_set_exec_command(sample_wfem):
 def test_set_original_result_directory(sample_wfem):
     sample_wfem.set_original_result_directory("/new/original/result/directory")
     assert sample_wfem.original_result_directory == "/new/original/result/directory"
+
+
+@pytest.fixture
+def variable_element():
+    in_xml = """<VariableElement id="0" type="VariableElement" variable_name="B" equation="a + b + 4" uid="dc897ea6-fca7-45d2-b7b7-1d720d2b14ca"/>"""
+    xml = etree.fromstring(in_xml)
+    ve = VariableElement()
+    ve.from_xml(xml)
+    return ve
+
+
+def test_variable_element_fields(variable_element):
+    assert variable_element.equation == "a + b + 4"
+    assert variable_element.variable_name == "B"
+    assert variable_element.evaluate_equation({"a": 6},{"b": 3}) == 13
+    with pytest.raises(WorkflowAbort):
+        variable_element.evaluate_equation({"a": "cat"},{"b": 3})
+    with pytest.raises(WorkflowAbort):
+        assert variable_element.evaluate_equation({},{})
+    UUID(variable_element.uid, version=4)
+
+def test_WFPass():
+    wfp = WFPass()
+    myuid = wfp.uid
+    wfp.rename({myuid: "renamed"})
+    assert wfp.uid == "renamed"
+    with pytest.raises(KeyError):
+        wfp.rename({myuid: "renamed"})
+
+
+@pytest.fixture
+def advanced_for():
+    xmlstring = """<ForEachGraph id="3" type="ForEachGraph" iterator_name="a,b" finish_uid="d3dd28bd-d101-47d1-a3d5-05fc84c9636c" uid="c13e8420-80f1-4082-a57c-d725f1fecaa0">
+      <subgraph>
+        <elements>
+          <WorkflowExecModule id="0" type="WorkflowExecModule" uid="331c29b8-eaf2-4711-a5bd-2d55d07518ac" given_name="TestNMSetup" path="AdvancedForEach/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="AdvancedForEach/${a,b_ITER}/TestNMSetup" original_result_directory="">
+            <inputs>
+              <Ele_0 id="0" type="StringList">
+                <Ele_0 id="0" type="str">{testvar}</Ele_0>
+                <Ele_1 id="1" type="str">workflow_data/AdvancedForEach/TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+              </Ele_0>
+            </inputs>
+            <outputs/>
+            <exec_command>#!/bin/bash
+            date
+       </exec_command>
+            <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+              <queue>default</queue>
+              <custom_requests>None</custom_requests>
+              <base_URI>None</base_URI>
+              <port>22</port>
+              <username>None</username>
+              <basepath>basepath</basepath>
+              <queueing_system>Internal</queueing_system>
+              <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+              <extra_config>None Required (default)</extra_config>
+              <ssh_private_key>UseSystemDefault</ssh_private_key>
+              <sge_pe>None</sge_pe>
+            </resources>
+            <runtime_directory>unstarted</runtime_directory>
+            <jobid>unstarted</jobid>
+            <external_runtime_directory>None</external_runtime_directory>
+          </WorkflowExecModule>
+        </elements>
+        <graph>
+          <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="temporary_connector">      <data key="d0">unstarted</data>    </node>    <node id="331c29b8-eaf2-4711-a5bd-2d55d07518ac">      <data key="d0">unstarted</data>    </node>    <edge source="temporary_connector" target="331c29b8-eaf2-4711-a5bd-2d55d07518ac"/>  </graph></graphml>
+        </graph>
+      </subgraph>
+      <iterator_files/>
+      <iterator_variables/>
+      <iterator_definestring>zip([1,2],[3,4])</iterator_definestring>
+      <subgraph_final_ids>
+        <Ele_0 id="0" type="str">331c29b8-eaf2-4711-a5bd-2d55d07518ac</Ele_0>
+      </subgraph_final_ids>
+    </ForEachGraph>"""
+    fg = ForEachGraph()
+    fg.from_xml(etree.fromstring(xmlstring))
+    return fg
+
+def test_advanced_for_fill_in(advanced_for):
+    advanced_for.fill_in_variables({"{testvar}": "testval"})
+    wfe :WorkflowExecModule = advanced_for.subgraph.elements[0]
+    assert wfe.inputs[0][0] == "testval"
+
+def test_advanced_for_getters(advanced_for):
+    assert advanced_for.iterator_name == "a,b"
+    assert len(advanced_for.iterator_files._storage) == 0
+    assert advanced_for.iterator_definestring =="zip([1,2],[3,4])"
+    assert len(advanced_for.iterator_variables._storage) == 0
+    assert advanced_for.subgraph_final_ids._storage == ["331c29b8-eaf2-4711-a5bd-2d55d07518ac"]
+
+def test_advanced_for_multiply_connect_subgraph(advanced_for):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        new_connections, new_activities, new_graphs = advanced_for.resolve_connect(tmpdir, {}, {})
+        assert len(new_connections) == 2
+        assert len(new_activities) == 2
+        assert len(new_graphs) == 2
 
 
