@@ -74,7 +74,7 @@ class TestSimStackServerEntryPoint:
                     appdir.user_config_dir = tmpdir
 
                     # file does not exist, go into time.sleep()
-                    with pytest.raises(InputFileError):
+                    with pytest.raises(FileNotFoundError):
                         flush_port_and_password_to_stdout(
                             appdir, other_process_setup=True
                         )
@@ -128,7 +128,7 @@ class TestSimStackServerEntryPoint:
                     "SimStackServer.SimStackServerEntryPoint.setup_pid",
                     return_value=mock_pid,
                 ), patch("sys.exit") as mock_exit:
-                    with pytest.raises(InputFileError):
+                    with pytest.raises(FileNotFoundError):
                         main()
                         output = capsys.readouterr()
                         assert "App Lock was found" in output
