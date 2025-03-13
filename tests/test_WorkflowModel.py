@@ -1190,3 +1190,68 @@ def test_advanced_for_multiply_connect_subgraph(advanced_for):
         assert len(new_graphs) == 2
 
 
+@pytest.fixture
+def while_graph():
+    xml_string = """    <WhileGraph id="2" type="WhileGraph" iterator_name="While_iterator" finish_uid="07b4373a-4b49-4e2e-b6d6-0d625c9a2fe5" condition="A == 5" current_id="0" uid="8149b829-2d24-4f0d-b24f-f6133d7eedd3">
+      <subgraph>
+        <elements>
+          <VariableElement id="0" type="VariableElement" variable_name="A" equation="6" uid="a506ba71-df35-4f31-93f0-c1d2a2a5043a"/>
+          <WorkflowExecModule id="1" type="WorkflowExecModule" uid="3863f699-06c4-4d04-b2e1-75d8ac8841fd" given_name="TestNMSetup" path="While/TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="While/${While_iterator}/TestNMSetup" original_result_directory="">
+            <inputs>
+              <Ele_0 id="0" type="StringList">
+                <Ele_0 id="0" type="str">{myvar}</Ele_0>
+                <Ele_1 id="1" type="str">workflow_data/While/TestNMSetup/inputs/cpu_usage_test.py</Ele_1>
+              </Ele_0>
+            </inputs>
+            <outputs/>
+            <exec_command>#!/bin/bash
+date {myvar}
+       </exec_command>
+            <resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False">
+              <queue>default</queue>
+              <custom_requests>None</custom_requests>
+              <base_URI>None</base_URI>
+              <port>22</port>
+              <username>None</username>
+              <basepath>/home/strunk/nanoscope/calculations</basepath>
+              <queueing_system>Internal</queueing_system>
+              <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
+              <extra_config>None Required (default)</extra_config>
+              <ssh_private_key>UseSystemDefault</ssh_private_key>
+              <sge_pe>None</sge_pe>
+            </resources>
+            <runtime_directory>unstarted</runtime_directory>
+            <jobid>unstarted</jobid>
+            <external_runtime_directory>None</external_runtime_directory>
+          </WorkflowExecModule>
+        </elements>
+        <graph>
+          <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="temporary_connector">      <data key="d0">unstarted</data>    </node>    <node id="a506ba71-df35-4f31-93f0-c1d2a2a5043a">      <data key="d0">unstarted</data>    </node>    <node id="3863f699-06c4-4d04-b2e1-75d8ac8841fd">      <data key="d0">unstarted</data>    </node>    <edge source="temporary_connector" target="a506ba71-df35-4f31-93f0-c1d2a2a5043a"/>    <edge source="a506ba71-df35-4f31-93f0-c1d2a2a5043a" target="3863f699-06c4-4d04-b2e1-75d8ac8841fd"/>  </graph></graphml>
+        </graph>
+      </subgraph>
+      <subgraph_final_ids>
+        <Ele_0 id="0" type="str">3863f699-06c4-4d04-b2e1-75d8ac8841fd</Ele_0>
+      </subgraph_final_ids>
+    </WhileGraph>"""
+    wg = WhileGraph()
+    wg.from_xml(etree.fromstring(xml_string))
+    return wg
+
+def test_wg_getters(while_graph):
+    assert while_graph.iterator_name == "While_iterator"
+    assert while_graph.condition == "A == 5"
+    assert while_graph.current_id == 0
+    assert while_graph.subgraph_final_ids._storage == ["3863f699-06c4-4d04-b2e1-75d8ac8841fd"]
+
+def test_wg_fill_in_variables(while_graph):
+    while_graph.fill_in_variables({"{myvar}": "cpu_usage_test.py"})
+    wfe :WorkflowExecModule = while_graph.subgraph.elements[1]
+    assert wfe.inputs[0][0] == "cpu_usage_test.py"
+
+def test_wg_resolve_connect(while_graph):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        new_connections, new_activity_elementlists, new_graphs = while_graph.resolve_connect(base_storage=tmpdir, input_variables={"A":7, "{myvar}": "cpu_usage_test.py"}, output_variables={})
+        assert len(new_connections) == 1
+        assert len(new_activity_elementlists) == 0
+        assert len(new_graphs) == 0
+
