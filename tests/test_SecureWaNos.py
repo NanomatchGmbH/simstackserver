@@ -24,6 +24,7 @@ class TestSecureModeGlobal:
         # Test setting secure mode
         SecureModeGlobal.set_secure_mode()
         assert SecureModeGlobal.get_secure_mode() is True
+        SecureModeGlobal._secure_mode = False
 
 
 class TestSecureWaNos:

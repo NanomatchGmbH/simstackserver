@@ -1263,7 +1263,6 @@ fi
     def completed_or_aborted(self):
         actual_resources = self.resources
         if self._my_external_cluster_manager is not None:
-
             self._my_external_cluster_manager: ClusterManager
             with self._my_external_cluster_manager.connection_context():
                 result = self._my_external_cluster_manager.send_jobstatus_message(
@@ -1288,7 +1287,7 @@ fi
                     return True
                 raise
 
-        elif actual_resources.queueing_system == "AiiDA":   # pragma: no cover
+        elif actual_resources.queueing_system == "AiiDA":  # pragma: no cover
             from SimStackServer.SimAiiDA.AiiDAJob import AiiDAJob
 
             myjob = AiiDAJob(self.jobid)
@@ -2555,15 +2554,9 @@ class Workflow(XMLYMLInstantiationBase):
 
     def abort(self):
         self._field_values["status"] = JobStatus.ABORTED
-        # This function has to be called from the child class
 
     def delete(self):
         self._field_values["status"] = JobStatus.MARKED_FOR_DELETION
-        # This function has to be called from the child class
-
-    def _stage_file(self, fromfile, tofile):
-        # At the moment this should only be a cp, but later it can also be a scp
-        shutil.copyfile(fromfile, tofile)
 
     def _get_job_directory(self, wfem: WorkflowExecModule):
         now = datetime.datetime.now()
@@ -2656,11 +2649,6 @@ class Workflow(XMLYMLInstantiationBase):
         secure_mode = SecureModeGlobal.get_secure_mode()
 
         if self.status == JobStatus.ABORTED:
-            """
-            for running_job in running_jobs:
-                running_job : AsyncResult
-                running_job.cancel()
-            """
             return True
 
         for running_job in running_jobs:
@@ -2896,7 +2884,7 @@ class Workflow(XMLYMLInstantiationBase):
             runtime_variables=wfem.get_runtime_variables(),
         )
         render_substitutions = wmr.get_render_substitutions()
-        if queueing_system == "AiiDA":   # pragma: no cover
+        if queueing_system == "AiiDA":  # pragma: no cover
             do_aiida = True
             from aiida.orm import load_node, SinglefileData
             import aiida.orm as orm
@@ -3077,7 +3065,6 @@ class Workflow(XMLYMLInstantiationBase):
         secure_mode = SecureModeGlobal.get_secure_mode()
 
         if not wfem.check_if_job_is_local():
-
             mycm: ClusterManager = self._get_clustermanager_from_job(wfem)
             runtime_dir = wfem.runtime_directory
             ext_runtime_dir = wfem.external_runtime_directory
