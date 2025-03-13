@@ -127,9 +127,9 @@ def test_str_to_bool():
         _str_to_bool("unknown")
 
 
-class TestClass(XMLYMLInstantiationBase):
+class ExampleClass(XMLYMLInstantiationBase):
     _fields = [("test_field", str, "unset_at_start", "A test field", "m")]
-    _name = "TestClass"
+    _name = "ExampleClass"
 
     @property
     def test_field(self):
@@ -148,12 +148,12 @@ class TestXMLYMLInstantiationBase:
         assert isinstance(instance._last_dump_time, float)
 
     def test_contains(self):
-        instance = TestClass()
+        instance = ExampleClass()
         assert instance.contains("test_field") is True
         assert instance.contains("non_existent_field") is False
 
     def test_set_field_value(self):
-        instance = TestClass()
+        instance = ExampleClass()
         instance.set_field_value("test_field", "test_value")
         assert instance._field_values["test_field"] == "test_value"
 
@@ -165,13 +165,13 @@ class TestXMLYMLInstantiationBase:
             instance.get_field_value("non_existent_field")
 
     def test_setup_empty_field_values(self):
-        instance = TestClass()
+        instance = ExampleClass()
         instance._setup_empty_field_values()
         assert instance._field_values["test_field"] == "unset_at_start"
 
     # Test for to_xml and from_xml functions
     def test_to_xml(self):
-        instance = TestClass()
+        instance = ExampleClass()
         instance.set_field_value("test_field", "test_value")
         parent = etree.Element("Parent")
         instance.to_xml(parent_element=parent)
@@ -184,12 +184,12 @@ class TestXMLYMLInstantiationBase:
     def test_from_xml(self):
         xml_str = "<Parent><test_field>test_value</test_field></Parent>"
         xml = etree.fromstring(xml_str)
-        instance = TestClass()
+        instance = ExampleClass()
         instance.from_xml(xml)
         assert instance.get_field_value("test_field") == "test_value"
 
     def test_to_dict(self):
-        instance = TestClass()
+        instance = ExampleClass()
         instance.set_field_value("test_field", "test_value")
         out_dict = {}
         instance.to_dict(out_dict)
@@ -197,22 +197,22 @@ class TestXMLYMLInstantiationBase:
 
     def test_from_dict(self):
         in_dict = {"test_field": "test_value"}
-        instance = TestClass()
+        instance = ExampleClass()
         instance.from_dict(in_dict)
         assert instance.get_field_value("test_field") == "test_value"
 
     def test_dump_xml_to_file(self):
-        instance = TestClass()
+        instance = ExampleClass()
         instance.set_field_value("test_field", "test_value")
         with tempfile.NamedTemporaryFile("wt") as outfile:
             instance.dump_xml_to_file(pathlib.Path(outfile.name))
             with open(outfile.name, "r") as f:
                 result = f.read()
-                expected = '<Workflow wfname="TestClass">\n  <test_field>test_value</test_field>\n</Workflow>\n\n'
+                expected = '<Workflow wfname="ExampleClass">\n  <test_field>test_value</test_field>\n</Workflow>\n\n'
                 assert result == expected
 
     def test_to_json(self):
-        instance = TestClass()
+        instance = ExampleClass()
         instance.set_field_value("test_field", "test_value")
         with tempfile.NamedTemporaryFile("wt") as outfile:
             instance.to_json(pathlib.Path(outfile.name))
@@ -226,12 +226,12 @@ class TestXMLYMLInstantiationBase:
         with tempfile.NamedTemporaryFile("wt") as infile:
             infile.write(json_str)
             infile.flush()
-            instance = TestClass()
+            instance = ExampleClass()
             instance.from_json(pathlib.Path(infile.name))
             assert instance.get_field_value("test_field") == "test_value"
 
     def test_new_instance_from_xml(self, temp_xml_file):
-        instance = TestClass.new_instance_from_xml(temp_xml_file)
+        instance = ExampleClass.new_instance_from_xml(temp_xml_file)
         assert instance.get_field_value("test_field") == "test_value"
 
 

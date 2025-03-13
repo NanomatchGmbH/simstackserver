@@ -74,8 +74,8 @@ def test_remove_clustersettings_from_folder(tmppath, cluster_settings):
 
 def test_get_cluster_settings_from_folder(tmppath, emptypath, cluster_settings):
     assert get_cluster_settings_from_folder(emptypath) == {}
-    assert [k for k in get_cluster_settings_from_folder(tmppath).keys()] == [
-        k for k in cluster_settings.keys()
+    assert [k for k in sorted(get_cluster_settings_from_folder(tmppath).keys())] == [
+        k for k in sorted(cluster_settings.keys())
     ]
 
 
