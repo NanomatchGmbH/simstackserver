@@ -1953,7 +1953,6 @@ class ForEachGraph(XMLYMLInstantiationBase):
             allvars = self._resolve_variable_iterator(input_variables, output_variables)
             iterator_names = [self.iterator_name]
         elif self.iterator_definestring != "":
-            # TODO: continue here
             iterator_names, allvars = self._resolve_multivar_iterator(
                 input_variables, output_variables
             )
@@ -2354,6 +2353,7 @@ class VariableElement(XMLYMLInstantiationBase):
 
     def evaluate_equation(self, input_variables, output_variables):
         equation = self.equation
+
         for vardict in [input_variables, output_variables]:
             for myvar, item in vardict.items():
                 try:
@@ -2367,7 +2367,7 @@ class VariableElement(XMLYMLInstantiationBase):
             print("Evaluating", equation)
             print(input_variables, output_variables)
             result = eval(equation)
-        except (NameError, SyntaxError) as e:
+        except (NameError, SyntaxError, TypeError) as e:
             self._logger.exception("Exception during evaluation of condition.")
             self._logger.error("Variables during exception were:")
             self._logger.error("Input var: {0}".format(input_variables))
@@ -2375,10 +2375,6 @@ class VariableElement(XMLYMLInstantiationBase):
             raise WorkflowAbort from e
 
         return result
-
-    @property
-    def subgraph_final_ids(self) -> StringList:
-        return self._field_values["subgraph_final_ids"]
 
     @property
     def uid(self):
@@ -2392,7 +2388,7 @@ class WFPass(XMLYMLInstantiationBase):
         super().__init__(*args, **kwargs)
         if "uid" not in kwargs:
             self._field_values["uid"] = str(uuid.uuid4())
-        self.name = "WFPass"
+        self._name = "WFPass"
 
     @property
     def uid(self):
