@@ -1,0 +1,168 @@
+[project]
+name = "SimStackServer"
+authors = [{name = "Nanomatch GmbH", email = "info@nanomatch.com"}]
+requires-python = ">= 3.11"
+dependencies = []
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: MIT License"]
+version="1.5.4"
+description="Server Component of the SimStack workflow system"
+
+[project.urls]
+Homepage = "https://github.com/NanomatchGmbH/simstackserver"
+
+[project.scripts]
+SimStackServer = "SimStackServer.SimStackServerEntryPoint:main"
+KillSimStackServer = "SimStackServer.Tools.KillSimStackServer:main"
+SimStack_generate_json_schema = "SimStackServer.Tools.GenJsonEntrypoint:main"
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"SimStackServer" = "SimStackServer"}
+include-package-data = true
+
+[tool.pixi.project]
+channels = ["https://mamba.nanomatch-distribution.de/mamba-repo", "conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+# These dependencies are the main pypi dependencies for your project
+# Add these also to the tool.pixi.dependencies. Keep the package itself in the first line:
+simstackserver = { path = ".", editable = true }
+# Your dependencies come here:
+
+# End of your dependencies
+[tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+# These the main conda dependencies, they will override the pypi ones
+# e.g. python = "3.12.*"
+# Cruft dependencies here:
+# End of cruft dependencies
+
+# Your dependencies come here:
+appdirs = ">=1.4.4"
+jinja2 = ">=3.0.3"
+lockfile = ">=0.12.2"
+lxml = ">=4.8.0"
+msgpack-python = ">=1.0.3"
+networkx = ">=2.7.1"
+numpy = ">=1.22.3"
+paramiko = ">=2.9.2"
+genson = ">=1.2.2"
+psutil = ">=5.9.0"
+python-daemon = ">=2.3.0"
+PyYAML = ">=6.0"
+pyzmq = ">=22.3.0"
+sshtunnel = ">=0.4.0"
+jsonschema = "*"
+nestdictmod = ">=1.1.0"
+pyparsing = ">=3.0.9"
+xmltodict = ">=0.12.0"
+clusterjob = ">=2.1.0,<2.2.0"
+threadfarm = ">=2.0.0"
+SQLAlchemy = ">2"
+micromamba = "==1.5.6"
+# End of your dependencies
+
+[tool.pixi.feature.dev.dependencies]
+# Cruft dependencies here:
+pixi-pycharm = "*"
+# End of cruft dependencies
+
+# Your dependencies come here:
+
+# End of your dependencies
+
+[tool.pixi.environments]
+test = { features = ["test"], solve-group = "default" }
+mypy = ["mypy"]
+default = { features = ["dev"], solve-group = "main" }
+cruft = { features = ["cruft"], no-default-feature = true }
+pythonbuild = { features = ["pythonbuild"], no-default-feature = true, solve-group = "default" }
+condabuild = { features = ["condabuild"], no-default-feature = true, solve-group = "default" }
+lint = { features = ["lint"], no-default-feature = true, solve-group = "default" }
+
+[tool.pixi.feature.lint.dependencies]
+ruff = "*"
+pre-commit = ">=3.7.1,<4"
+pre-commit-hooks = ">=4.6.0,<5"
+typos = ">=1.23.1,<2"
+
+[tool.pixi.feature.lint.tasks]
+pre-commit-install = "pre-commit install"
+pre-commit-run = "pre-commit run --all"
+lint = { depends-on = ["pre-commit-run"] }
+
+[tool.pixi.feature.cruft.dependencies]
+cruft = "*"
+
+[tool.pixi.feature.cruft.tasks]
+cruft = "cruft"
+
+[tool.pixi.feature.test.dependencies]
+# Cruft dependencies here:
+pytest = ">=7,<8"
+pytest-cov = ">=6.0.0,<7"
+# Cruft dependencies end. Add yours below this line
+
+[tool.pixi.feature.test.tasks]
+tests = "python -m pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=SimStackServer"
+
+[tool.pixi.feature.mypy.dependencies]
+mypy = "*"
+# Add your mypy dependencies here:
+
+# End of your mypy dependencies
+
+[tool.pixi.feature.mypy.tasks]
+mypy = "mypy ."
+
+[tool.pixi.feature.condabuild.dependencies]
+conda-build = "*"
+
+[tool.pixi.feature.condabuild.tasks]
+condabuild = "conda build conda-recipe/ -c https://mamba.nanomatch-distribution.de/mamba-repo -c conda-forge --no-test"
+
+[tool.pixi.feature.pythonbuild.dependencies]
+python-build = "*"
+
+[tool.pixi.feature.pythonbuild.tasks]
+pythonbuild = "python3 -m build"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+python_files = "test_*.py"
+testpaths = [
+    "tests",
+]
+
+
+[tool.coverage.run]
+omit = [
+"SimStackServer/third_party/boolexp/__init__.py",
+"SimStackServer/WaNoCalcJob.py"
+]
+
+[tool.ruff]
+extend-exclude = ["tests/input_dirs"]
+force-exclude = true
+
+[tool.ruff.lint.per-file-ignores]
+"SimStackServer/third_party/*" = ["D", "E", "F"]
+"SimStackServer/wano_calcjob/*" = ["D", "E", "F"]
+
+[tool.mypy]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/src"
+python_version = "3.12"
+disallow_untyped_defs = true
+show_error_codes = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+exclude = ["tests"]

@@ -1,0 +1,46 @@
+<Workflow storage="simstack_workspace/2022-02-09-14h18m54s-SampleWF" name="SampleWF" submit_name="2022-02-09-14h18m54s-SampleWF" status="3" queueing_system="Internal">
+  <elements>
+    <WorkflowExecModule id="0" type="WorkflowExecModule" uid="7fa0e72c-aa0b-4ca5-a20a-09768a008c13" given_name="EmployeeRecord" path="EmployeeRecord" wano_xml="EmployeeRecord.xml" outputpath="EmployeeRecord">
+      <inputs>
+        <Ele_0 id="0" type="StringList">
+          <Ele_0 id="0" type="str">report_template.body</Ele_0>
+          <Ele_1 id="1" type="str">workflow_data/EmployeeRecord/inputs/report_template.body</Ele_1>
+        </Ele_0>
+        <Ele_1 id="1" type="StringList">
+          <Ele_0 id="0" type="str">output_config.ini</Ele_0>
+          <Ele_1 id="1" type="str">workflow_data/EmployeeRecord/inputs/sample_config.ini</Ele_1>
+        </Ele_1>
+        <Ele_2 id="2" type="StringList">
+          <Ele_0 id="0" type="str">test.png</Ele_0>
+          <Ele_1 id="1" type="str">workflow_data/EmployeeRecord/inputs/test.png</Ele_1>
+        </Ele_2>
+      </inputs>
+      <outputs>
+        <Ele_0 id="0" type="StringList">
+          <Ele_0 id="0" type="str">Rocko</Ele_0>
+          <Ele_1 id="1" type="str">Rocko</Ele_1>
+        </Ele_0>
+      </outputs>
+      <exec_command>echo "hello"; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </exec_command>
+      <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
+        <queue></queue>
+        <host>localhost</host>
+        <custom_requests></custom_requests>
+        <base_URI></base_URI>
+        <port>0</port>
+        <username></username>
+        <basepath></basepath>
+        <queueing_system></queueing_system>
+        <sw_dir_on_resource></sw_dir_on_resource>
+        <extra_config>None Required (default)</extra_config>
+        <ssh_private_key>UseSystemDefault</ssh_private_key>
+      </resources>
+      <runtime_directory>unstarted</runtime_directory>
+      <jobid>unstarted</jobid>
+      <queueing_system>unset</queueing_system>
+    </WorkflowExecModule>
+  </elements>
+  <graph>
+    <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">  <key id="d0" for="node" attr.name="status" attr.type="string"/>  <graph edgedefault="directed">    <node id="0">      <data key="d0">unstarted</data>    </node>    <node id="7fa0e72c-aa0b-4ca5-a20a-09768a008c13">      <data key="d0">unstarted</data>    </node>    <edge source="0" target="7fa0e72c-aa0b-4ca5-a20a-09768a008c13"/>  </graph></graphml>
+  </graph>
+</Workflow>

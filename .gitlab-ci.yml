@@ -1,0 +1,16 @@
+build:
+  stage: deploy
+  script:
+    - source $NANOCONFIGS/quantumpatch.config
+    - conda config --set pip_interop_enabled True
+    - pip install git-archive-all
+    - ./tools/do_release_nanomatch.sh
+  artifacts:
+    paths:
+      - simstackserver.zip
+    expire_in: '26 weeks'
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  only:
+    refs:
+      - tags

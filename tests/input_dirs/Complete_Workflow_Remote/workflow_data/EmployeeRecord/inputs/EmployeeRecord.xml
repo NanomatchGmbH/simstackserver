@@ -1,0 +1,32 @@
+<WaNoTemplate>
+ <WaNoRoot name="EmployeeRecord">
+  <WaNoString name="name">Rocko</WaNoString>
+  <WaNoDropDown name="Job">
+    <Entry id="0" chosen="True">Developer</Entry>
+    <Entry id="1">Guy who brings the coffee</Entry>
+    <Entry id="2">Karen</Entry>
+  </WaNoDropDown>
+  <WaNoMultipleOf name="Kids">
+    <Element id="0">
+       <WaNoString name="name">Bronco</WaNoString>
+    </Element>
+    <Element id="1">
+       <WaNoString name="name">Rolfgang</WaNoString>
+    </Element>
+    <Element id="2">
+       <WaNoString name="name">Moachim</WaNoString>
+    </Element>
+  </WaNoMultipleOf>
+  <WaNoMatrixString rows="1" cols="3" col_header="X;Y;Z" row_header="" name="Simple Vector">[ [  "" , "" , "" ] ] </WaNoMatrixString>
+  <WaNoMatrixFloat rows="1" cols="3" col_header="X;Y;Z" row_header="" name="Simple Vector Float">[ [  "" , "" , "" ] ] </WaNoMatrixFloat>
+ </WaNoRoot>
+ <WaNoExecCommand>echo "hello"; date > $HOME/lastrun; cp rendered_wano.yml output_dict.yml; sleep 2.6;  echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </WaNoExecCommand>
+ <WaNoInputFiles>
+   <WaNoInputFile logical_filename="report_template.body">report_template.body</WaNoInputFile>
+   <WaNoInputFile logical_filename="output_config.ini">sample_config.ini</WaNoInputFile>
+   <WaNoInputFile logical_filename="test.png">test.png</WaNoInputFile>
+ </WaNoInputFiles>
+ <WaNoOutputFiles>
+   <WaNoOutputFile>{{ wano["name"] }}</WaNoOutputFile>
+ </WaNoOutputFiles>
+</WaNoTemplate>

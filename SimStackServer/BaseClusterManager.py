@@ -1,0 +1,2 @@
+class SSHExpectedDirectoryError(Exception):
+    pass

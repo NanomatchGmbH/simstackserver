@@ -1,0 +1,7 @@
+<Resources walltime="3600" cpus_per_node="32" nodes="4" memory="65536">
+    <queue>not-default</queue>
+    <host>superhost</host>
+    <custom_requests>GPU=3</custom_requests>
+    <queueing_system>pbs</queueing_system>
+    <username>MaxPower</username>
+</Resources>

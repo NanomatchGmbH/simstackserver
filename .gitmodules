@@ -1,0 +1,3 @@
+[submodule "SimStackServer/wano_calcjob/wano_repo"]
+	path = SimStackServer/wano_calcjob/wano_repo
+	url = git@github.com:NanomatchGmbH/wano.git
