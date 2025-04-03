@@ -1,4 +1,4 @@
-<Workflow wfname="RandomFlow" storage="/home/strunk/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow" name="RandomFlow" submit_name="2025-03-13-15h27m49s-RandomFlow" status="6" queueing_system="Internal">
+<Workflow wfname="RandomFlow" storage="/home/username/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow" name="RandomFlow" submit_name="2025-03-13-15h27m49s-RandomFlow" status="6" queueing_system="Internal">
   <elements>
     <VariableElement id="0" type="VariableElement" variable_name="a" equation="5" uid="c0cc66af-7434-4b31-bd83-373826b11f55"/>
     <WorkflowExecModule id="1" type="WorkflowExecModule" uid="c107717d-9b11-45b2-b967-3ed464f968d4" given_name="TestNMSetup" path="TestNMSetup" wano_xml="TestNMSetup.xml" outputpath="TestNMSetup" original_result_directory="">
@@ -50,14 +50,14 @@ which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
         <base_URI>None</base_URI>
         <port>22</port>
         <username>None</username>
-        <basepath>/home/strunk/nanoscope/calculations</basepath>
+        <basepath>/home/username/nanoscope/calculations</basepath>
         <queueing_system>Internal</queueing_system>
         <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
         <extra_config>None Required (default)</extra_config>
         <ssh_private_key>UseSystemDefault</ssh_private_key>
         <sge_pe>None</sge_pe>
       </resources>
-      <runtime_directory>/home/strunk/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow/exec_directories/2025-03-13-15h27m54s-TestNMSetup</runtime_directory>
+      <runtime_directory>/home/username/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow/exec_directories/2025-03-13-15h27m54s-TestNMSetup</runtime_directory>
       <jobid>0</jobid>
       <external_runtime_directory>None</external_runtime_directory>
     </WorkflowExecModule>
@@ -113,7 +113,7 @@ which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
               <base_URI>None</base_URI>
               <port>22</port>
               <username>None</username>
-              <basepath>/home/strunk/nanoscope/calculations</basepath>
+              <basepath>/home/username/nanoscope/calculations</basepath>
               <queueing_system>Internal</queueing_system>
               <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
               <extra_config>None Required (default)</extra_config>
@@ -186,7 +186,7 @@ which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
         <base_URI>None</base_URI>
         <port>22</port>
         <username>None</username>
-        <basepath>/home/strunk/nanoscope/calculations</basepath>
+        <basepath>/home/username/nanoscope/calculations</basepath>
         <queueing_system>Internal</queueing_system>
         <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
         <extra_config>None Required (default)</extra_config>
@@ -246,7 +246,7 @@ which QuantumPatchNG.py &gt;&gt; diagnostic_output.txt
         <base_URI>None</base_URI>
         <port>22</port>
         <username>None</username>
-        <basepath>/home/strunk/nanoscope/calculations</basepath>
+        <basepath>/home/username/nanoscope/calculations</basepath>
         <queueing_system>Internal</queueing_system>
         <sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource>
         <extra_config>None Required (default)</extra_config>

@@ -1,7 +1,7 @@
 Shell was set to: /usr/bin/bash
 NANOMATCH variable was set to -  -
-HOSTFILE was set to /home/strunk/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow/exec_directories/2025-03-13-15h27m54s-TestNMSetup/HOSTFILE
-HOSTFILE was set to /home/strunk/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow/exec_directories/2025-03-13-15h27m54s-TestNMSetup/HOSTFILE. Contents were:
+HOSTFILE was set to /home/username/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow/exec_directories/2025-03-13-15h27m54s-TestNMSetup/HOSTFILE
+HOSTFILE was set to /home/username/nanoscope/calculations/2025-03-13-15h27m49s-RandomFlow/exec_directories/2025-03-13-15h27m54s-TestNMSetup/HOSTFILE. Contents were:
 -- HOSTFILE BEGIN --
 localhost
 -- HOSTFILE END --

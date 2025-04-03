@@ -4,9 +4,9 @@
   "checkout": null,
   "context": {
     "cookiecutter": {
-      "author_name": "Timo Strunk",
-      "email": "timo.strunk@gmail.com",
-      "github_username": "timostrunk",
+      "author_name": "Nanomatch GmbH",
+      "email": "info@nanomatch.com",
+      "github_username": "NanomatchGmbH",
       "project_name": "SimStackServer",
       "project_slug": "simstackserver",
       "project_short_description": "Server Component of the SimStack workflow system",

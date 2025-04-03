@@ -11,7 +11,7 @@ UC_NODES=1; export UC_NODES;
 UC_PROCESSORS_PER_NODE=1; export UC_PROCESSORS_PER_NODE;
 UC_TOTAL_PROCESSORS=1; export UC_TOTAL_PROCESSORS;
 UC_MEMORY_PER_NODE=4096; export UC_MEMORY_PER_NODE;
-BASEFOLDER="/home/strunk/micromamba"
+BASEFOLDER="/home/username/micromamba"
 
 # The following are exports to resolve previous and future
 # versions of the SimStackServer conda / python interpreters
@@ -57,8 +57,8 @@ fi
 ###########################################################
 
 
-    cd /home/strunk/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup
-    export HOSTFILE=/home/strunk/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup/HOSTFILE
+    cd /home/username/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup
+    export HOSTFILE=/home/username/nanoscope/calculations/2025-03-06-15h05m44s-fwfw/exec_directories/2025-03-06-15h05m47s-TestNMSetup/HOSTFILE
     #!/bin/bash
 echo "Shell was set to: $SHELL" > diagnostic_output.txt
 echo "NANOMATCH variable was set to - $NANOMATCH -" >> diagnostic_output.txt
