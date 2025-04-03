@@ -24,15 +24,15 @@
       <exec_command>echo "hello"; date > $HOME/lastrun; sleep 2.6; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "dynamicfile" &gt;&gt; {{ wano["name"] }} </exec_command>
       <resources walltime="86399" cpus_per_node="1" nodes="1" memory="4096">
         <queue></queue>
-        <resource_name>int-strunk</resource_name>
-        <host>int-strunk</host>
+        <resource_name>int-username</resource_name>
+        <host>int-username</host>
         <custom_requests></custom_requests>
-        <base_URI>int-strunk</base_URI>
+        <base_URI>int-username</base_URI>
         <port>22</port>
         <username>unittest_testuser</username>
         <basepath>simstack_workspace_2</basepath>
         <queueing_system>Internal</queueing_system>
-        <sw_dir_on_resource>/home/strunk/software/nanomatch_v4/nanomatch</sw_dir_on_resource>
+        <sw_dir_on_resource>/home/username/software/nanomatch_v4/nanomatch</sw_dir_on_resource>
         <extra_config>None Required (default)</extra_config>
         <ssh_private_key>UseSystemDefault</ssh_private_key>
       </resources>
