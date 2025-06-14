@@ -1,0 +1,14 @@
+# .conda-ignore
+bld/
+rattler-build/
+info/
+.git/
+.pixi/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+*.egg-info/
+build/
+dist/
