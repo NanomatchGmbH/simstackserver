@@ -26,7 +26,7 @@ package-dir = {"SimStackServer" = "SimStackServer"}
 include-package-data = true
 
 [tool.pixi.project]
-channels = ["https://mamba.nanomatch-distribution.de/mamba-repo", "conda-forge"]
+channels = ["https://repo.prefix.dev/simstack", "conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.pypi-dependencies]
