@@ -305,6 +305,9 @@ class LocalClusterManager:
             basepath_override = self._calculation_basepath
 
         getpath = basepath_override + "/" + from_file
+        getpath_path = Path(getpath)
+        if not getpath_path.is_absolute():
+            getpath = str(Path.home() / getpath)
         shutil.copyfile(getpath, to_file)
 
     def exec_command(self, command):
