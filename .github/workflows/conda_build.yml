@@ -34,4 +34,4 @@ jobs:
         id: upload
         run: |
           pixi auth login prefix.dev --token ${{ secrets.PREFIX_PUBLISH_KEY }}
-          pixi upload https://prefix.dev/api/v1/upload/nanomatch-testing ${{ steps.build.outputs.releasepath }}
+          pixi upload https://prefix.dev/api/v1/upload/simstack ${{ steps.build.outputs.releasepath }}
