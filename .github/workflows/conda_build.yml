@@ -30,7 +30,7 @@ jobs:
           name: condapackage
           path: ${{ steps.build.outputs.releasepath }}
 
-      - name: Upload to Testing Repo
+      - name: Upload to Repo
         id: upload
         run: |
           pixi auth login prefix.dev --token ${{ secrets.PREFIX_PUBLISH_KEY }}
