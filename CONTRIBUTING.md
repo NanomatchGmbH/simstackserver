@@ -1,6 +1,6 @@
 # Contributing to SimStack
 
-We welcome contributions to SimStack! This document provides guidelines for contributing to the GUI of the SimStack workflow platform.
+We welcome contributions to SimStack! This document provides guidelines for contributing to SimStack Server, i.e. the server side of the SimStack workflow platform.
 
 ## Getting Started
 
@@ -15,11 +15,6 @@ After cloning the workflow, use pixi to do everything.
 1. Run the tests:
    ```bash
    pixi run tests
-   ```
-
-2. Run simstack:
-   ```bash
-   pixi run simstack
    ```
 
 ### Before Making Changes
@@ -48,23 +43,7 @@ We maintain high code quality standards using automated tools:
 
 We aim for comprehensive test coverage. When adding new features:
 - Write unit tests in the corresponding `tests/` directory
-- Use `pytest-qt` for Qt widget testing with `qtbot` fixtures
 - Mock complex dependencies appropriately
-
-### Architecture Guidelines
-
-SimStack follows an MVC-like architecture:
-
-- **Application Layer**: Central controllers (`WFEditorApplication`, settings providers)
-- **UI Layer**: Qt widgets organized in `view/` directory
-- **Remote Operations**: SSH and cluster management components
-- **WaNo System**: Workflow nodes with custom UI views. WaNos are not part of this repository.
-
-When contributing:
-- Follow existing patterns and code organization
-- Place UI components in `view/` directory
-- Use existing base classes and utilities from `lib/`
-- Maintain separation between UI and business logic
 
 ### Code Conventions
 
@@ -72,7 +51,6 @@ When contributing:
 - **Type Hints**: Use type annotations (required by mypy)
 - **Documentation**: Add docstrings for public methods and classes
 - **Imports**: Organize imports logically, use absolute imports
-- **Qt Patterns**: Follow Qt best practices for signal/slot connections and widget lifecycle
 
 ## Making a Pull Request
 
@@ -116,8 +94,6 @@ When contributing:
 ### New Features
 
 - Discuss significant features in an issue first
-- Follow existing UI/UX patterns
-- Ensure features work with the WaNo system
 - Update relevant documentation
 
 ### Breaking Changes
@@ -141,12 +117,6 @@ When contributing:
 - Document architectural improvements
 - Keep refactoring PRs focused and well-scoped
 
-### UI/UX Improvements
-
-- Maintain consistency with existing Qt design patterns
-- Test on different screen sizes/resolutions
-- Consider accessibility guidelines
-- Provide screenshots in PR description
 
 ## Environment-Specific Development
 
@@ -161,7 +131,6 @@ Switch environments with: `pixi shell -e <environment-name>`
 ## Getting Help
 
 - Check existing issues and discussions
-- Review CLAUDE.md for development commands and architecture details
 - Ask questions in pull request discussions
 
 ## Code of Conduct
