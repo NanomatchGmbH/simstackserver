@@ -12,12 +12,13 @@ A clear and concise description of what the bug is.
 
 ## Steps to Reproduce
 
-Steps to reproduce the behavior:
+Steps to reproduce the behavior, if needed in combination with the SimStack Client:
 
 1. Go to '...'
 2. Click on '...'
 3. Scroll down to '...'
-4. See error
+4. See error (e.g. in Client)
+5. Additional information in File '...' (e.g. on the server side)
 
 ## Expected Behavior
 
@@ -29,13 +30,14 @@ A clear and concise description of what actually happened.
 
 ## Screenshots
 
-If applicable, add screenshots to help explain your problem.
+If applicable, add screenshots (Client side).
 
 ## Environment Information
 
 **Desktop:**
 - OS: [e.g. Ubuntu 20.04, Windows 10, macOS 12.0]
 - SimStack Version: [e.g. 0.1.0]
+- SimStackServer Version: [e.g. 0.1.0]
 
 ## Console Output/Error Messages
 
@@ -64,4 +66,4 @@ If you have an idea of what might be causing this issue or how to fix it, please
 - [ ] I have searched for existing issues that might be related to this bug
 - [ ] I have provided all the requested information above
 - [ ] I can reproduce this issue consistently
-- [ ] I have tested this with the latest version of SimStack
+- [ ] I have tested this with the latest version of SimStack Client and SimStack Server

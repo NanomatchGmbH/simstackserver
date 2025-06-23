@@ -36,18 +36,12 @@ Describe specific use cases where this feature would be beneficial:
 - Use case 2: ...
 - Use case 3: ...
 
-## User Interface Mockups
-
-If this feature involves UI changes, please provide mockups, sketches, or descriptions of the desired interface.
-
 ## Technical Considerations
 
 <!-- For technical contributors -->
 
 **Implementation Areas:**
-- [ ] UI/Frontend (Qt widgets, views)
 - [ ] Backend/Core logic
-- [ ] WaNo system integration
 - [ ] Remote operations/SSH
 - [ ] Settings/Configuration
 - [ ] Testing

@@ -27,6 +27,7 @@ Describe what you've already attempted:
 **System:**
 - OS: [e.g. Ubuntu 20.04, Windows 10, macOS 12.0]
 - SimStack Version: [e.g. 0.1.0]
+- SimStackServer Version: [e.g. 0.1.0]
 
 ## Code Examples
 
