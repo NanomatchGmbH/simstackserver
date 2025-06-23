@@ -12,7 +12,6 @@
 - [ ] Documentation update
 - [ ] Code refactoring (no functional changes)
 - [ ] Performance improvement
-- [ ] UI/UX improvement
 
 ## Changes Made
 
