@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/NanomatchGmbH/simstack/blob/main/README.md
+    about: Check the project documentation and README
+  - name: Contributing Guidelines
+    url: https://github.com/NanomatchGmbH/simstack/blob/main/CONTRIBUTING.md
+    about: Learn how to contribute to the project
+  - name: Development Setup
+    url: https://github.com/NanomatchGmbH/simstack/blob/main/CLAUDE.md
+    about: Development commands and architecture information
