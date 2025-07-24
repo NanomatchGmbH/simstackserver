@@ -122,6 +122,7 @@ class ReportRenderer:
         Returns:
             str: The rendered HTML report as a string.
         """
+        raise ValueError("broken code")
         title, body, style = self._parse_html_parts(html_parts)
         torender = self.render_string % (title, style, body)
         tm = Template(torender)
