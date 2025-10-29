@@ -26,6 +26,7 @@ import lxml.html
 from SimStackServer.RemoteServerManager import RemoteServerManager
 from SimStackServer.SecureWaNos import SecureWaNos, SecureModeGlobal
 from SimStackServer.ClusterManager import ClusterManager
+from SimStackServer.RESTClusterManager import RESTClusterManager
 from SimStackServer.Util.InternalBatchSystem import InternalBatchSystem
 
 from SimStackServer.Util.Exceptions import SecurityError

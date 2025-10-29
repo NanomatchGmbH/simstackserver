@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from SimStackServer.RemoteServerManager import RemoteServerManager
+from SimStackServer.RESTClusterManager import RESTClusterManager
 from SimStackServer.WorkflowModel import Resources
 
 

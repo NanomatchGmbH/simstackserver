@@ -11,6 +11,7 @@ import sshtunnel
 import zmq
 
 from SimStackServer import ClusterManager
+from SimStackServer.RESTClusterManager import RESTClusterManager
 from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 

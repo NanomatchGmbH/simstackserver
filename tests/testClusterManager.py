@@ -7,6 +7,7 @@ from shutil import rmtree
 import getpass
 
 from SimStackServer.ClusterManager import ClusterManager, SSHExpectedDirectoryError
+from SimStackServer.RESTClusterManager import RESTClusterManager
 from SimStackServer.Util.FileUtilities import mkdir_p
 from SimStackServer.WorkflowModel import Resources
 

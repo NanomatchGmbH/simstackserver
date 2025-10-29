@@ -1,4 +1,5 @@
 from SimStackServer.ClusterManager import ClusterManager
+from SimStackServer.RESTClusterManager import RESTClusterManager
 
 from typing import TYPE_CHECKING
 
