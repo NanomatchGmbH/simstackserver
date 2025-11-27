@@ -34,7 +34,9 @@ def get_cluster_settings_from_folder(folder: pathlib.Path):
     return outdict
 
 
-def save_cluster_settings_to_folder(folder: pathlib.Path, clustersettings: dict):
+def save_cluster_settings_to_folder(
+    folder: pathlib.Path, clustersettings: dict[str, Resources]
+):
     global ___clustersettings_file_ending
     for name, resources in clustersettings.items():
         outpath = get_clustersettings_filename_from_folder(folder, name)
