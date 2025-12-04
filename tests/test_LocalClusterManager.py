@@ -1223,3 +1223,8 @@ def test_set_connect_to_unknown_hosts(cluster_manager):
     prev = copy.deepcopy(cluster_manager._unknown_host_connect_workaround)
     cluster_manager.set_connect_to_unknown_hosts(not prev)
     assert cluster_manager._unknown_host_connect_workaround is not prev
+
+
+def test_sshtunnel_lib():
+    # Tests if get_keys works (breaks with paramiko > 3.5.1)
+    sshtunnel.SSHTunnelForwarder.get_keys()

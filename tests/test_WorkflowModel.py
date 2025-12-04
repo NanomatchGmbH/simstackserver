@@ -284,6 +284,25 @@ def sample_resource_model(input_directory):
     return resources
 
 
+def test_resources_reset_to_default(sample_resource_model):
+    with tempfile.TemporaryDirectory() as outdir:
+        myresources = Resources()
+        myresources.set_field_value("extra_config", "Test")
+        outpath = pathlib.Path(outdir) / "out.json"
+        myresources.to_json(outpath)
+        new_resources = Resources()
+        new_resources.from_json(outpath)
+        assert new_resources.extra_config == "Test"
+
+        myresources = Resources()
+        myresources.set_field_value("extra_config", " \n   ")
+        outpath = pathlib.Path(outdir) / "out.json"
+        myresources.to_json(outpath)
+        new_resources = Resources()
+        new_resources.from_json(outpath)
+        assert new_resources.extra_config == "None Required (default)"
+
+
 def test_sample_wfem_roundtrip(sample_wfem):
     wfem = sample_wfem
     wfem_dict = {}

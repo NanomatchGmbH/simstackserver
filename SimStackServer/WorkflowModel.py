@@ -738,6 +738,11 @@ class Resources(XMLYMLInstantiationBase):
         if sge_pe in replace_set:
             self.set_field_value("sge_pe", default_resources.sge_pe)
 
+    def to_json(self, filename: pathlib.Path):
+        if self._field_values["extra_config"].strip() == "":
+            self._field_values["extra_config"] = self._field_defaults["extra_config"]
+        super().to_json(filename)
+
 
 class ReportError(Exception):
     pass
