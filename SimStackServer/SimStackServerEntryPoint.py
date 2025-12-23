@@ -151,6 +151,11 @@ def main():
             logger.debug("PID written")
             ss.setup_zmq_port(myport, mysecret)
             logger.debug("ZMQ port setup finished")
+
+            # Start FastAPI server
+            fastapi_port = ss._start_fastapi_server(host="127.0.0.1")
+            logger.info(f"FastAPI server started on port {fastapi_port}")
+
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()
