@@ -25,7 +25,7 @@ build-backend = "setuptools.build_meta"
 package-dir = {"SimStackServer" = "SimStackServer"}
 include-package-data = true
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://repo.prefix.dev/simstack", "conda-forge"]
 platforms = ["linux-64"]
 
@@ -67,6 +67,8 @@ clusterjob = ">=2.1.0,<2.2.0"
 threadfarm = ">=2.0.0"
 SQLAlchemy = ">2"
 micromamba = "==1.5.6"
+fastapi = ">=0.115.0"
+uvicorn = ">=0.32.0"
 # End of your dependencies
 
 [tool.pixi.feature.dev.dependencies]

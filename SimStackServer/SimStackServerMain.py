@@ -13,6 +13,7 @@ from SimStackServer.MessageTypes import (
     JobStatus,
 )
 from SimStackServer.HTTPServer.HTTPServer import CustomHTTPServerThread
+from SimStackServer.FastAPIServer import FastAPIThread
 
 
 import zmq
@@ -447,6 +448,9 @@ class SimStackServer(object):
         self._http_pass = None
         self._http_port = None
 
+        self._fastapi_thread = None
+        self._fastapi_port = None
+
         self._auth = None
         self._communication_timeout = 4.0
         self._polling_time = 500  # We check every half second for new message
@@ -504,6 +508,17 @@ class SimStackServer(object):
         self._http_server.set_auth(user, mypass)
         self._http_server.start()
         return user, mypass, myport
+
+    def _start_fastapi_server(self, host="127.0.0.1", port=None):
+        """Start FastAPI server in background thread"""
+        if self._fastapi_thread is None:
+            if port is None:
+                port = get_open_port()
+            self._fastapi_port = port
+            self._fastapi_thread = FastAPIThread(self, host, port)
+            self._fastapi_thread.start()
+            self._logger.info(f"FastAPI server started on {host}:{port}")
+        return self._fastapi_port
 
     def _message_handler(self, message_type, message, sock):
         # Every message here MUST absolutely have a send after, otherwise the client will hang.
@@ -758,6 +773,15 @@ class SimStackServer(object):
                     self._logger.debug(
                         "Stopping HTTP server thread, try %d of 10" % (count + 1)
                     )
+
+        # Shutdown FastAPI server
+        if self._fastapi_thread is not None:
+            self._logger.info("Shutting down FastAPI server")
+            self._fastapi_thread.shutdown()
+            self._fastapi_thread.join(timeout=5.0)
+            if self._fastapi_thread.is_alive():
+                self._logger.warning("FastAPI thread did not terminate in time")
+
         time.sleep(2.0 * self._polling_time / 1000.0)
         if self._auth is not None:
             self._auth.stop()
@@ -789,8 +813,6 @@ class SimStackServer(object):
         if self._config is None:
             # Something seriously went wrong here.
             raise SystemExit("Could not setup config. Exiting.")
-        if remove_crontab:
-            self._config.unregister_crontab()
 
     def main_loop(self, workflow_file=None):
         work_done = False
