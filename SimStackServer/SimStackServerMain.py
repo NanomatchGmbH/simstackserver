@@ -15,16 +15,9 @@ from SimStackServer.MessageTypes import (
 from SimStackServer.HTTPServer.HTTPServer import CustomHTTPServerThread
 from SimStackServer.FastAPIServer import FastAPIThread
 
-
-import zmq
-
 from lxml import etree
 
 import logging
-import threading
-
-# from SimStackServer import ClusterManager
-from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
 from SimStackServer.RemoteServerManager import RemoteServerManager
@@ -441,7 +434,7 @@ class SimStackServer(object):
             raise AlreadyRunningException("Already running, please discard silently.")
         self._workflow_manager = WorkflowManager()
         self._workflow_manager.restore()
-        self._zmq_context = None
+
         self._http_server = None
 
         self._http_user = None
@@ -451,10 +444,7 @@ class SimStackServer(object):
         self._fastapi_thread = None
         self._fastapi_port = None
 
-        self._auth = None
         self._communication_timeout = 4.0
-        self._polling_time = 500  # We check every half second for new message
-        self._commthread = None
         self._stop_thread = False
         self._stop_main = False
         self._signal_termination = False
@@ -679,63 +669,11 @@ class SimStackServer(object):
             except Exception:
                 self._logger.exception("Error submitting workflow.")
 
-    def _zmq_worker_loop(self, port):
-        context = self._zmq_context
-        sock = context.socket(zmq.REP)
-        sock.plain_server = True
-        sock.setsockopt(zmq.RCVTIMEO, 1000)
-        sock.setsockopt(zmq.LINGER, 0)
-        bindaddr = "tcp://127.0.0.1:%s" % port
-        self._logger.info("Message worker thread binding to %s." % bindaddr)
-        sock.bind(bindaddr)
-        poller = zmq.Poller()
-        poller.register(sock, zmq.POLLIN)
-        counter = 0
-        while True:
-            counter += 1
-            if self._stop_thread:
-                self._logger.info("Terminating communication thread.")
-                poller.unregister(sock)
-                sock.close()
-                self._logger.info("Closed socket, unregistered poller.")
-                return
-            socks = dict(poller.poll(self._polling_time))
-            if sock in socks:
-                data = sock.recv()
-                self._logger.debug("Received a message.")
-                messagetype, message = Message.unpack(data)
-                self._logger.debug(
-                    "MessageType was: %s." % MessageTypes(messagetype).name
-                )
-                self._message_handler(messagetype, message, sock)
-            else:
-                pass
-            if counter % 50 == 0:
-                self._logger.debug("Socket Worker Heartbeat log")
-
     def _register(self, my_executable):
         self._config = Config()
         if self._config.is_running():
             return False
         return True
-
-    def setup_zmq_port(self, port, password):
-        if self._zmq_context is None:
-            self._zmq_context = zmq.Context.instance()
-
-        if self._auth is None:
-            self._auth = ThreadAuthenticator(self._zmq_context)
-            auth = self._auth
-            auth.start()
-            auth.allow("127.0.0.1")
-            auth.configure_plain(domain="*", passwords={"simstack_client": password})
-            self._logger.debug("Configured Authentication with pass %s" % password)
-
-        if self._commthread is None:
-            self._commthread = threading.Thread(
-                target=self._zmq_worker_loop, name="ZMQ Commthread", args=(port,)
-            )
-            self._commthread.start()
 
     def _signal_handler(self, signum, frame):
         self._logger.debug("Received signal %d. Terminating server." % signum)
@@ -781,20 +719,6 @@ class SimStackServer(object):
             self._fastapi_thread.join(timeout=5.0)
             if self._fastapi_thread.is_alive():
                 self._logger.warning("FastAPI thread did not terminate in time")
-
-        time.sleep(2.0 * self._polling_time / 1000.0)
-        if self._auth is not None:
-            self._auth.stop()
-        if self._zmq_context is not None:
-            self._logger.debug("Terminating ZMQ context.")
-            # The correct call here would be:
-            # self._zmq_context.term()
-            # However: term can hang and leave the Server dangling. Therefore: destory
-            # I will gladly take an error message over deadlock.
-            # If term ever gets a timeout argument, please switch over.
-            # Note, maybe with the current setup, where we set linger on all ports this would be a non-issue.
-            self._zmq_context.destroy()
-            self._logger.debug("ZMQ context terminated.")
 
         # Now that nothing is running anymore, we save WorkflowManagers runtime information and all workflows (inside WFM)
         self._workflow_manager.backup_and_save()

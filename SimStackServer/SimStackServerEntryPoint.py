@@ -149,11 +149,9 @@ def main():
                 logger.info("SimStackServer Daemon Startup")
             mypidfile.update_pid_to_current_process()  # "PIDFILE TAKEOVER
             logger.debug("PID written")
-            ss.setup_zmq_port(myport, mysecret)
-            logger.debug("ZMQ port setup finished")
 
             # Start FastAPI server
-            fastapi_port = ss._start_fastapi_server(host="127.0.0.1")
+            fastapi_port = ss._start_fastapi_server(host="127.0.0.1",port=myport)
             logger.info(f"FastAPI server started on port {fastapi_port}")
 
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
