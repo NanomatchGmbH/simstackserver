@@ -3,6 +3,7 @@ import os
 import pathlib
 import pytest
 from unittest.mock import MagicMock, patch
+import requests
 
 import paramiko
 from paramiko.hostkeys import HostKeys
@@ -192,32 +193,23 @@ def test_connection_context_not_connected(cluster_manager):
 
 def test_connect_ssh_and_zmq_if_disconnected_already_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=True)
-    with patch.object(cluster_manager, "connect") as mock_connect, patch.object(
-        cluster_manager, "connect_zmq_tunnel"
-    ) as mock_tunnel, patch.object(cluster_manager, "_get_server_command") as mock_cmd:
+    with patch.object(cluster_manager, "connect") as mock_connect:
         cluster_manager.connect_ssh_and_zmq_if_disconnected(
             connect_http=False, verbose=False
         )
     mock_connect.assert_not_called()
-    mock_cmd.assert_not_called()
-    mock_tunnel.assert_not_called()
 
 
 def test_connect_ssh_and_zmq_if_disconnected_not_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=False)
-    with patch.object(cluster_manager, "connect") as mock_connect, patch.object(
-        cluster_manager, "_get_server_command", return_value="myservercmd"
-    ) as mock_cmd, patch.object(cluster_manager, "connect_zmq_tunnel") as mock_tunnel:
+    with patch.object(cluster_manager, "connect") as mock_connect:
         cluster_manager.connect_ssh_and_zmq_if_disconnected(
             connect_http=True, verbose=True
         )
     mock_connect.assert_called_once()
-    mock_cmd.assert_called_once()
-    mock_tunnel.assert_called_once_with("myservercmd", connect_http=True, verbose=True)
 
 
 def test_disconnect_all_set(cluster_manager):
-    mock_socket = MagicMock()
     mock_sftp = MagicMock()
     mock_sshclient = MagicMock()
 
@@ -225,35 +217,27 @@ def test_disconnect_all_set(cluster_manager):
     mock_http_tunnel._server_list = [MagicMock(), MagicMock()]
     mock_transport = MagicMock()
     mock_http_tunnel._transport = mock_transport
+    mock_http_tunnel.is_alive = True
 
-    mock_zmq_tunnel = MagicMock()
-    mock_zmq_tunnel.kill = MagicMock()
-
-    cluster_manager._socket = mock_socket
     cluster_manager._sftp_client = mock_sftp
     cluster_manager._ssh_client = mock_sshclient
     cluster_manager._http_server_tunnel = mock_http_tunnel
-    cluster_manager._zmq_ssh_tunnel = mock_zmq_tunnel
 
     cluster_manager.disconnect()
 
-    mock_socket.close.assert_called_once()
     mock_sftp.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
     for srv in mock_http_tunnel._server_list:
         assert srv.timeout == 0.01
     mock_transport.close.assert_called_once()
     mock_http_tunnel.stop.assert_called_once()
-    mock_zmq_tunnel.kill.assert_called_once()
 
 
 def test_disconnect_minimal(cluster_manager):
     mock_sshclient = MagicMock()
     cluster_manager._ssh_client = mock_sshclient
-    cluster_manager._socket = None
     cluster_manager._sftp_client = None
     cluster_manager._http_server_tunnel = None
-    cluster_manager._zmq_ssh_tunnel = None
 
     cluster_manager.disconnect()
     mock_sshclient.close.assert_called_once()
@@ -389,100 +373,9 @@ def test_exec_command(cluster_manager):
     assert stderr is mock_stderr
 
 
-def test_connect_zmq_tunnel(cluster_manager, mock_zmq_context):
-    fake_stderr = []
-    for fake_stdout in [
-        ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"],
-        ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.2.4"],
-        ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey GETLINE586,6,ZMQ,4.3.4"],
-    ]:
-        cluster_manager.exec_command = MagicMock(
-            return_value=(fake_stdout, fake_stderr)
-        )
-        mock_socket = mock_zmq_context.socket.return_value
-        mock_socket.recv.return_value = Message.dict_message(
-            MTS.CONNECT, {"info": "connected"}
-        )
-        with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
-            mock_tunnel = MagicMock()
-            mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-            cluster_manager.connect()
-            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
-        assert mock_socket.plain_username == b"simstack_client"
-        assert mock_socket.plain_password == b"secretkey"
-        mock_socket.send.assert_called()
-        mock_socket.recv.assert_called()
-
-    fake_stderr = []
-    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
-    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
-    mock_tunnel = MagicMock()
-    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
-        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-        with patch("SimStackServer.__version__", new="7.1.2"):
-            cluster_manager.connect()
-            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
-    assert mock_socket.plain_username == b"simstack_client"
-    assert mock_socket.plain_password == b"secretkey"
-    mock_socket.send.assert_called()
-    mock_socket.recv.assert_called()
-    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel:
-        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-        cluster_manager.get_http_server_address = MagicMock(return_value="127.0.1.2")
-        with patch("SimStackServer.__version__", new="6.1.2"):
-            cluster_manager.connect()
-            cluster_manager.connect_zmq_tunnel(
-                "some_fake_command", connect_http=True, verbose=True
-            )
-            with patch.object(
-                cluster_manager, "get_http_server_address", side_effect=Exception
-            ):
-                with pytest.raises(Exception):
-                    cluster_manager.connect_zmq_tunnel(
-                        "some_fake_command", connect_http=True, verbose=True
-                    )
-
-
-def test_connect_zmq_tunnel_extra_config(cluster_manager, mock_zmq_context):
-    fake_stderr = []
-    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
-    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
-    mock_tunnel = MagicMock()
-    cluster_manager._extra_config = "some_config"
-    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel, patch.object(
-        cluster_manager, "exists", return_value=False
-    ):
-        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-        cluster_manager.connect()
-        with pytest.raises(ConnectionError):
-            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
-
-
-def test_connect_zmq_tunnel_other_queuing(cluster_manager, mock_zmq_context):
-    fake_stderr = []
-    fake_stdout = ["SIMSTACK_STARTUP 127.0.0.1 5555 secretkey SERVER,6,ZMQ,4.3.4"]
-    cluster_manager.exec_command = MagicMock(return_value=(fake_stdout, fake_stderr))
-    mock_tunnel = MagicMock()
-    cluster_manager._queueing_system = "pbs"
-    with patch("zmq.ssh.tunnel.paramiko_tunnel") as mock_paramiko_tunnel, patch.object(
-        cluster_manager, "exists", return_value=False
-    ):
-        mock_paramiko_tunnel.return_value = ("tcp://127.0.0.1:5555", mock_tunnel)
-        cluster_manager.connect()
-        with pytest.raises(ConnectionError):
-            cluster_manager.connect_zmq_tunnel("some_fake_command", connect_http=False)
-
-
-def test_send_shutdown_message(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    mock_socket.recv.return_value = Message.dict_message(
-        MTS.ACK, {"info": "acknowledge WF submission"}
-    )
-    cluster_manager._socket = mock_socket
-    cluster_manager.connect()
-    cluster_manager.send_shutdown_message()
-    assert mock_socket.send.called
-    assert mock_socket.recv.called
+# ZMQ tunnel tests are no longer relevant with REST API implementation
+# These tests have been removed as the ZMQ functionality has been replaced
+# with REST API calls using requests library
 
 
 def test_save_hostkeyfile(cluster_manager, ssh_client_with_host_keys, tmpfile):
@@ -532,54 +425,58 @@ def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
     assert local_ssh_client is mock_sshclient_instance
 
 
-def test_get_http_server_address(cluster_manager, mock_zmq_context):
-    cluster_manager._sshprivatekeyfilename = "/fake/ssh/key"
-    with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
-        mock_forwarder_instance = MagicMock()
-        mock_forwarder_cls.return_value = mock_forwarder_instance
-        mock_forwarder_instance.is_alive = True
-        mock_forwarder_instance.local_bind_port = 9999
-        mock_forwarder_instance.start.return_value = None
-        mock_socket = mock_zmq_context.socket.return_value
-        mock_socket.recv.return_value = Message.dict_message(
-            MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"}
-        )
-        cluster_manager._socket = mock_socket
-        cluster_manager.connect()
-        address = cluster_manager.get_http_server_address()
-        assert address == "http://dummy:404@localhost:9999"
-        mock_forwarder_cls.assert_called_once_with(
-            ("fake-url", 22),
-            ssh_username="fake-user",
-            ssh_pkey="/fake/ssh/key",
-            threaded=False,
-            remote_bind_address=("127.0.0.1", 505),
-        )
-        mock_forwarder_instance.start.assert_called_once()
-        # Now simulate tunnel not alive to trigger error.
-        mock_forwarder_instance.is_alive = False
-        cluster_manager.connect()
-        with pytest.raises(
-            sshtunnel.BaseSSHTunnelForwarderError, match="Cannot start ssh tunnel."
-        ):
-            cluster_manager.get_http_server_address()
+def test_get_http_server_address(cluster_manager, requests_mock):
+    """Test REST API implementation of get_http_server_address"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock mkdir_p REST API call (called by connect())
+    requests_mock.post(
+        "http://localhost:8000/api/files/mkdir",
+        json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"}
+    )
+
+    # Mock the REST API response
+    requests_mock.post(
+        "http://localhost:8000/api/http-server",
+        json={
+            "port": 8000,
+            "user": "dummy",
+            "password": "404",
+            "url": "http://localhost:8000/http/browse/"
+        }
+    )
+
+    cluster_manager.connect()
+    address = cluster_manager.get_http_server_address()
+    assert address == "http://localhost:8000/http/browse/"
+    assert cluster_manager._http_user == "dummy"
+    assert cluster_manager._http_pass == "404"
 
 
-def test_get_http_server_address_connect_error(cluster_manager, mock_zmq_context):
-    with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
-        mock_forwarder_instance = MagicMock()
-        mock_forwarder_cls.return_value = mock_forwarder_instance
-        mock_forwarder_instance.is_alive = True
-        mock_forwarder_instance.local_bind_port = 9999
-        mock_forwarder_instance.start.return_value = None
-        mock_socket = mock_zmq_context.socket.return_value
-        mock_socket.recv.return_value = Message.dict_message(
-            MTS.ACK, {"http_user": "dummy", "http_pass": "404"}
-        )
-        cluster_manager._socket = mock_socket
-        cluster_manager.connect()
-        with pytest.raises(ConnectionError):
-            cluster_manager.get_http_server_address()
+def test_get_http_server_address_connect_error(cluster_manager, requests_mock):
+    """Test REST API error handling for get_http_server_address"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock mkdir_p REST API call (called by connect())
+    requests_mock.post(
+        "http://localhost:8000/api/files/mkdir",
+        json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"}
+    )
+
+    # Mock the REST API to return an error
+    requests_mock.post(
+        "http://localhost:8000/api/http-server",
+        status_code=500,
+        text="Internal server error"
+    )
+
+    cluster_manager.connect()
+    with pytest.raises(requests.exceptions.HTTPError):
+        cluster_manager.get_http_server_address()
 
 
 def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftpclient):
@@ -668,34 +565,37 @@ def test_get_server_command(cluster_manager):
         mock_method.assert_called_once_with(cluster_manager._software_directory)
 
 
-def test_get_workflow_job_list_success(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    cluster_manager._recv_message = MagicMock(
-        return_value=(MTS.ACK, {"list_of_jobs": ["job1", "job2"]})
+def test_get_workflow_job_list_success(cluster_manager, requests_mock):
+    """Test REST API implementation of get_workflow_job_list"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response
+    requests_mock.get(
+        "http://localhost:8000/api/workflows/some_workflow/jobs",
+        json={"workflow_id": "some_workflow", "jobs": ["job1", "job2"], "count": 2}
     )
+
     result = cluster_manager.get_workflow_job_list("some_workflow")
-    expected_send = Message.list_jobs_of_wf_message(
-        workflow_submit_name="some_workflow"
-    )
-    mock_socket.send.assert_called_once_with(expected_send)
-    cluster_manager._recv_message.assert_called_once()
     assert result == ["job1", "job2"]
 
 
-def test_get_workflow_job_list_missing_key(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._recv_message = MagicMock(
-        return_value=(MTS.ACK, {"some_unexpected_key": []})
+def test_get_workflow_job_list_missing_key(cluster_manager, requests_mock):
+    """Test REST API with missing jobs key - should return empty list"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response without 'jobs' key
+    requests_mock.get(
+        "http://localhost:8000/api/workflows/some_workflow/jobs",
+        json={"workflow_id": "some_workflow", "some_unexpected_key": []}
     )
-    cluster_manager._socket = mock_socket
-    with pytest.raises(ConnectionError) as excinfo:
-        cluster_manager.get_workflow_job_list("some_workflow")
-    assert "Could not read message in workflow job list update" in str(excinfo.value)
-    expected_send = Message.list_jobs_of_wf_message(
-        workflow_submit_name="some_workflow"
-    )
-    mock_socket.send.assert_called_once_with(expected_send)
+
+    # Should return empty list when 'jobs' key is missing
+    result = cluster_manager.get_workflow_job_list("some_workflow")
+    assert result == []
 
 
 def test_put_directory(cluster_manager):
@@ -808,60 +708,94 @@ def test_get_directory(cluster_manager, mock_sftpclient, tmpdir):
     assert pathlib.Path(file2_path).exists()
 
 
-def test_send_clearserverstate_message(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-        cluster_manager.send_clearserverstate_message()
-    mock_socket.send.assert_called_once_with(Message.clearserverstate_message())
-    mock_recv_ack.assert_called_once()
+def test_send_clearserverstate_message(cluster_manager, requests_mock):
+    """Test REST API implementation of send_clearserverstate_message"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response
+    requests_mock.post(
+        "http://localhost:8000/api/server/clear-state",
+        json={"status": "cleared", "message": "Server state has been cleared"}
+    )
+
+    cluster_manager.send_clearserverstate_message()
+    assert requests_mock.called
 
 
-def test_delete_wf(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch.object(
-        cluster_manager, "_recv_ack_message"
-    ) as mock_recv_ack, patch.object(cluster_manager._logger, "debug") as mock_debug:
+def test_delete_wf(cluster_manager, requests_mock):
+    """Test REST API implementation of delete_wf"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response
+    requests_mock.delete(
+        "http://localhost:8000/api/workflows/some_workflow",
+        json={"status": "deleted", "workflow_id": "some_workflow"}
+    )
+
+    with patch.object(cluster_manager._logger, "debug") as mock_debug:
         cluster_manager.delete_wf("some_workflow")
-    mock_socket.send.assert_called_once_with(Message.delete_wf_message("some_workflow"))
-    mock_recv_ack.assert_called_once()
+
+    assert requests_mock.called
     mock_debug.assert_called_once_with(
         "Sent delete WF message for submitname %s" % ("some_workflow")
     )
 
 
-def test_get_workflow_list(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch.object(
-        cluster_manager,
-        "_recv_message",
-        return_value=(MTS.ACK, {"workflows": ["wf1", "wf2"]}),
-    ) as mock_recv:
-        result = cluster_manager.get_workflow_list()
-    mock_socket.send.assert_called_once_with(Message.list_wfs_message())
-    mock_recv.assert_called_once()
-    assert result == ["wf1", "wf2"]
+def test_get_workflow_list(cluster_manager, requests_mock):
+    """Test REST API implementation of get_workflow_list"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response
+    requests_mock.get(
+        "http://localhost:8000/api/workflows",
+        json={
+            "inprogress": ["wf1"],
+            "finished": ["wf2"],
+            "total": 2
+        }
+    )
+
+    result = cluster_manager.get_workflow_list()
+    assert result == {"inprogress": ["wf1"], "finished": ["wf2"]}
 
 
-def test_abort_wf(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-        cluster_manager.abort_wf("my-test-workflow")
-    expected_msg = Message.abort_wf_message("my-test-workflow")
-    mock_socket.send.assert_called_once_with(expected_msg)
-    mock_recv_ack.assert_called_once()
+def test_abort_wf(cluster_manager, requests_mock):
+    """Test REST API implementation of abort_wf"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response
+    requests_mock.post(
+        "http://localhost:8000/api/workflows/my-test-workflow/abort",
+        json={"status": "abort_requested", "workflow_id": "my-test-workflow"}
+    )
+
+    cluster_manager.abort_wf("my-test-workflow")
+    assert requests_mock.called
 
 
-def test_abort_wf_logs_debug(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch.object(cluster_manager, "_recv_ack_message"), patch.object(
-        cluster_manager._logger, "debug"
-    ) as mock_debug:
+def test_abort_wf_logs_debug(cluster_manager, requests_mock):
+    """Test REST API implementation of abort_wf with debug logging"""
+    # Setup REST session and base URL
+    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_base_url = "http://localhost:8000"
+
+    # Mock the REST API response
+    requests_mock.post(
+        "http://localhost:8000/api/workflows/my-workflow/abort",
+        json={"status": "abort_requested", "workflow_id": "my-workflow"}
+    )
+
+    with patch.object(cluster_manager._logger, "debug") as mock_debug:
         cluster_manager.abort_wf("my-workflow")
+
     mock_debug.assert_called_once_with(
         "Sent Abort WF message for submitname my-workflow"
     )

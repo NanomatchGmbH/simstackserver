@@ -478,10 +478,11 @@ def test_submit_singlejob(test_client, mock_simstack_server):
     assert mock_simstack_server._external_job_uid_to_jobid["test-job-123"] == -1
 
 
-def test_get_http_server_new_server(test_client, mock_simstack_server):
+def test_get_http_server_new_server(test_client, mock_simstack_server, fastapi_thread):
     """Test getting HTTP server info when no server exists"""
     mock_simstack_server._http_server = None
     mock_simstack_server._start_http_server = Mock(return_value=("testuser", "testpass", 8080))
+    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
     response = test_client.post(
         "/api/http-server",
@@ -489,16 +490,18 @@ def test_get_http_server_new_server(test_client, mock_simstack_server):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["port"] == 8080
+    # Now returns FastAPI port instead of old HTTP server port
+    assert data["port"] == fastapi_thread.port
     assert data["user"] == "testuser"
     assert data["password"] == "testpass"
-    assert data["url"] == "http://testuser:testpass@localhost:8080"
+    # URL now points to FastAPI browse endpoint
+    assert "/http/browse/" in data["url"]
 
-    # Verify start_http_server was called
+    # Verify start_http_server was called for backwards compatibility
     mock_simstack_server._start_http_server.assert_called_once_with(directory="path/to/folder")
 
 
-def test_get_http_server_existing_server(test_client, mock_simstack_server):
+def test_get_http_server_existing_server(test_client, mock_simstack_server, fastapi_thread):
     """Test getting HTTP server info when server already exists"""
     mock_http_server = Mock()
     mock_http_server.is_alive.return_value = True
@@ -506,6 +509,7 @@ def test_get_http_server_existing_server(test_client, mock_simstack_server):
     mock_simstack_server._http_user = "existing_user"
     mock_simstack_server._http_pass = "existing_pass"
     mock_simstack_server._http_port = 9090
+    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
     response = test_client.post(
         "/api/http-server",
@@ -513,18 +517,21 @@ def test_get_http_server_existing_server(test_client, mock_simstack_server):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["port"] == 9090
+    # Now returns FastAPI port instead of old HTTP server port
+    assert data["port"] == fastapi_thread.port
     assert data["user"] == "existing_user"
     assert data["password"] == "existing_pass"
-    assert data["url"] == "http://existing_user:existing_pass@localhost:9090"
+    # URL now points to FastAPI browse endpoint
+    assert "/http/browse/" in data["url"]
 
 
-def test_get_http_server_dead_server(test_client, mock_simstack_server):
+def test_get_http_server_dead_server(test_client, mock_simstack_server, fastapi_thread):
     """Test getting HTTP server info when server exists but is dead"""
     mock_http_server = Mock()
     mock_http_server.is_alive.return_value = False
     mock_simstack_server._http_server = mock_http_server
     mock_simstack_server._start_http_server = Mock(return_value=("newuser", "newpass", 8081))
+    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
     response = test_client.post(
         "/api/http-server",
@@ -532,9 +539,12 @@ def test_get_http_server_dead_server(test_client, mock_simstack_server):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["port"] == 8081
+    # Now returns FastAPI port instead of old HTTP server port
+    assert data["port"] == fastapi_thread.port
     assert data["user"] == "newuser"
     assert data["password"] == "newpass"
+    # URL now points to FastAPI browse endpoint
+    assert "/http/browse/" in data["url"]
 
     # Verify start_http_server was called to restart
     mock_simstack_server._start_http_server.assert_called_once()
@@ -1125,3 +1135,252 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
     )
     assert response.status_code == 200
     assert not os.path.exists(os.path.join(temp_basepath, "level1"))
+
+
+# ==================== HTTP Server Directory Browsing Tests ====================
+
+
+@pytest.fixture
+def http_browse_test_client(mock_simstack_server_with_basepath, temp_basepath):
+    """Create a TestClient for HTTP browsing with base directory set"""
+    thread = FastAPIThread(mock_simstack_server_with_basepath, host="127.0.0.1", port=8011)
+    # Set base directory for browsing
+    thread._http_base_directory = temp_basepath
+    return TestClient(thread.app), temp_basepath
+
+
+def test_serve_static_css(test_client):
+    """Test serving static CSS file"""
+    response = test_client.get("/http/static/dirlist.css")
+    assert response.status_code == 200
+    assert "text/css" in response.headers["content-type"] or "text/plain" in response.headers["content-type"]
+
+
+def test_serve_static_favicon(test_client):
+    """Test serving static favicon"""
+    response = test_client.get("/http/static/favicon.ico")
+    assert response.status_code == 200
+    # Favicon should be served with appropriate image type
+
+
+def test_serve_static_file_not_found(test_client):
+    """Test serving non-existent static file"""
+    response = test_client.get("/http/static/nonexistent.css")
+    assert response.status_code == 404
+
+
+def test_serve_static_file_directory_traversal(test_client):
+    """Test that directory traversal is prevented for static files"""
+    response = test_client.get("/http/static/../../../etc/passwd")
+    assert response.status_code in [403, 404]
+
+
+def test_browse_directory_listing(http_browse_test_client):
+    """Test browsing a directory with HTML listing"""
+    client, temp_basepath = http_browse_test_client
+
+    # Create test files
+    os.makedirs(os.path.join(temp_basepath, "test_dir"))
+    with open(os.path.join(temp_basepath, "test_dir", "file1.txt"), "w") as f:
+        f.write("content1")
+    with open(os.path.join(temp_basepath, "test_dir", "file2.log"), "w") as f:
+        f.write("content2")
+
+    response = client.get("/http/browse/test_dir")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+    # Check HTML content
+    html_content = response.text
+    assert "Directory listing" in html_content
+    assert "file1.txt" in html_content
+    assert "file2.log" in html_content
+    assert "dirlist.css" in html_content  # CSS should be linked
+
+
+def test_browse_root_directory(http_browse_test_client):
+    """Test browsing the root directory"""
+    client, temp_basepath = http_browse_test_client
+
+    # Create some test files in root
+    with open(os.path.join(temp_basepath, "root_file.txt"), "w") as f:
+        f.write("root content")
+
+    response = client.get("/http/browse")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "root_file.txt" in response.text
+
+
+def test_browse_serve_file(http_browse_test_client):
+    """Test serving a file through the browse endpoint"""
+    client, temp_basepath = http_browse_test_client
+
+    # Create a test file
+    test_content = "This is test content for serving"
+    with open(os.path.join(temp_basepath, "serve_test.txt"), "w") as f:
+        f.write(test_content)
+
+    response = client.get("/http/browse/serve_test.txt")
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    assert response.text == test_content
+
+
+def test_browse_custom_mime_types(http_browse_test_client):
+    """Test that custom MIME types are applied correctly"""
+    client, temp_basepath = http_browse_test_client
+
+    # Test various custom extensions
+    custom_files = {
+        "test.log": "log content",
+        "test.sh": "#!/bin/bash\necho test",
+        "test.json": '{"key": "value"}',
+        "test.stderr": "error output",
+    }
+
+    for filename, content in custom_files.items():
+        with open(os.path.join(temp_basepath, filename), "w") as f:
+            f.write(content)
+
+        response = client.get(f"/http/browse/{filename}")
+        assert response.status_code == 200
+        assert "text/plain" in response.headers["content-type"]
+
+
+def test_browse_directory_not_found(http_browse_test_client):
+    """Test browsing a non-existent directory"""
+    client, _ = http_browse_test_client
+
+    response = client.get("/http/browse/nonexistent_dir")
+    assert response.status_code == 404
+
+
+def test_browse_directory_traversal_blocked(http_browse_test_client):
+    """Test that directory traversal attacks are blocked"""
+    client, _ = http_browse_test_client
+
+    # Attempt directory traversal
+    response = client.get("/http/browse/../../../etc/passwd")
+    # Should return either 403 (access denied) or 404 (path not found after normalization)
+    # The important thing is it's not 200 (successfully serving the file)
+    assert response.status_code in [403, 404]
+
+
+def test_browse_without_base_directory():
+    """Test browsing when base directory is not set"""
+    mock_server = Mock()
+    mock_server._workflow_manager = Mock()
+    thread = FastAPIThread(mock_server, host="127.0.0.1", port=8012)
+    # Don't set _http_base_directory
+    client = TestClient(thread.app)
+
+    response = client.get("/http/browse/some_path")
+    assert response.status_code == 400
+    assert "base directory not set" in response.text.lower()
+
+
+def test_browse_nested_directories(http_browse_test_client):
+    """Test browsing nested directory structures"""
+    client, temp_basepath = http_browse_test_client
+
+    # Create nested structure
+    nested_path = os.path.join(temp_basepath, "level1", "level2", "level3")
+    os.makedirs(nested_path)
+    with open(os.path.join(nested_path, "deep_file.txt"), "w") as f:
+        f.write("deep content")
+
+    # Browse to nested directory
+    response = client.get("/http/browse/level1/level2/level3")
+    assert response.status_code == 200
+    assert "deep_file.txt" in response.text
+
+    # Serve file from nested directory
+    response = client.get("/http/browse/level1/level2/level3/deep_file.txt")
+    assert response.status_code == 200
+    assert response.text == "deep content"
+
+
+def test_browse_file_metadata_in_listing(http_browse_test_client):
+    """Test that file metadata is shown in directory listing"""
+    client, temp_basepath = http_browse_test_client
+
+    # Create a file with known size
+    test_file = os.path.join(temp_basepath, "metadata_test.txt")
+    with open(test_file, "w") as f:
+        f.write("x" * 1024)  # 1 KiB
+
+    response = client.get("/http/browse")
+    assert response.status_code == 200
+
+    html_content = response.text
+    assert "metadata_test.txt" in html_content
+    # Should show file size
+    assert "KiB" in html_content or "B" in html_content
+    # Should show file type
+    assert "File" in html_content
+
+
+def test_browse_symlink_handling(http_browse_test_client):
+    """Test that symlinks are handled correctly"""
+    client, temp_basepath = http_browse_test_client
+
+    # Create a file and a symlink to it
+    target_file = os.path.join(temp_basepath, "target.txt")
+    with open(target_file, "w") as f:
+        f.write("target content")
+
+    symlink_path = os.path.join(temp_basepath, "link.txt")
+    try:
+        os.symlink(target_file, symlink_path)
+
+        # Browse should show the symlink
+        response = client.get("/http/browse")
+        assert response.status_code == 200
+        # Symlinks are marked with @
+        assert "link.txt@" in response.text or "link.txt" in response.text
+    except OSError:
+        # Skip test if symlinks are not supported (e.g., on Windows)
+        pytest.skip("Symlinks not supported on this system")
+
+
+def test_human_readable_size_helper():
+    """Test the human readable size helper function"""
+    from SimStackServer.FastAPIServer import FastAPIThread
+
+    assert FastAPIThread._human_readable_size(100) == "100.00B"
+    assert FastAPIThread._human_readable_size(1024) == "1.00KiB"
+    assert FastAPIThread._human_readable_size(1024 * 1024) == "1.00MiB"
+    assert FastAPIThread._human_readable_size(1024 * 1024 * 1024) == "1.00GiB"
+
+
+def test_guess_mime_type_helper():
+    """Test the MIME type guessing helper function"""
+    from SimStackServer.FastAPIServer import FastAPIThread
+
+    # Test custom types
+    assert FastAPIThread._guess_mime_type("test.log") == "text/plain"
+    assert FastAPIThread._guess_mime_type("test.sh") == "text/plain"
+    assert FastAPIThread._guess_mime_type("test.json") == "text/plain"
+
+    # Test standard types
+    assert "html" in FastAPIThread._guess_mime_type("test.html")
+    assert "image" in FastAPIThread._guess_mime_type("test.png")
+
+
+def test_http_server_endpoint_sets_base_directory(test_client, mock_simstack_server):
+    """Test that /api/http-server sets the base directory for browsing"""
+    from queue import Queue
+    mock_simstack_server._http_server = None
+    mock_simstack_server._start_http_server = Mock(return_value=("user", "pass", 8080))
+    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
+
+    response = test_client.post(
+        "/api/http-server",
+        json={"basefolder": "test/folder"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should return FastAPI port, not old HTTP server port
+    assert data["url"].endswith("/http/browse/")

@@ -4,10 +4,14 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional
 import tempfile
 import os
+import datetime
+import html
+import urllib.parse
+import sys
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
 from SimStackServer.REST.files_api import (
@@ -23,6 +27,7 @@ from SimStackServer.REST.files_api import (
     FileInfo,
 )
 from SimStackServer.WorkflowModel import WorkflowExecModule
+import SimStackServer.Data as DataDir
 
 if TYPE_CHECKING:
     from SimStackServer.SimStackServerMain import SimStackServer
@@ -75,6 +80,26 @@ class ShutdownResponse(BaseModel):
 class FastAPIThread(threading.Thread):
     """Thread to run FastAPI server for SimStackServer REST API"""
 
+    # Custom MIME type mappings (same as HTTPServer)
+    CUSTOM_MIME_TYPES = {
+        ".lsf": "text/plain",
+        ".body": "text/plain",
+        ".ini": "text/plain",
+        ".stderr": "text/plain",
+        ".stdout": "text/plain",
+        ".sh": "text/plain",
+        ".yml": "text/plain",
+        ".json": "text/plain",
+        ".dat": "text/plain",
+        ".txt": "text/plain",
+        ".sge": "text/plain",
+        ".log": "text/plain",
+        ".script": "text/plain",
+        ".pbs": "text/plain",
+        ".slr": "text/plain",
+        "": "text/plain",
+    }
+
     def __init__(self, simstack_server: "SimStackServer", host="127.0.0.1", port=8000):
         super().__init__(name="FastAPI-Thread", daemon=True)
         self.simstack_server = simstack_server
@@ -82,6 +107,7 @@ class FastAPIThread(threading.Thread):
         self.port = port
         self.server = None
         self._logger = logging.getLogger("FastAPIThread")
+        self._http_base_directory = None  # Will be set when starting HTTP server
 
         # Create FastAPI app
         @asynccontextmanager
@@ -99,6 +125,112 @@ class FastAPIThread(threading.Thread):
             lifespan=lifespan,
         )
         self._setup_routes()
+
+    @staticmethod
+    def _get_static_http_path():
+        """Get path to static HTTP files (favicon, CSS)"""
+        data_dir = os.path.join(
+            os.path.dirname(os.path.realpath(DataDir.__file__)), "static_http"
+        )
+        return data_dir
+
+    @staticmethod
+    def _human_readable_size(size: int, decimal_places: int = 2) -> str:
+        """Convert bytes to human readable format"""
+        for unit in ["B", "KiB", "MiB", "GiB", "TiB"]:
+            if size < 1024.0:
+                break
+            size /= 1024.0
+        return f"{size:.{decimal_places}f}{unit}"
+
+    @staticmethod
+    def _guess_mime_type(filename: str) -> str:
+        """Guess MIME type based on file extension"""
+        import mimetypes
+
+        # Get file extension
+        _, ext = os.path.splitext(filename)
+
+        # Check custom types first
+        if ext in FastAPIThread.CUSTOM_MIME_TYPES:
+            return FastAPIThread.CUSTOM_MIME_TYPES[ext]
+
+        # Fall back to standard mimetypes
+        mime_type, _ = mimetypes.guess_type(filename)
+        return mime_type or "application/octet-stream"
+
+    def _generate_directory_listing_html(self, path: str, display_path: str) -> str:
+        """Generate HTML directory listing (similar to HTTPServer)"""
+        try:
+            entries = os.listdir(path)
+        except OSError:
+            raise HTTPException(status_code=404, detail="No permission to list directory")
+
+        entries.sort(key=lambda a: a.lower())
+
+        # HTML escape the display path
+        display_path_escaped = html.escape(display_path, quote=False)
+        enc = sys.getfilesystemencoding()
+        title = f"Directory listing for {display_path_escaped}"
+
+        # Build HTML
+        html_parts = []
+        html_parts.append('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" '
+                         '"http://www.w3.org/TR/html4/strict.dtd">')
+        html_parts.append("<html>\n<head>")
+        html_parts.append('<link rel="stylesheet" href="/http/static/dirlist.css" />')
+        html_parts.append(f'<meta http-equiv="Content-Type" content="text/html; charset={enc}">')
+        html_parts.append(f"<title>{title}</title>\n</head>")
+        html_parts.append(f"<body>\n<br/><center><b>Index of {title}</b></center><br/>")
+        html_parts.append('<div class="list">')
+        html_parts.append('<table summary="Directory Listing" cellpadding="0" cellspacing="0">')
+        html_parts.append('<thead><tr><th class="n">Name</th><th class="m">Last Modified</th>'
+                         '<th class="s">Size</th><th class="t">Type</th></tr></thead>')
+        html_parts.append("<tbody>")
+
+        for name in entries:
+            fullname = os.path.join(path, name)
+            displayname = linkname = name
+            filetype = "File"
+            lastmodified = "-"
+            filesize = ""
+
+            # Determine file type and metadata
+            if os.path.isdir(fullname):
+                displayname = name + "/"
+                linkname = name + "/"
+                filetype = "Directory"
+            elif os.path.islink(fullname):
+                displayname = name + "@"
+                filetype = "Link"
+            elif os.path.isfile(fullname):
+                try:
+                    statdict = os.stat(fullname)
+                    lastmodified = datetime.datetime.fromtimestamp(statdict.st_mtime)
+                    filesize = self._human_readable_size(statdict.st_size, decimal_places=2)
+                except OSError:
+                    pass
+
+            # Build the current path for the link
+            if display_path.endswith('/'):
+                link_path = display_path + urllib.parse.quote(linkname, errors="surrogatepass")
+            else:
+                link_path = display_path + "/" + urllib.parse.quote(linkname, errors="surrogatepass")
+
+            html_parts.append(
+                "<tr>"
+                f'<td class="n"><a href="{link_path}">{html.escape(displayname, quote=False)}</a></td>'
+                f'<td class="m">{lastmodified}</td>'
+                f'<td class="s">{filesize}</td>'
+                f'<td class="t">{filetype}</td>'
+                "</tr>"
+            )
+
+        html_parts.append("</tbody>")
+        html_parts.append("</table>")
+        html_parts.append("</div></body>\n</html>\n")
+
+        return "\n".join(html_parts)
 
     def _setup_routes(self):
         """Setup FastAPI routes with access to SimStackServer"""
@@ -119,6 +251,100 @@ class FastAPIThread(threading.Thread):
                 "status": "healthy",
                 "workflows_running": self.simstack_server._workflow_manager.workflows_running(),
             }
+
+        # ==================== HTTP Server Routes (Directory Browsing) ====================
+
+        @self.app.get("/http/static/{filename}")
+        async def serve_static_file(filename: str):
+            """Serve static files (favicon.ico, dirlist.css)"""
+            try:
+                static_path = self._get_static_http_path()
+                file_path = os.path.join(static_path, filename)
+
+                # Security check: ensure file is within static directory
+                if not os.path.abspath(file_path).startswith(os.path.abspath(static_path)):
+                    raise HTTPException(status_code=403, detail="Access denied")
+
+                if not os.path.exists(file_path):
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                if not os.path.isfile(file_path):
+                    raise HTTPException(status_code=400, detail="Not a file")
+
+                # Determine MIME type
+                mime_type = self._guess_mime_type(filename)
+
+                return FileResponse(file_path, media_type=mime_type)
+            except HTTPException:
+                raise
+            except Exception as e:
+                self._logger.exception(f"Error serving static file: {filename}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.get("/http/browse")
+        async def browse_root():
+            """Browse root directory - redirect to default path"""
+            if self._http_base_directory is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="HTTP server base directory not set. Call /api/http-server first."
+                )
+            return HTMLResponse(
+                content=self._generate_directory_listing_html(
+                    self._http_base_directory,
+                    "/http/browse/"
+                )
+            )
+
+        @self.app.get("/http/browse/{path:path}")
+        async def browse_directory(path: str):
+            """Browse directory structure and serve files"""
+            try:
+                if self._http_base_directory is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="HTTP server base directory not set. Call /api/http-server first."
+                    )
+
+                # Decode URL path
+                try:
+                    decoded_path = urllib.parse.unquote(path, errors="surrogatepass")
+                except UnicodeDecodeError:
+                    decoded_path = urllib.parse.unquote(path)
+
+                # Build full path
+                full_path = os.path.join(self._http_base_directory, decoded_path)
+
+                # Security check: ensure path is within base directory
+                if not os.path.abspath(full_path).startswith(os.path.abspath(self._http_base_directory)):
+                    raise HTTPException(status_code=403, detail="Access denied")
+
+                if not os.path.exists(full_path):
+                    raise HTTPException(status_code=404, detail="Path not found")
+
+                # If it's a directory, show listing
+                if os.path.isdir(full_path):
+                    html_content = self._generate_directory_listing_html(
+                        full_path,
+                        f"/http/browse/{path}"
+                    )
+                    return HTMLResponse(content=html_content)
+
+                # If it's a file, serve it
+                elif os.path.isfile(full_path):
+                    mime_type = self._guess_mime_type(full_path)
+                    return FileResponse(full_path, media_type=mime_type)
+
+                else:
+                    raise HTTPException(status_code=400, detail="Not a file or directory")
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                self._logger.exception(f"Error browsing path: {path}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # ==================== API Routes ====================
 
         @self.app.get("/api/workflows")
         async def list_workflows():
@@ -282,7 +508,15 @@ class FastAPIThread(threading.Thread):
         async def get_http_server(request: HTTPServerRequest):
             """Get or start HTTP server for serving files"""
             try:
-                # Check if HTTP server is already running
+                # Set the base directory for HTTP browsing
+                base_dir = self.simstack_server._remote_relative_to_absolute_filename(
+                    request.basefolder
+                )
+                self._http_base_directory = base_dir
+
+                self._logger.info(f"HTTP server base directory set to: {base_dir}")
+
+                # Check if old HTTP server is already running (for backwards compatibility)
                 if not self.simstack_server._http_server or not self.simstack_server._http_server.is_alive():
                     user, mypass, port = self.simstack_server._start_http_server(
                         directory=request.basefolder
@@ -295,11 +529,12 @@ class FastAPIThread(threading.Thread):
                     mypass = self.simstack_server._http_pass
                     port = self.simstack_server._http_port
 
+                # Return info pointing to the new FastAPI endpoints
                 return HTTPServerInfo(
-                    port=port,
-                    user=user,
-                    password=mypass,
-                    url=f"http://{user}:{mypass}@localhost:{port}"
+                    port=self.port,  # Use FastAPI port instead
+                    user=user,  # Keep for backwards compatibility
+                    password=mypass,  # Keep for backwards compatibility
+                    url=f"http://localhost:{self.port}/http/browse/"
                 )
             except Exception as e:
                 self._logger.exception("Error getting HTTP server info")
