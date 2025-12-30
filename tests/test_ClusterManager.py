@@ -9,10 +9,8 @@ import paramiko
 from paramiko.hostkeys import HostKeys
 from paramiko.rsakey import RSAKey
 import sshtunnel
-import zmq
 
 from SimStackServer import ClusterManager
-from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 
 
@@ -74,33 +72,20 @@ def mock_sshtunnel_forwarder():
 
 
 @pytest.fixture
-def mock_zmq_context():
-    """Return a MagicMock for zmq.Context and its socket."""
-    mock_context = MagicMock(spec=zmq.Context)
-    mock_socket = MagicMock(spec=zmq.Socket)
-    mock_context.socket.return_value = mock_socket
-    return mock_context
-
-
-@pytest.fixture
 @patch("paramiko.SSHClient", autospec=True)
 @patch("sshtunnel.SSHTunnelForwarder", autospec=True)
-@patch("zmq.Context.instance", autospec=True)
 def cluster_manager(
-    mock_zmq_context_class,
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,
     mock_sshclient,
     mock_sftpclient,
     mock_sshtunnel_forwarder,
-    mock_zmq_context,
 ):
     """
     Create a ClusterManager instance with patched dependencies.
     """
     mock_sshclient_class.return_value = mock_sshclient
     mock_sshtunnel_forwarder_class.return_value = mock_sshtunnel_forwarder
-    mock_zmq_context_class.return_value = mock_zmq_context
 
     cm = ClusterManager.ClusterManager(
         url="fake-url",

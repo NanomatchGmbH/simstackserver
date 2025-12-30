@@ -24,13 +24,12 @@ with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWa
 from os import path
 import posixpath
 from pathlib import Path
+from typing import Optional
+import requests
 
 import sshtunnel
-import zmq
 
 
-from SimStackServer.MessageTypes import Message
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import filewalker
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
@@ -49,6 +48,8 @@ class LocalClusterManager:
         default_queue,
         software_directory=None,
         filegen_mode=False,
+        rest_session=None,
+        rest_base_url=None,
     ):
         """
 
@@ -60,6 +61,8 @@ class LocalClusterManager:
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
         :param filegen_mode (bool): If True: Do not submit anything and stop once the first WaNo is rendered
+        :param rest_session: Authenticated requests.Session for REST API communication
+        :param rest_base_url: Base URL for REST API (e.g., "http://localhost:8000")
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
@@ -77,8 +80,6 @@ class LocalClusterManager:
         self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
-        self._context = zmq.Context.instance()
-        self._socket = None
         self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
         self._http_server_tunnel = None
         self._http_user = None
@@ -88,6 +89,8 @@ class LocalClusterManager:
         self._extra_hostkey_file = None
         self._software_directory = software_directory
         self._filegen_mode = filegen_mode
+        self._rest_session = rest_session  # Authenticated requests session
+        self._rest_base_url = rest_base_url  # Base URL for REST API
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -152,9 +155,6 @@ class LocalClusterManager:
         disconnect the ssh client
         :return: Nothing
         """
-        if self._socket is not None:
-            self._socket.close()
-
         if self._http_server_tunnel is not None:
             # This handling here is purely for windows. Somehow, the transport is not closed, if not set.
             for _srv in self._http_server_tunnel._server_list:
@@ -756,11 +756,9 @@ class LocalClusterManager:
         We make sure that the connections are closed on destruction.
         :return:
         """
-        if self._socket is not None:
-            self._socket.close()
-
         if (
-            self._http_server_tunnel is not None
-            and not self._http_server_tunnel.is_alive
+            hasattr(self, "_http_server_tunnel")
+            and self._http_server_tunnel is not None
+            and self._http_server_tunnel.is_alive
         ):
             self._http_server_tunnel.stop()

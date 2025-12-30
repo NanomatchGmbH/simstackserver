@@ -16,12 +16,25 @@ from paramiko.hostkeys import HostKeys
 from paramiko.rsakey import RSAKey
 
 import sshtunnel
-import zmq
+
+# ZMQ import - handle gracefully if not available
+try:
+    import zmq
+    HAS_ZMQ = True
+except ImportError:
+    zmq = None
+    HAS_ZMQ = False
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
-from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
 from SimStackServer.LocalClusterManager import LocalClusterManager
 import SimStackServer
+
+# Only import Message types if ZMQ is available
+if HAS_ZMQ:
+    from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
+else:
+    Message = None
+    MTS = None
 
 
 #############################
@@ -83,6 +96,8 @@ def mock_sshtunnel_forwarder():
 @pytest.fixture
 def mock_zmq_context():
     """Return a MagicMock for a zmq.Context and its socket."""
+    if not HAS_ZMQ:
+        pytest.skip("ZMQ not available")
     ctx = MagicMock(spec=zmq.Context)
     sock = MagicMock(spec=zmq.Socket)
     ctx.socket.return_value = sock
@@ -92,15 +107,12 @@ def mock_zmq_context():
 @pytest.fixture
 @patch("paramiko.SSHClient", autospec=True)
 @patch("sshtunnel.SSHTunnelForwarder", autospec=True)
-@patch("zmq.Context.instance", autospec=True)
 def cluster_manager(
-    mock_zmq_context_class,
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,
     mock_sshclient,
     mock_sftpclient,
     mock_sshtunnel_forwarder,
-    mock_zmq_context,
 ):
     """
     Return a LocalClusterManager instance with patched dependencies.
@@ -109,8 +121,6 @@ def cluster_manager(
     mock_sshclient_class.return_value = mock_sshclient
     # Whenever SSHTunnelForwarder is constructed, return our mock.
     mock_sshtunnel_forwarder_class.return_value = mock_sshtunnel_forwarder
-    # Whenever zmq.Context.instance() is called, return our mock context.
-    mock_zmq_context_class.return_value = mock_zmq_context
 
     lcm = LocalClusterManager(
         url="fake-url",
@@ -213,24 +223,14 @@ def test_connect_ssh_and_zmq_if_disconnected_not_connected(cluster_manager):
 
 
 def test_disconnect_all_set(cluster_manager):
-    # Create mocks for all connections.
-    mock_socket = MagicMock()
-    mock_sftp = MagicMock()
-    mock_ssh = MagicMock()
+    # Create mocks for all connections (without ZMQ).
     mock_http = MagicMock()
     mock_http._server_list = [MagicMock(), MagicMock()]
     for srv in mock_http._server_list:
         srv.timeout = None
     mock_http._transport = MagicMock()
-    mock_zmq = MagicMock()
-    mock_zmq.kill = MagicMock()
-    cluster_manager._socket = mock_socket
-    cluster_manager._sftp_client = mock_sftp
-    cluster_manager._ssh_client = mock_ssh
     cluster_manager._http_server_tunnel = mock_http
-    cluster_manager._zmq_ssh_tunnel = mock_zmq
     cluster_manager.disconnect()
-    mock_socket.close.assert_called_once()
     for srv in mock_http._server_list:
         assert srv.timeout == 0.01
     mock_http._transport.close.assert_called_once()
@@ -623,7 +623,7 @@ def test__is_socket_closed_unexpected_exception():
 
 def test___del___(cluster_manager):
     mock_http_server_tunnel = MagicMock()
-    mock_http_server_tunnel.is_alive = False
+    mock_http_server_tunnel.is_alive = True
     cluster_manager._http_server_tunnel = mock_http_server_tunnel
     cluster_manager.connect()
     cluster_manager.__del__()
@@ -865,6 +865,7 @@ def test_submit_wf_filegen_mode(cluster_manager):
             dummy_wm.backup_and_save.assert_called_once()
 
 
+@pytest.mark.skipif(not HAS_ZMQ, reason="ZMQ not available")
 def test_recv_ack_message_success(cluster_manager):
     # Simulate a successful ACK response.
     dummy_message = {"status": "ok"}
@@ -875,6 +876,7 @@ def test_recv_ack_message_success(cluster_manager):
     cluster_manager._recv_ack_message()
 
 
+@pytest.mark.skipif(not HAS_ZMQ, reason="ZMQ not available")
 def test_recv_ack_message_failure(cluster_manager):
     # Simulate a response that is not an ACK.
     dummy_message = {"error": "failed"}

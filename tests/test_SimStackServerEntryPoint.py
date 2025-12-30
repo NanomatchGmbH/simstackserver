@@ -63,21 +63,16 @@ class TestSimStackServerEntryPoint:
             temp_file_path = temp_file.name
 
         try:
-            # Patch the functions to use our test file
-            mock_zmq = MagicMock()
-            mock_zmq.zmp_version.return_value = "1.0.2"
-            with patch(
-                "SimStackServer.SimStackServerEntryPoint.zmq", return_value=mock_zmq
-            ):
-                with patch("sys.stdout") as mock_stdout:
-                    appdir = MagicMock()
-                    appdir.user_config_dir = tmpdir
+            # Test without zmq patch (zmq removed)
+            with patch("sys.stdout") as mock_stdout:
+                appdir = MagicMock()
+                appdir.user_config_dir = tmpdir
 
-                    # file does not exist, go into time.sleep()
-                    with pytest.raises(FileNotFoundError):
-                        flush_port_and_password_to_stdout(
-                            appdir, other_process_setup=True
-                        )
+                # file does not exist, go into time.sleep()
+                with pytest.raises(FileNotFoundError):
+                    flush_port_and_password_to_stdout(
+                        appdir, other_process_setup=True
+                    )
 
                     tmpfile = pathlib.Path(tmpdir) / "portconfig.txt"
                     tmpfile.touch()
@@ -107,16 +102,12 @@ class TestSimStackServerEntryPoint:
             "SimStackServer.Util.NoEnterPIDLockFile.NoEnterPIDLockFile",
             return_value=mock_lock,
         ):
-            mock_zmq = MagicMock()
-            mock_zmq.zmp_version.return_value = "1.0.2"
             appdir = MagicMock()
             appdir.user_config_dir = tmpdir
             tmpfile = tmppath / "portconfig.txt"
             appdir.user_log_dir = tmppath / "logs"
 
-            with patch(
-                "SimStackServer.SimStackServerEntryPoint.zmq", return_value=mock_zmq
-            ), patch("sys.stdout"), patch(
+            with patch("sys.stdout"), patch(
                 "daemon.DaemonContext", return_value=nullcontext()
             ), patch(
                 "SimStackServer.SimStackServerMain.SimStackServer.get_appdirs",
@@ -136,11 +127,14 @@ class TestSimStackServerEntryPoint:
                         mock_exit.assert_called_once_with(0)
 
                 os.mkdir(appdir.user_log_dir)
-                tmpfile.touch()
+                # Write content to portconfig.txt so it's not empty
+                with open(tmpfile, "w") as of:
+                    of.write("Name name2 12345 mypass REST,1.0")
                 with caplog.at_level(logging.DEBUG, logger="Startup"):
-                    main()
-                    mock_get_appdirs.assert_called()
-                    mock_lock.acquire.assert_called()
+                    with pytest.raises(SystemExit):
+                        main()
+                mock_get_appdirs.assert_called()
+                mock_lock.acquire.assert_called()
 
                 with open(tmpfile, "w") as of:
                     of.write("Name name2 12345 mypass some")
@@ -154,5 +148,5 @@ class TestSimStackServerEntryPoint:
                 ), patch("sys.exit", side_effect=SystemExit) as mock_exit:
                     with pytest.raises(SystemExit):
                         main()
-                        # Assert that sys.exit was called with 0.
+                    # Assert that sys.exit was called with 0 - moved outside pytest.raises
                     mock_exit.assert_called_once_with(0)
