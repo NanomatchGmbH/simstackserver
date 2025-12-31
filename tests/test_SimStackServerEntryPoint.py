@@ -130,11 +130,19 @@ class TestSimStackServerEntryPoint:
                 # Write content to portconfig.txt so it's not empty
                 with open(tmpfile, "w") as of:
                     of.write("Name name2 12345 mypass REST,1.0")
-                with caplog.at_level(logging.DEBUG, logger="Startup"):
-                    with pytest.raises(SystemExit):
-                        main()
-                mock_get_appdirs.assert_called()
-                mock_lock.acquire.assert_called()
+
+                # Mock register_pidfile to simulate server already running
+                mock_server_pid = MagicMock()
+                mock_server_pid.acquire.side_effect = lockfile.AlreadyLocked
+                with patch(
+                    "SimStackServer.SimStackServerMain.SimStackServer.register_pidfile",
+                    return_value=mock_server_pid,
+                ):
+                    with caplog.at_level(logging.DEBUG, logger="Startup"):
+                        with pytest.raises(SystemExit):
+                            main()
+                    mock_get_appdirs.assert_called()
+                    mock_lock.acquire.assert_called()
 
                 with open(tmpfile, "w") as of:
                     of.write("Name name2 12345 mypass some")

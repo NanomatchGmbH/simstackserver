@@ -3,7 +3,7 @@ import os
 import pathlib
 import pytest
 from unittest.mock import MagicMock, patch
-import requests
+import httpx
 
 import paramiko
 from paramiko.hostkeys import HostKeys
@@ -410,27 +410,25 @@ def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
     assert local_ssh_client is mock_sshclient_instance
 
 
-def test_get_http_server_address(cluster_manager, requests_mock):
+def test_get_http_server_address(cluster_manager, respx_mock):
     """Test REST API implementation of get_http_server_address"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock mkdir_p REST API call (called by connect())
-    requests_mock.post(
-        "http://localhost:8000/api/files/mkdir",
-        json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"}
+    respx_mock.post("http://localhost:8000/api/files/mkdir").mock(
+        return_value=httpx.Response(200, json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"})
     )
 
     # Mock the REST API response
-    requests_mock.post(
-        "http://localhost:8000/api/http-server",
-        json={
+    respx_mock.post("http://localhost:8000/api/http-server").mock(
+        return_value=httpx.Response(200, json={
             "port": 8000,
             "user": "dummy",
             "password": "404",
             "url": "http://localhost:8000/http/browse/"
-        }
+        })
     )
 
     cluster_manager.connect()
@@ -440,27 +438,24 @@ def test_get_http_server_address(cluster_manager, requests_mock):
     assert cluster_manager._http_pass == "404"
 
 
-def test_get_http_server_address_connect_error(cluster_manager, requests_mock):
+def test_get_http_server_address_connect_error(cluster_manager, respx_mock):
     """Test REST API error handling for get_http_server_address"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock mkdir_p REST API call (called by connect())
-    requests_mock.post(
-        "http://localhost:8000/api/files/mkdir",
-        json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"}
+    respx_mock.post("http://localhost:8000/api/files/mkdir").mock(
+        return_value=httpx.Response(200, json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"})
     )
 
     # Mock the REST API to return an error
-    requests_mock.post(
-        "http://localhost:8000/api/http-server",
-        status_code=500,
-        text="Internal server error"
+    respx_mock.post("http://localhost:8000/api/http-server").mock(
+        return_value=httpx.Response(500, text="Internal server error")
     )
 
     cluster_manager.connect()
-    with pytest.raises(requests.exceptions.HTTPError):
+    with pytest.raises(httpx.HTTPStatusError):
         cluster_manager.get_http_server_address()
 
 
@@ -550,32 +545,30 @@ def test_get_server_command(cluster_manager):
         mock_method.assert_called_once_with(cluster_manager._software_directory)
 
 
-def test_get_workflow_job_list_success(cluster_manager, requests_mock):
+def test_get_workflow_job_list_success(cluster_manager, respx_mock):
     """Test REST API implementation of get_workflow_job_list"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response
-    requests_mock.get(
-        "http://localhost:8000/api/workflows/some_workflow/jobs",
-        json={"workflow_id": "some_workflow", "jobs": ["job1", "job2"], "count": 2}
+    respx_mock.get("http://localhost:8000/api/workflows/some_workflow/jobs").mock(
+        return_value=httpx.Response(200, json={"workflow_id": "some_workflow", "jobs": ["job1", "job2"], "count": 2})
     )
 
     result = cluster_manager.get_workflow_job_list("some_workflow")
     assert result == ["job1", "job2"]
 
 
-def test_get_workflow_job_list_missing_key(cluster_manager, requests_mock):
+def test_get_workflow_job_list_missing_key(cluster_manager, respx_mock):
     """Test REST API with missing jobs key - should return empty list"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response without 'jobs' key
-    requests_mock.get(
-        "http://localhost:8000/api/workflows/some_workflow/jobs",
-        json={"workflow_id": "some_workflow", "some_unexpected_key": []}
+    respx_mock.get("http://localhost:8000/api/workflows/some_workflow/jobs").mock(
+        return_value=httpx.Response(200, json={"workflow_id": "some_workflow", "some_unexpected_key": []})
     )
 
     # Should return empty list when 'jobs' key is missing
@@ -693,89 +686,84 @@ def test_get_directory(cluster_manager, mock_sftpclient, tmpdir):
     assert pathlib.Path(file2_path).exists()
 
 
-def test_send_clearserverstate_message(cluster_manager, requests_mock):
+def test_send_clearserverstate_message(cluster_manager, respx_mock):
     """Test REST API implementation of send_clearserverstate_message"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response
-    requests_mock.post(
-        "http://localhost:8000/api/server/clear-state",
-        json={"status": "cleared", "message": "Server state has been cleared"}
+    route = respx_mock.post("http://localhost:8000/api/server/clear-state").mock(
+        return_value=httpx.Response(200, json={"status": "cleared", "message": "Server state has been cleared"})
     )
 
     cluster_manager.send_clearserverstate_message()
-    assert requests_mock.called
+    assert route.called
 
 
-def test_delete_wf(cluster_manager, requests_mock):
+def test_delete_wf(cluster_manager, respx_mock):
     """Test REST API implementation of delete_wf"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response
-    requests_mock.delete(
-        "http://localhost:8000/api/workflows/some_workflow",
-        json={"status": "deleted", "workflow_id": "some_workflow"}
+    route = respx_mock.delete("http://localhost:8000/api/workflows/some_workflow").mock(
+        return_value=httpx.Response(200, json={"status": "deleted", "workflow_id": "some_workflow"})
     )
 
     with patch.object(cluster_manager._logger, "debug") as mock_debug:
         cluster_manager.delete_wf("some_workflow")
 
-    assert requests_mock.called
+    assert route.called
     mock_debug.assert_called_once_with(
         "Sent delete WF message for submitname %s" % ("some_workflow")
     )
 
 
-def test_get_workflow_list(cluster_manager, requests_mock):
+def test_get_workflow_list(cluster_manager, respx_mock):
     """Test REST API implementation of get_workflow_list"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response
-    requests_mock.get(
-        "http://localhost:8000/api/workflows",
-        json={
+    respx_mock.get("http://localhost:8000/api/workflows").mock(
+        return_value=httpx.Response(200, json={
             "inprogress": ["wf1"],
             "finished": ["wf2"],
             "total": 2
-        }
+        })
     )
 
     result = cluster_manager.get_workflow_list()
     assert result == {"inprogress": ["wf1"], "finished": ["wf2"]}
 
 
-def test_abort_wf(cluster_manager, requests_mock):
+def test_abort_wf(cluster_manager, respx_mock):
     """Test REST API implementation of abort_wf"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response
-    requests_mock.post(
-        "http://localhost:8000/api/workflows/my-test-workflow/abort",
-        json={"status": "abort_requested", "workflow_id": "my-test-workflow"}
+    route = respx_mock.post("http://localhost:8000/api/workflows/my-test-workflow/abort").mock(
+        return_value=httpx.Response(200, json={"status": "abort_requested", "workflow_id": "my-test-workflow"})
     )
 
     cluster_manager.abort_wf("my-test-workflow")
-    assert requests_mock.called
+    assert route.called
 
 
-def test_abort_wf_logs_debug(cluster_manager, requests_mock):
+def test_abort_wf_logs_debug(cluster_manager, respx_mock):
     """Test REST API implementation of abort_wf with debug logging"""
     # Setup REST session and base URL
-    cluster_manager._rest_session = requests.Session()
+    cluster_manager._rest_session = httpx.Client()
     cluster_manager._rest_base_url = "http://localhost:8000"
 
     # Mock the REST API response
-    requests_mock.post(
-        "http://localhost:8000/api/workflows/my-workflow/abort",
-        json={"status": "abort_requested", "workflow_id": "my-workflow"}
+    respx_mock.post("http://localhost:8000/api/workflows/my-workflow/abort").mock(
+        return_value=httpx.Response(200, json={"status": "abort_requested", "workflow_id": "my-workflow"})
     )
 
     with patch.object(cluster_manager._logger, "debug") as mock_debug:

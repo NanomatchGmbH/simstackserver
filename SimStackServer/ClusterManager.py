@@ -13,6 +13,7 @@ import io
 
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
+import httpx
 
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
@@ -44,8 +45,7 @@ class ClusterManager:
         queueing_system,
         default_queue,
         software_directory=None,
-        rest_session=None,
-        rest_base_url=None,
+        rest_port=None,
     ):
         """
 
@@ -56,8 +56,7 @@ class ClusterManager:
         :param user (str): Username on the respective server.
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
-        :param rest_session: Authenticated requests.Session for REST API communication
-        :param rest_base_url: Base URL for REST API (e.g., "http://localhost:8000")
+        :param rest_port (int): Port the rest session runs on
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
@@ -85,8 +84,15 @@ class ClusterManager:
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
         self._software_directory = software_directory
-        self._rest_session = rest_session  # Authenticated requests session
-        self._rest_base_url = rest_base_url  # Base URL for REST API
+        self._rest_port = rest_port
+        self._init_client()
+
+    def _init_client(self):
+        if self._rest_port:
+            base_url = f"http://{self._url}:{self._rest_port}"
+        else:
+            base_url = f"http://{self._url}"
+        self._client = httpx.Client(base_url=base_url)
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -211,9 +217,9 @@ class ClusterManager:
 
     def delete_file(self, filename, basepath_override=None):
         """Delete a file using REST API"""
-        if self._rest_session:
-            response = self._rest_session.delete(
-                f"{self._rest_base_url}/api/files/delete",
+        if self._client:
+            response = self._client.delete(
+                "/api/files/delete",
                 json={"filename": filename, "basepath_override": basepath_override}
             )
             response.raise_for_status()
@@ -239,9 +245,9 @@ class ClusterManager:
 
     def rmtree(self, dirname, basepath_override=None):
         """Delete a directory tree using REST API"""
-        if self._rest_session:
-            response = self._rest_session.delete(
-                f"{self._rest_base_url}/api/files/rmtree",
+        if self._client:
+            response = self._client.delete(
+                "/api/files/rmtree",
                 json={"dirname": dirname, "basepath_override": basepath_override}
             )
             response.raise_for_status()
@@ -271,10 +277,10 @@ class ClusterManager:
 
     def exists_remote(self, path):
         """Check if a path exists using REST API"""
-        if self._rest_session:
+        if self._client:
             # For absolute paths, use empty basepath_override
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/files/exists",
+            response = self._client.post(
+                "/api/files/exists",
                 json={"filename": path, "basepath_override": ""}
             )
             response.raise_for_status()
@@ -346,7 +352,7 @@ class ClusterManager:
                 "File %s was not found during ssh put file on local host" % (from_file)
             )
 
-        if self._rest_session:
+        if self._client:
             # Use REST API for file upload
             with open(from_file, 'rb') as f:
                 files = {'file': (posixpath.basename(from_file), f)}
@@ -354,8 +360,8 @@ class ClusterManager:
                     'to_file': to_file,
                     'basepath_override': basepath_override
                 }
-                response = self._rest_session.post(
-                    f"{self._rest_base_url}/api/files/upload",
+                response = self._client.post(
+                    "/api/files/upload",
                     files=files,
                     data=data
                 )
@@ -375,9 +381,9 @@ class ClusterManager:
 
     def list_dir(self, path, basepath_override=None):
         """List directory contents using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/files/list",
+        if self._client:
+            response = self._client.post(
+                "/api/files/list",
                 json={"path": path, "basepath_override": basepath_override}
             )
             response.raise_for_status()
@@ -440,14 +446,14 @@ class ClusterManager:
         :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
-        if self._rest_session:
+        if self._client:
             # Use REST API for file download
             params = {
                 'from_file': from_file,
                 'basepath_override': basepath_override
             }
-            response = self._rest_session.get(
-                f"{self._rest_base_url}/api/files/download",
+            response = self._client.get(
+                "/api/files/download",
                 params=params,
                 stream=True
             )
@@ -548,6 +554,139 @@ class ClusterManager:
         software_dir = self._software_directory
         return self.get_server_command_from_software_directory(software_dir)
 
+    def start_server_remote(self, command):
+        """
+        Executes the servercommand command and sets up the ZMQ tunnel
+
+        :param command (str): Command to execute remotely.
+        :return: Nothing (currently)
+        """
+
+        if not self._extra_config.startswith("None"):
+            extra_conf_mode = True
+            exists = self.exists(self._extra_config)
+            if not exists:
+                raise ConnectionError(
+                    "The extra_config file %s was not found on the server, please make sure it exists."
+                    % self._extra_config
+                )
+        else:
+            extra_conf_mode = False
+
+        queue_to_submission_com = {
+            "slurm": "sbatch",
+            "pbs": "qsub",
+            "lsf": "bsub",
+            "sge_multi": "qsub",
+        }
+        if self._queueing_system not in ["Internal", "AiiDA"]:
+            mycom = queue_to_submission_com[self._queueing_system]
+            if extra_conf_mode:
+                com = '"source %s; which %s"' % (self._extra_config, mycom)
+            else:
+                com = '"which %s"' % mycom
+            stdout, stderr = self.exec_command("bash -c %s" % com)
+            stdout_line = None
+            for line in stdout:
+                stdout_line = line[:-1]
+                break
+            if stdout_line is None or not os.path.basename(stdout_line) == mycom:
+                raise ConnectionError(
+                    "Could not find batch system execution command %s in path. "
+                    "Please try changing the extra_command setting in the settings"
+                    " to include the setup file to the queueing system." % mycom
+                )
+
+        if extra_conf_mode:
+            command = '"source %s; %s"' % (self._extra_config, command)
+        else:
+            command = '"%s"' % command
+
+        stdout, stderr = self.exec_command("bash -c %s" % command)
+
+        password = None
+        for line in stdout:
+            firstline = line[:-1]
+            myline = firstline.split()
+            if not len(myline) == 5:
+                raise ConnectionError(
+                    "Expected port and secret key and zmq version but myline was: <%s>"
+                    % firstline
+                )
+            password = myline[3]
+            port = int(myline[2])
+            self._rest_port = port
+            self._init_client()
+            server_zmq_version_string = myline[4].strip()
+            if server_zmq_version_string.startswith("SERVER"):
+                # Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION
+                splitversion = server_zmq_version_string.split(",")
+                serverversion = splitversion[1]
+
+                semver_serversion = serverversion.split(".")[0:2]
+                from SimStackServer import __version__ as myversion
+
+                semver_myversion = myversion.split(".")[0:2]
+                for client_single, server_single in zip(
+                    semver_myversion, semver_serversion
+                ):
+                    if server_single > client_single:
+                        print(
+                            f"Server version {serverversion} newer than Client version {myversion}. This might lead to issues. Please update client."
+                        )
+                        print("Will still try to connect")
+                        break
+                    if client_single > server_single:
+                        print(
+                            f"Client version {myversion} newer than Server version {serverversion}. This might lead to issues. Please update server."
+                        )
+                        print("Will still try to connect")
+                        break
+
+                zmq_version_string = splitversion[3]
+            else:
+                print(
+                    "Client version newer than Server version. This might lead to issues. Please update server."
+                )
+
+                zmq_version_string = server_zmq_version_string
+
+            if zmq_version_string.startswith("4.2."):
+                # If new issues with ZMQ versions crop up, please specify here.
+                errstring = (
+                    "ZMQ version mismatch: Client requires version newer than 4.3.x"
+                )
+                print(errstring)
+
+            break
+        stderrmessage = " - ".join(stderr)
+        if stderrmessage != "":
+            raise ConnectionError(
+                "Stderr was not empty during connect. Message was: %s" % stderrmessage
+            )
+        if password is None:
+            raise ConnectionError("Did not receive correct response to connection.")
+
+        #socket.plain_username = b"simstack_client"
+        #socket.plain_password = password.encode("utf8").strip()
+
+
+        key_filename = None
+        if self._sshprivatekeyfilename != "UseSystemDefault":
+            key_filename = self._sshprivatekeyfilename
+        """
+        connect_address = "tcp://127.0.0.1:%d" % port
+        if self._url != "localhost":
+            ssh_url = self.get_ssh_url()
+            self._zmq_ssh_tunnel = ssh.tunnel_connection(
+                socket, connect_address, ssh_url, keyfile=key_filename, paramiko=True
+            )
+        else:
+            self._zmq_ssh_tunnel = None
+            socket.connect(connect_address)
+            print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
+        """
+
     def get_url_for_workflow(self, workflow):
         if not workflow.startswith("/"):
             workflow = "/%s" % workflow
@@ -555,9 +694,9 @@ class ClusterManager:
 
     def submit_wf(self, filename, basepath_override=None):
         """Submit a workflow using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/workflows/submit",
+        if self._client:
+            response = self._client.post(
+                "/api/workflows/submit",
                 json={"filename": filename}
             )
             response.raise_for_status()
@@ -566,9 +705,9 @@ class ClusterManager:
 
     def submit_single_job(self, wfem):
         """Submit a single job using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/singlejobs/submit",
+        if self._client:
+            response = self._client.post(
+                "/api/singlejobs/submit",
                 json={"wfem": wfem.to_dict()}
             )
             response.raise_for_status()
@@ -577,9 +716,9 @@ class ClusterManager:
 
     def send_jobstatus_message(self, wfem_uid: str):
         """Get single job status using REST API"""
-        if self._rest_session:
-            response = self._rest_session.get(
-                f"{self._rest_base_url}/api/singlejobs/{wfem_uid}/status"
+        if self._client:
+            response = self._client.get(
+                f"/api/singlejobs/{wfem_uid}/status"
             )
             response.raise_for_status()
             return response.json()
@@ -588,9 +727,9 @@ class ClusterManager:
 
     def send_abortsinglejob_message(self, wfem_uid: str):
         """Abort a single job using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/singlejobs/{wfem_uid}/abort"
+        if self._client:
+            response = self._client.post(
+                f"/api/singlejobs/{wfem_uid}/abort"
             )
             response.raise_for_status()
         else:
@@ -602,9 +741,9 @@ class ClusterManager:
 
     def send_shutdown_message(self):
         """Shutdown server using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/server/shutdown"
+        if self._client:
+            response = self._client.post(
+                "/api/server/shutdown"
             )
             response.raise_for_status()
         else:
@@ -615,9 +754,9 @@ class ClusterManager:
         self._logger.debug(
             "Sent Abort WF message for submitname %s" % (workflow_submitname)
         )
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/workflows/{workflow_submitname}/abort"
+        if self._client:
+            response = self._client.post(
+                f"/api/workflows/{workflow_submitname}/abort"
             )
             response.raise_for_status()
         else:
@@ -625,9 +764,9 @@ class ClusterManager:
 
     def send_clearserverstate_message(self):
         """Clear server state using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/server/clear-state"
+        if self._client:
+            response = self._client.post(
+                "/api/server/clear-state"
             )
             response.raise_for_status()
         else:
@@ -638,9 +777,9 @@ class ClusterManager:
         self._logger.debug(
             "Sent delete WF message for submitname %s" % (workflow_submitname)
         )
-        if self._rest_session:
-            response = self._rest_session.delete(
-                f"{self._rest_base_url}/api/workflows/{workflow_submitname}"
+        if self._client:
+            response = self._client.delete(
+                f"/api/workflows/{workflow_submitname}"
             )
             response.raise_for_status()
         else:
@@ -648,13 +787,12 @@ class ClusterManager:
 
     def get_workflow_list(self):
         """Get list of workflows using REST API"""
-        if self._rest_session:
-            response = self._rest_session.get(
-                f"{self._rest_base_url}/api/workflows"
+        if self._client:
+            response = self._client.get(
+                "/api/workflows"
             )
             response.raise_for_status()
             data = response.json()
-            # Return combined list matching old format
             workflows = {"inprogress": data.get("inprogress", []), "finished": data.get("finished", [])}
             return workflows
         else:
@@ -662,9 +800,9 @@ class ClusterManager:
 
     def get_workflow_job_list(self, workflow):
         """Get job list for a workflow using REST API"""
-        if self._rest_session:
-            response = self._rest_session.get(
-                f"{self._rest_base_url}/api/workflows/{workflow}/jobs"
+        if self._client:
+            response = self._client.get(
+                f"/api/workflows/{workflow}/jobs"
             )
             response.raise_for_status()
             data = response.json()
@@ -684,9 +822,9 @@ class ClusterManager:
 
     def exists(self, path):
         """Check if a path exists (file or directory) using REST API"""
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/files/exists",
+        if self._client:
+            response = self._client.post(
+                "/api/files/exists",
                 json={"filename": path, "basepath_override": ""}
             )
             response.raise_for_status()
@@ -734,10 +872,10 @@ class ClusterManager:
         server tunnel if it is not present.
         :return: HTTP server URL
         """
-        if self._rest_session:
+        if self._client:
             # Use REST API to get HTTP server info
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/http-server",
+            response = self._client.post(
+                "/api/http-server",
                 json={"basefolder": self.get_calculation_basepath()}
             )
             response.raise_for_status()
@@ -755,9 +893,9 @@ class ClusterManager:
         :param path (str): The path to check
         :return bool: Exists, does not exist
         """
-        if self._rest_session:
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/files/exists",
+        if self._client:
+            response = self._client.post(
+                "/api/files/exists",
                 json={"filename": path, "basepath_override": ""}
             )
             response.raise_for_status()
@@ -792,10 +930,10 @@ class ClusterManager:
         if isinstance(directory, pathlib.Path):
             directory = str(directory)
 
-        if self._rest_session:
+        if self._client:
             # Use REST API for directory creation
-            response = self._rest_session.post(
-                f"{self._rest_base_url}/api/files/mkdir",
+            response = self._client.post(
+                "/api/files/mkdir",
                 json={
                     "directory": directory,
                     "basepath_override": basepath_override,
