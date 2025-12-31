@@ -70,9 +70,7 @@ class TestSimStackServerEntryPoint:
 
                 # file does not exist, go into time.sleep()
                 with pytest.raises(FileNotFoundError):
-                    flush_port_and_password_to_stdout(
-                        appdir, other_process_setup=True
-                    )
+                    flush_port_and_password_to_stdout(appdir, other_process_setup=True)
 
                     tmpfile = pathlib.Path(tmpdir) / "portconfig.txt"
                     tmpfile.touch()

@@ -19,7 +19,6 @@ import sshtunnel
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 from SimStackServer.LocalClusterManager import LocalClusterManager
-import SimStackServer
 
 
 #############################

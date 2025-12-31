@@ -2,7 +2,6 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional
-import tempfile
 import os
 import datetime
 import html
@@ -11,7 +10,7 @@ import sys
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from SimStackServer.REST.files_api import (
@@ -36,11 +35,13 @@ if TYPE_CHECKING:
 # Request/Response models for workflow operations
 class SubmitWorkflowRequest(BaseModel):
     """Request model for workflow submission"""
+
     filename: str
 
 
 class SubmitWorkflowResponse(BaseModel):
     """Response model for workflow submission"""
+
     status: str
     message: str
     filename: str
@@ -48,11 +49,13 @@ class SubmitWorkflowResponse(BaseModel):
 
 class SubmitSingleJobRequest(BaseModel):
     """Request model for single job submission"""
+
     wfem: dict
 
 
 class SubmitSingleJobResponse(BaseModel):
     """Response model for single job submission"""
+
     status: str
     message: str
     job_uid: str
@@ -60,6 +63,7 @@ class SubmitSingleJobResponse(BaseModel):
 
 class HTTPServerInfo(BaseModel):
     """HTTP server information"""
+
     port: int
     user: str
     password: str
@@ -68,11 +72,13 @@ class HTTPServerInfo(BaseModel):
 
 class HTTPServerRequest(BaseModel):
     """Request for HTTP server info"""
+
     basefolder: str
 
 
 class ShutdownResponse(BaseModel):
     """Response for shutdown request"""
+
     status: str
     message: str
 
@@ -164,7 +170,9 @@ class FastAPIThread(threading.Thread):
         try:
             entries = os.listdir(path)
         except OSError:
-            raise HTTPException(status_code=404, detail="No permission to list directory")
+            raise HTTPException(
+                status_code=404, detail="No permission to list directory"
+            )
 
         entries.sort(key=lambda a: a.lower())
 
@@ -175,17 +183,25 @@ class FastAPIThread(threading.Thread):
 
         # Build HTML
         html_parts = []
-        html_parts.append('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" '
-                         '"http://www.w3.org/TR/html4/strict.dtd">')
+        html_parts.append(
+            '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" '
+            '"http://www.w3.org/TR/html4/strict.dtd">'
+        )
         html_parts.append("<html>\n<head>")
         html_parts.append('<link rel="stylesheet" href="/http/static/dirlist.css" />')
-        html_parts.append(f'<meta http-equiv="Content-Type" content="text/html; charset={enc}">')
+        html_parts.append(
+            f'<meta http-equiv="Content-Type" content="text/html; charset={enc}">'
+        )
         html_parts.append(f"<title>{title}</title>\n</head>")
         html_parts.append(f"<body>\n<br/><center><b>Index of {title}</b></center><br/>")
         html_parts.append('<div class="list">')
-        html_parts.append('<table summary="Directory Listing" cellpadding="0" cellspacing="0">')
-        html_parts.append('<thead><tr><th class="n">Name</th><th class="m">Last Modified</th>'
-                         '<th class="s">Size</th><th class="t">Type</th></tr></thead>')
+        html_parts.append(
+            '<table summary="Directory Listing" cellpadding="0" cellspacing="0">'
+        )
+        html_parts.append(
+            '<thead><tr><th class="n">Name</th><th class="m">Last Modified</th>'
+            '<th class="s">Size</th><th class="t">Type</th></tr></thead>'
+        )
         html_parts.append("<tbody>")
 
         for name in entries:
@@ -207,15 +223,23 @@ class FastAPIThread(threading.Thread):
                 try:
                     statdict = os.stat(fullname)
                     lastmodified = datetime.datetime.fromtimestamp(statdict.st_mtime)
-                    filesize = self._human_readable_size(statdict.st_size, decimal_places=2)
+                    filesize = self._human_readable_size(
+                        statdict.st_size, decimal_places=2
+                    )
                 except OSError:
                     pass
 
             # Build the current path for the link
-            if display_path.endswith('/'):
-                link_path = display_path + urllib.parse.quote(linkname, errors="surrogatepass")
+            if display_path.endswith("/"):
+                link_path = display_path + urllib.parse.quote(
+                    linkname, errors="surrogatepass"
+                )
             else:
-                link_path = display_path + "/" + urllib.parse.quote(linkname, errors="surrogatepass")
+                link_path = (
+                    display_path
+                    + "/"
+                    + urllib.parse.quote(linkname, errors="surrogatepass")
+                )
 
             html_parts.append(
                 "<tr>"
@@ -262,7 +286,9 @@ class FastAPIThread(threading.Thread):
                 file_path = os.path.join(static_path, filename)
 
                 # Security check: ensure file is within static directory
-                if not os.path.abspath(file_path).startswith(os.path.abspath(static_path)):
+                if not os.path.abspath(file_path).startswith(
+                    os.path.abspath(static_path)
+                ):
                     raise HTTPException(status_code=403, detail="Access denied")
 
                 if not os.path.exists(file_path):
@@ -287,12 +313,11 @@ class FastAPIThread(threading.Thread):
             if self._http_base_directory is None:
                 raise HTTPException(
                     status_code=400,
-                    detail="HTTP server base directory not set. Call /api/http-server first."
+                    detail="HTTP server base directory not set. Call /api/http-server first.",
                 )
             return HTMLResponse(
                 content=self._generate_directory_listing_html(
-                    self._http_base_directory,
-                    "/http/browse/"
+                    self._http_base_directory, "/http/browse/"
                 )
             )
 
@@ -303,7 +328,7 @@ class FastAPIThread(threading.Thread):
                 if self._http_base_directory is None:
                     raise HTTPException(
                         status_code=400,
-                        detail="HTTP server base directory not set. Call /api/http-server first."
+                        detail="HTTP server base directory not set. Call /api/http-server first.",
                     )
 
                 # Decode URL path
@@ -316,7 +341,9 @@ class FastAPIThread(threading.Thread):
                 full_path = os.path.join(self._http_base_directory, decoded_path)
 
                 # Security check: ensure path is within base directory
-                if not os.path.abspath(full_path).startswith(os.path.abspath(self._http_base_directory)):
+                if not os.path.abspath(full_path).startswith(
+                    os.path.abspath(self._http_base_directory)
+                ):
                     raise HTTPException(status_code=403, detail="Access denied")
 
                 if not os.path.exists(full_path):
@@ -325,8 +352,7 @@ class FastAPIThread(threading.Thread):
                 # If it's a directory, show listing
                 if os.path.isdir(full_path):
                     html_content = self._generate_directory_listing_html(
-                        full_path,
-                        f"/http/browse/{path}"
+                        full_path, f"/http/browse/{path}"
                     )
                     return HTMLResponse(content=html_content)
 
@@ -336,7 +362,9 @@ class FastAPIThread(threading.Thread):
                     return FileResponse(full_path, media_type=mime_type)
 
                 else:
-                    raise HTTPException(status_code=400, detail="Not a file or directory")
+                    raise HTTPException(
+                        status_code=400, detail="Not a file or directory"
+                    )
 
             except HTTPException:
                 raise
@@ -463,8 +491,10 @@ class FastAPIThread(threading.Thread):
             """Submit a workflow for execution"""
             try:
                 # Convert relative path to absolute path
-                workflow_filename = self.simstack_server._remote_relative_to_absolute_filename(
-                    request.filename
+                workflow_filename = (
+                    self.simstack_server._remote_relative_to_absolute_filename(
+                        request.filename
+                    )
                 )
 
                 self._logger.info(f"Workflow submission requested: {workflow_filename}")
@@ -475,7 +505,7 @@ class FastAPIThread(threading.Thread):
                 return SubmitWorkflowResponse(
                     status="submitted",
                     message="Workflow has been submitted for execution",
-                    filename=request.filename
+                    filename=request.filename,
                 )
             except Exception as e:
                 self._logger.exception(f"Error submitting workflow: {request.filename}")
@@ -498,7 +528,7 @@ class FastAPIThread(threading.Thread):
                 return SubmitSingleJobResponse(
                     status="submitted",
                     message="Single job has been submitted for execution",
-                    job_uid=wfem.uid
+                    job_uid=wfem.uid,
                 )
             except Exception as e:
                 self._logger.exception("Error submitting single job")
@@ -517,7 +547,10 @@ class FastAPIThread(threading.Thread):
                 self._logger.info(f"HTTP server base directory set to: {base_dir}")
 
                 # Check if old HTTP server is already running (for backwards compatibility)
-                if not self.simstack_server._http_server or not self.simstack_server._http_server.is_alive():
+                if (
+                    not self.simstack_server._http_server
+                    or not self.simstack_server._http_server.is_alive()
+                ):
                     user, mypass, port = self.simstack_server._start_http_server(
                         directory=request.basefolder
                     )
@@ -534,7 +567,7 @@ class FastAPIThread(threading.Thread):
                     port=self.port,  # Use FastAPI port instead
                     user=user,  # Keep for backwards compatibility
                     password=mypass,  # Keep for backwards compatibility
-                    url=f"http://localhost:{self.port}/http/browse/"
+                    url=f"http://localhost:{self.port}/http/browse/",
                 )
             except Exception as e:
                 self._logger.exception("Error getting HTTP server info")
@@ -549,8 +582,7 @@ class FastAPIThread(threading.Thread):
                 self.simstack_server._stop_thread = True
 
                 return ShutdownResponse(
-                    status="shutting_down",
-                    message="Server shutdown has been initiated"
+                    status="shutting_down", message="Server shutdown has been initiated"
                 )
             except Exception as e:
                 self._logger.exception("Error during server shutdown")
@@ -563,10 +595,7 @@ class FastAPIThread(threading.Thread):
                 self._logger.info("Hard clearing server state via API")
                 self.simstack_server._clear_server_state()
 
-                return {
-                    "status": "cleared",
-                    "message": "Server state has been cleared"
-                }
+                return {"status": "cleared", "message": "Server state has been cleared"}
             except Exception as e:
                 self._logger.exception("Error clearing server state")
                 raise HTTPException(status_code=500, detail=str(e))
@@ -577,16 +606,18 @@ class FastAPIThread(threading.Thread):
         async def check_file_exists(request: FilePathRequest):
             """Check if a file or directory exists"""
             try:
-                filepath = self._resolve_path(request.filename, request.basepath_override)
+                filepath = self._resolve_path(
+                    request.filename, request.basepath_override
+                )
                 exists = os.path.exists(filepath)
                 is_dir = os.path.isdir(filepath) if exists else None
                 return ExistsResponse(
-                    exists=exists,
-                    path=request.filename,
-                    is_directory=is_dir
+                    exists=exists, path=request.filename, is_directory=is_dir
                 )
             except Exception as e:
-                self._logger.exception(f"Error checking if file exists: {request.filename}")
+                self._logger.exception(
+                    f"Error checking if file exists: {request.filename}"
+                )
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/api/files/list", response_model=ListDirResponse)
@@ -596,20 +627,21 @@ class FastAPIThread(threading.Thread):
                 dirpath = self._resolve_path(request.path, request.basepath_override)
 
                 if not os.path.exists(dirpath):
-                    raise HTTPException(status_code=404, detail=f"Directory not found: {request.path}")
+                    raise HTTPException(
+                        status_code=404, detail=f"Directory not found: {request.path}"
+                    )
 
                 if not os.path.isdir(dirpath):
-                    raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Path is not a directory: {request.path}",
+                    )
 
                 files = []
                 for entry in os.listdir(dirpath):
                     entry_path = os.path.join(dirpath, entry)
-                    file_type = 'd' if os.path.isdir(entry_path) else 'f'
-                    files.append(FileInfo(
-                        name=entry,
-                        path=dirpath,
-                        type=file_type
-                    ))
+                    file_type = "d" if os.path.isdir(entry_path) else "f"
+                    files.append(FileInfo(name=entry, path=dirpath, type=file_type))
 
                 return ListDirResponse(files=files, count=len(files))
             except HTTPException:
@@ -622,27 +654,25 @@ class FastAPIThread(threading.Thread):
         async def create_directory(request: MkdirRequest):
             """Create a directory (recursively)"""
             try:
-                dirpath = self._resolve_path(request.directory, request.basepath_override)
+                dirpath = self._resolve_path(
+                    request.directory, request.basepath_override
+                )
 
                 if os.path.exists(dirpath):
                     if not os.path.isdir(dirpath):
                         raise HTTPException(
                             status_code=400,
-                            detail=f"Path exists but is not a directory: {request.directory}"
+                            detail=f"Path exists but is not a directory: {request.directory}",
                         )
                     return MkdirResponse(
-                        created=False,
-                        path=request.directory,
-                        absolute_path=dirpath
+                        created=False, path=request.directory, absolute_path=dirpath
                     )
 
                 os.makedirs(dirpath, mode=request.mode_override or 0o770, exist_ok=True)
                 self._logger.info(f"Created directory: {dirpath}")
 
                 return MkdirResponse(
-                    created=True,
-                    path=request.directory,
-                    absolute_path=dirpath
+                    created=True, path=request.directory, absolute_path=dirpath
                 )
             except HTTPException:
                 raise
@@ -654,15 +684,19 @@ class FastAPIThread(threading.Thread):
         async def delete_file(request: FilePathRequest):
             """Delete a file"""
             try:
-                filepath = self._resolve_path(request.filename, request.basepath_override)
+                filepath = self._resolve_path(
+                    request.filename, request.basepath_override
+                )
 
                 if not os.path.exists(filepath):
-                    raise HTTPException(status_code=404, detail=f"File not found: {request.filename}")
+                    raise HTTPException(
+                        status_code=404, detail=f"File not found: {request.filename}"
+                    )
 
                 if os.path.isdir(filepath):
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Path is a directory, use /api/files/rmtree instead: {request.filename}"
+                        detail=f"Path is a directory, use /api/files/rmtree instead: {request.filename}",
                     )
 
                 os.remove(filepath)
@@ -671,7 +705,7 @@ class FastAPIThread(threading.Thread):
                 return DeleteResponse(
                     deleted=True,
                     path=request.filename,
-                    message="File deleted successfully"
+                    message="File deleted successfully",
                 )
             except HTTPException:
                 raise
@@ -690,23 +724,24 @@ class FastAPIThread(threading.Thread):
                     return DeleteResponse(
                         deleted=False,
                         path=request.dirname,
-                        message="Directory does not exist"
+                        message="Directory does not exist",
                     )
 
                 if not os.path.isdir(dirpath):
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Path is not a directory: {request.dirname}"
+                        detail=f"Path is not a directory: {request.dirname}",
                     )
 
                 import shutil
+
                 shutil.rmtree(dirpath)
                 self._logger.info(f"Deleted directory tree: {dirpath}")
 
                 return DeleteResponse(
                     deleted=True,
                     path=request.dirname,
-                    message="Directory deleted successfully"
+                    message="Directory deleted successfully",
                 )
             except HTTPException:
                 raise
@@ -718,7 +753,7 @@ class FastAPIThread(threading.Thread):
         async def upload_file(
             file: UploadFile = File(...),
             to_file: Optional[str] = Form(None),
-            basepath_override: Optional[str] = Form(None)
+            basepath_override: Optional[str] = Form(None),
         ):
             """Upload a file to the server"""
             try:
@@ -740,9 +775,7 @@ class FastAPIThread(threading.Thread):
                 self._logger.info(f"Uploaded file: {filepath}")
 
                 return FileOperationResponse(
-                    success=True,
-                    message="File uploaded successfully",
-                    path=destination
+                    success=True, message="File uploaded successfully", path=destination
                 )
             except Exception as e:
                 self._logger.exception(f"Error uploading file to: {to_file}")
@@ -750,26 +783,26 @@ class FastAPIThread(threading.Thread):
 
         @self.app.get("/api/files/download")
         async def download_file(
-            from_file: str,
-            basepath_override: Optional[str] = None
+            from_file: str, basepath_override: Optional[str] = None
         ):
             """Download a file from the server"""
             try:
                 filepath = self._resolve_path(from_file, basepath_override)
 
                 if not os.path.exists(filepath):
-                    raise HTTPException(status_code=404, detail=f"File not found: {from_file}")
+                    raise HTTPException(
+                        status_code=404, detail=f"File not found: {from_file}"
+                    )
 
                 if os.path.isdir(filepath):
                     raise HTTPException(
-                        status_code=400,
-                        detail=f"Path is a directory: {from_file}"
+                        status_code=400, detail=f"Path is a directory: {from_file}"
                     )
 
                 return FileResponse(
                     filepath,
                     filename=os.path.basename(filepath),
-                    media_type='application/octet-stream'
+                    media_type="application/octet-stream",
                 )
             except HTTPException:
                 raise

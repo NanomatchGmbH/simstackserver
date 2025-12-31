@@ -47,7 +47,8 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
         splitline = line.split()
         if not len(splitline) >= 4:
             raise InputFileError(
-                "Input of portconfig was expected to be at least four fields, got <%s>" % line
+                "Input of portconfig was expected to be at least four fields, got <%s>"
+                % line
             )
         port = int(splitline[2])
         mypass = splitline[3].strip()
@@ -152,7 +153,7 @@ def main():
             logger.debug("PID written")
 
             # Start FastAPI server
-            fastapi_port = ss._start_fastapi_server(host="127.0.0.1",port=myport)
+            fastapi_port = ss._start_fastapi_server(host="127.0.0.1", port=myport)
             logger.info(f"FastAPI server started on port {fastapi_port}")
 
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open

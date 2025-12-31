@@ -8,8 +8,6 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 import random
-from typing import Optional
-import io
 
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
@@ -218,13 +216,16 @@ class ClusterManager:
     def delete_file(self, filename, basepath_override=None):
         """Delete a file using REST API"""
         if self._client:
-            response = self._client.delete(
+            response = self._client.request(
+                "DELETE",
                 "/api/files/delete",
-                json={"filename": filename, "basepath_override": basepath_override}
+                json={"filename": filename, "basepath_override": basepath_override},
             )
             response.raise_for_status()
         else:
-            resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
+            resolved_filename = self.resolve_file_in_basepath(
+                filename, basepath_override
+            )
             self._sftp_client.remove(resolved_filename)
 
     def __rmtree_helper(self, abspath):
@@ -246,9 +247,10 @@ class ClusterManager:
     def rmtree(self, dirname, basepath_override=None):
         """Delete a directory tree using REST API"""
         if self._client:
-            response = self._client.delete(
+            response = self._client.request(
+                "DELETE",
                 "/api/files/rmtree",
-                json={"dirname": dirname, "basepath_override": basepath_override}
+                json={"dirname": dirname, "basepath_override": basepath_override},
             )
             response.raise_for_status()
         else:
@@ -280,8 +282,7 @@ class ClusterManager:
         if self._client:
             # For absolute paths, use empty basepath_override
             response = self._client.post(
-                "/api/files/exists",
-                json={"filename": path, "basepath_override": ""}
+                "/api/files/exists", json={"filename": path, "basepath_override": ""}
             )
             response.raise_for_status()
             return response.json()["exists"]
@@ -354,16 +355,11 @@ class ClusterManager:
 
         if self._client:
             # Use REST API for file upload
-            with open(from_file, 'rb') as f:
-                files = {'file': (posixpath.basename(from_file), f)}
-                data = {
-                    'to_file': to_file,
-                    'basepath_override': basepath_override
-                }
+            with open(from_file, "rb") as f:
+                files = {"file": (posixpath.basename(from_file), f)}
+                data = {"to_file": to_file, "basepath_override": basepath_override}
                 response = self._client.post(
-                    "/api/files/upload",
-                    files=files,
-                    data=data
+                    "/api/files/upload", files=files, data=data
                 )
                 response.raise_for_status()
         else:
@@ -384,7 +380,7 @@ class ClusterManager:
         if self._client:
             response = self._client.post(
                 "/api/files/list",
-                json={"path": path, "basepath_override": basepath_override}
+                json={"path": path, "basepath_override": basepath_override},
             )
             response.raise_for_status()
             return response.json()["files"]
@@ -448,20 +444,14 @@ class ClusterManager:
         """
         if self._client:
             # Use REST API for file download
-            params = {
-                'from_file': from_file,
-                'basepath_override': basepath_override
-            }
-            response = self._client.get(
-                "/api/files/download",
-                params=params,
-                stream=True
-            )
-            response.raise_for_status()
-
-            with open(to_file, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            params = {"from_file": from_file, "basepath_override": basepath_override}
+            with self._client.stream(
+                "GET", "/api/files/download", params=params
+            ) as response:
+                response.raise_for_status()
+                with open(to_file, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
         else:
             if basepath_override is None:
                 basepath_override = self._calculation_basepath
@@ -667,13 +657,12 @@ class ClusterManager:
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
 
-        #socket.plain_username = b"simstack_client"
-        #socket.plain_password = password.encode("utf8").strip()
+        # socket.plain_username = b"simstack_client"
+        # socket.plain_password = password.encode("utf8").strip()
 
-
-        key_filename = None
-        if self._sshprivatekeyfilename != "UseSystemDefault":
-            key_filename = self._sshprivatekeyfilename
+        # key_filename = None
+        # if self._sshprivatekeyfilename != "UseSystemDefault":
+        #    key_filename = self._sshprivatekeyfilename
         """
         connect_address = "tcp://127.0.0.1:%d" % port
         if self._url != "localhost":
@@ -696,44 +685,46 @@ class ClusterManager:
         """Submit a workflow using REST API"""
         if self._client:
             response = self._client.post(
-                "/api/workflows/submit",
-                json={"filename": filename}
+                "/api/workflows/submit", json={"filename": filename}
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ submission not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ submission not available with REST session"
+            )
 
     def submit_single_job(self, wfem):
         """Submit a single job using REST API"""
         if self._client:
             response = self._client.post(
-                "/api/singlejobs/submit",
-                json={"wfem": wfem.to_dict()}
+                "/api/singlejobs/submit", json={"wfem": wfem.to_dict()}
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ submission not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ submission not available with REST session"
+            )
 
     def send_jobstatus_message(self, wfem_uid: str):
         """Get single job status using REST API"""
         if self._client:
-            response = self._client.get(
-                f"/api/singlejobs/{wfem_uid}/status"
-            )
+            response = self._client.get(f"/api/singlejobs/{wfem_uid}/status")
             response.raise_for_status()
             return response.json()
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def send_abortsinglejob_message(self, wfem_uid: str):
         """Abort a single job using REST API"""
         if self._client:
-            response = self._client.post(
-                f"/api/singlejobs/{wfem_uid}/abort"
-            )
+            response = self._client.post(f"/api/singlejobs/{wfem_uid}/abort")
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def send_noop_message(self):
         """No-op - not needed with REST API"""
@@ -742,12 +733,12 @@ class ClusterManager:
     def send_shutdown_message(self):
         """Shutdown server using REST API"""
         if self._client:
-            response = self._client.post(
-                "/api/server/shutdown"
-            )
+            response = self._client.post("/api/server/shutdown")
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def abort_wf(self, workflow_submitname):
         """Abort a workflow using REST API"""
@@ -755,22 +746,22 @@ class ClusterManager:
             "Sent Abort WF message for submitname %s" % (workflow_submitname)
         )
         if self._client:
-            response = self._client.post(
-                f"/api/workflows/{workflow_submitname}/abort"
-            )
+            response = self._client.post(f"/api/workflows/{workflow_submitname}/abort")
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def send_clearserverstate_message(self):
         """Clear server state using REST API"""
         if self._client:
-            response = self._client.post(
-                "/api/server/clear-state"
-            )
+            response = self._client.post("/api/server/clear-state")
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def delete_wf(self, workflow_submitname):
         """Delete a workflow using REST API"""
@@ -778,37 +769,40 @@ class ClusterManager:
             "Sent delete WF message for submitname %s" % (workflow_submitname)
         )
         if self._client:
-            response = self._client.delete(
-                f"/api/workflows/{workflow_submitname}"
-            )
+            response = self._client.delete(f"/api/workflows/{workflow_submitname}")
             response.raise_for_status()
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def get_workflow_list(self):
         """Get list of workflows using REST API"""
         if self._client:
-            response = self._client.get(
-                "/api/workflows"
-            )
+            response = self._client.get("/api/workflows")
             response.raise_for_status()
             data = response.json()
-            workflows = {"inprogress": data.get("inprogress", []), "finished": data.get("finished", [])}
+            workflows = {
+                "inprogress": data.get("inprogress", []),
+                "finished": data.get("finished", []),
+            }
             return workflows
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def get_workflow_job_list(self, workflow):
         """Get job list for a workflow using REST API"""
         if self._client:
-            response = self._client.get(
-                f"/api/workflows/{workflow}/jobs"
-            )
+            response = self._client.get(f"/api/workflows/{workflow}/jobs")
             response.raise_for_status()
             data = response.json()
             return data.get("jobs", [])
         else:
-            raise NotImplementedError("Legacy ZeroMQ messaging not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def is_connected(self):
         """
@@ -825,7 +819,7 @@ class ClusterManager:
         if self._client:
             response = self._client.post(
                 "/api/files/exists",
-                json={"filename": path, "basepath_override": ""}
+                json={"filename": str(path), "basepath_override": ""},
             )
             response.raise_for_status()
             return response.json()["exists"]
@@ -875,8 +869,7 @@ class ClusterManager:
         if self._client:
             # Use REST API to get HTTP server info
             response = self._client.post(
-                "/api/http-server",
-                json={"basefolder": self.get_calculation_basepath()}
+                "/api/http-server", json={"basefolder": self.get_calculation_basepath()}
             )
             response.raise_for_status()
             data = response.json()
@@ -885,7 +878,9 @@ class ClusterManager:
             # Return the URL from the FastAPI server
             return data.get("url")
         else:
-            raise NotImplementedError("Legacy ZeroMQ HTTP server not available with REST session")
+            raise NotImplementedError(
+                "Legacy ZeroMQ HTTP server not available with REST session"
+            )
 
     def exists_as_directory(self, path):
         """
@@ -895,8 +890,7 @@ class ClusterManager:
         """
         if self._client:
             response = self._client.post(
-                "/api/files/exists",
-                json={"filename": path, "basepath_override": ""}
+                "/api/files/exists", json={"filename": path, "basepath_override": ""}
             )
             response.raise_for_status()
             result = response.json()
@@ -937,8 +931,8 @@ class ClusterManager:
                 json={
                     "directory": directory,
                     "basepath_override": basepath_override,
-                    "mode_override": mode_override or self._default_mode
-                }
+                    "mode_override": mode_override or self._default_mode,
+                },
             )
             response.raise_for_status()
             return directory
@@ -980,8 +974,5 @@ class ClusterManager:
         if self._sftp_client is not None:
             self._sftp_client.close()
         self._ssh_client.close()
-        if (
-            self._http_server_tunnel is not None
-            and self._http_server_tunnel.is_alive
-        ):
+        if self._http_server_tunnel is not None and self._http_server_tunnel.is_alive:
             self._http_server_tunnel.stop()

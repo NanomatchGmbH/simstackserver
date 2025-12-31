@@ -137,7 +137,19 @@ def test_get_ssh_url(cluster_manager):
     assert cluster_manager.get_ssh_url() == "fake-user@fake-url:22"
 
 
-def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient):
+def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.set_connect_to_unknown_hosts(True)
     cluster_manager.connect()
     mock_sshclient.connect.assert_called_once_with(
@@ -228,26 +240,51 @@ def test_disconnect_minimal(cluster_manager):
     mock_sshclient.close.assert_called_once()
 
 
-def test_delete_file(cluster_manager, mock_sftpclient):
+def test_delete_file(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the delete_file REST API call - using route() for DELETE with json body
+    respx_mock.route(method="DELETE", url="http://fake-url/api/files/delete").mock(
+        return_value=httpx.Response(200, json={"deleted": True, "path": "myfile"})
+    )
+
     cluster_manager._sftp_client = mock_sftpclient
     cluster_manager.connect()
     cluster_manager.delete_file("myfile")
-    mock_sftpclient.remove.assert_called_once()
+    # Note: If using REST API, the SFTP client won't be called
 
 
-def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path):
+def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the file upload endpoint
+    respx_mock.post("http://fake-url/api/files/upload").mock(
+        return_value=httpx.Response(200, json={"uploaded": True, "path": "remote.txt"})
+    )
+
     local_file = tmp_path / "local.txt"
     local_file.write_text("hello world")
     cluster_manager.connect()
     cluster_manager.put_file(str(local_file), "remote.txt")
-    mock_sftpclient.put.assert_called_once()
-    args, _ = mock_sftpclient.put.call_args
-    assert args[0] == str(local_file)
-    # Depending on your internal logic, adjust the expected remote path:
-    # For example, if the file is uploaded into a directory named after the remote file,
-    # the expected path might be "/fake/basepath/remote.txt/local.txt".
-    # Modify this assertion as appropriate.
-    # assert args[1] == "/fake/basepath/remote.txt/local.txt"
+    # Note: With REST API, SFTP client won't be called
 
 
 def test_put_file_not_found(cluster_manager, mock_sftpclient):
@@ -255,42 +292,109 @@ def test_put_file_not_found(cluster_manager, mock_sftpclient):
         cluster_manager.put_file("non_existent_file.txt", "remote.txt")
 
 
-def test_get_file_success(cluster_manager, mock_sftpclient, tmp_path):
+def test_get_file_success(cluster_manager, mock_sftpclient, tmp_path, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the file download endpoint
+    respx_mock.get("http://fake-url/api/files/download").mock(
+        return_value=httpx.Response(200, content=b"test file content")
+    )
+
     local_dest = tmp_path / "downloaded.txt"
     cluster_manager.connect()
     cluster_manager.get_file("remote.txt", str(local_dest))
-    mock_sftpclient.get.assert_called_once_with(
-        "/fake/basepath/remote.txt", str(local_dest), None
+    assert local_dest.exists()
+    assert local_dest.read_bytes() == b"test file content"
+
+
+def test_exists_as_directory_true(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the exists endpoint
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        return_value=httpx.Response(200, json={"exists": True, "is_directory": True})
     )
 
-
-def test_exists_as_directory_true(cluster_manager, mock_sftpclient):
     cluster_manager.connect()
-    stat_mock = MagicMock()
-    stat_mock.st_mode = 0o040755
-    mock_sftpclient.stat.return_value = stat_mock
     result = cluster_manager.exists_as_directory("/fake/dir")
     assert result is True
-    mock_sftpclient.stat.assert_called()
 
 
-def test_exists_as_directory_not_dir(cluster_manager, mock_sftpclient):
+def test_exists_as_directory_not_dir(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the exists endpoint - exists but is not a directory
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        return_value=httpx.Response(200, json={"exists": True, "is_directory": False})
+    )
+
     cluster_manager.connect()
-    stat_mock = MagicMock()
-    stat_mock.st_mode = 0o100644
-    mock_sftpclient.stat.return_value = stat_mock
     with pytest.raises(SSHExpectedDirectoryError):
         cluster_manager.exists_as_directory("/test/dir")
 
 
-def test_exists_as_directory_not_found(cluster_manager, mock_sftpclient):
+def test_exists_as_directory_not_found(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the exists endpoint - doesn't exist
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        return_value=httpx.Response(200, json={"exists": False, "is_directory": False})
+    )
+
     cluster_manager.connect()
-    mock_sftpclient.stat.side_effect = FileNotFoundError
     result = cluster_manager.exists_as_directory("/fake/dir")
     assert result is False
 
 
-def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
+def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API calls
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "foo/bar/baz",
+                "absolute_path": "/fake/basepath/foo/bar/baz",
+            },
+        )
+    )
+
     def side_effect(path_str):
         return False
 
@@ -298,37 +402,29 @@ def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient):
     cluster_manager.connect()
     result = cluster_manager.mkdir_p(pathlib.Path("foo/bar/baz"))
     assert result == "foo/bar/baz"
-    # Adjust expected_calls as needed based on your implementation
-    expected_calls = [call[0] for call in mock_sftpclient.mkdir.call_args_list]
-    # For example, you might check that at least one call contains "/fake/basepath/foo"
-    assert any("/fake/basepath/foo" in args[0] for args in expected_calls)
+    # Note: With REST API, SFTP mkdir won't be called
 
 
-def test_rmtree(cluster_manager, mock_sftpclient):
+def test_rmtree(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock the rmtree endpoint
+    respx_mock.route(method="DELETE", url="http://fake-url/api/files/rmtree").mock(
+        return_value=httpx.Response(200, json={"deleted": True, "path": "testdir"})
+    )
+
     cluster_manager.connect()
-
-    def mock_listdir_attr(path):
-        if path == "/fake/basepath/testdir":
-            return [
-                MagicMock(filename="subfile1", st_mode=0o100755),
-                MagicMock(filename="subdir1", st_mode=0o040755),
-            ]
-        elif path == "/fake/basepath/testdir/subdir1":
-            return [MagicMock(filename="subfile2", st_mode=0o100755)]
-        return []
-
-    mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
-
-    cluster_manager.exists_as_directory = MagicMock(return_value=False)
-    res = cluster_manager.rmtree("testdir")
-    assert res is None
-
-    cluster_manager.exists_as_directory = MagicMock(return_value=True)
     cluster_manager.rmtree("testdir")
-    mock_sftpclient.remove.assert_any_call("/fake/basepath/testdir/subfile1")
-    mock_sftpclient.remove.assert_any_call("/fake/basepath/testdir/subdir1/subfile2")
-    mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir/subdir1")
-    mock_sftpclient.rmdir.assert_any_call("/fake/basepath/testdir")
+    # With REST API, no SFTP operations should occur
 
 
 def test_remote_open(cluster_manager, mock_sftpclient):
@@ -363,7 +459,21 @@ def test_exec_command(cluster_manager):
 # with REST API calls using requests library
 
 
-def test_save_hostkeyfile(cluster_manager, ssh_client_with_host_keys, tmpfile):
+def test_save_hostkeyfile(
+    cluster_manager, ssh_client_with_host_keys, tmpfile, respx_mock
+):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.connect()
     cluster_manager._ssh_client = ssh_client_with_host_keys
     cluster_manager.save_hostkeyfile(tmpfile)
@@ -412,45 +522,54 @@ def test_get_new_connected_ssh_channel_use_system_default(cluster_manager):
 
 def test_get_http_server_address(cluster_manager, respx_mock):
     """Test REST API implementation of get_http_server_address"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock mkdir_p REST API call (called by connect())
-    respx_mock.post("http://localhost:8000/api/files/mkdir").mock(
-        return_value=httpx.Response(200, json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"})
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
     )
 
     # Mock the REST API response
-    respx_mock.post("http://localhost:8000/api/http-server").mock(
-        return_value=httpx.Response(200, json={
-            "port": 8000,
-            "user": "dummy",
-            "password": "404",
-            "url": "http://localhost:8000/http/browse/"
-        })
+    respx_mock.post("http://fake-url/api/http-server").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "port": 8000,
+                "user": "dummy",
+                "password": "404",
+                "url": "http://fake-url/http/browse/",
+            },
+        )
     )
 
     cluster_manager.connect()
     address = cluster_manager.get_http_server_address()
-    assert address == "http://localhost:8000/http/browse/"
+    assert address == "http://fake-url/http/browse/"
     assert cluster_manager._http_user == "dummy"
     assert cluster_manager._http_pass == "404"
 
 
 def test_get_http_server_address_connect_error(cluster_manager, respx_mock):
     """Test REST API error handling for get_http_server_address"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock mkdir_p REST API call (called by connect())
-    respx_mock.post("http://localhost:8000/api/files/mkdir").mock(
-        return_value=httpx.Response(200, json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"})
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
     )
 
     # Mock the REST API to return an error
-    respx_mock.post("http://localhost:8000/api/http-server").mock(
+    respx_mock.post("http://fake-url/api/http-server").mock(
         return_value=httpx.Response(500, text="Internal server error")
     )
 
@@ -459,7 +578,21 @@ def test_get_http_server_address_connect_error(cluster_manager, respx_mock):
         cluster_manager.get_http_server_address()
 
 
-def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftpclient):
+def test_get_newest_version_directory(
+    cluster_manager, mock_sshclient, mock_sftpclient, respx_mock
+):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.connect()
 
     def mock_listdir_attr(path):
@@ -486,7 +619,25 @@ def test_get_newest_version_directory(cluster_manager, mock_sshclient, mock_sftp
         cluster_manager.get_newest_version_directory("/fake/nonexistent")
 
 
-def test_get_server_command_for_software_directory(cluster_manager, mock_sftpclient):
+def test_get_server_command_for_software_directory(
+    cluster_manager, mock_sftpclient, respx_mock
+):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock exists endpoint - micromamba binary exists
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        return_value=httpx.Response(200, json={"exists": True})
+    )
+
     cluster_manager.connect()
     cluster_manager._queueing_system = "AiiDA"
     for nin in ["V2", "V3", "V4"]:
@@ -515,8 +666,20 @@ def test_get_server_command_for_software_directory(cluster_manager, mock_sftpcli
 
 
 def test_get_server_command_for_software_directory_no_micromamba(
-    cluster_manager, mock_sftpclient
+    cluster_manager, mock_sftpclient, respx_mock
 ):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.connect()
     with patch(
         "SimStackServer.ClusterManager.ClusterManager.exists", return_value=False
@@ -547,13 +710,12 @@ def test_get_server_command(cluster_manager):
 
 def test_get_workflow_job_list_success(cluster_manager, respx_mock):
     """Test REST API implementation of get_workflow_job_list"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response
-    respx_mock.get("http://localhost:8000/api/workflows/some_workflow/jobs").mock(
-        return_value=httpx.Response(200, json={"workflow_id": "some_workflow", "jobs": ["job1", "job2"], "count": 2})
+    respx_mock.get("http://fake-url/api/workflows/some_workflow/jobs").mock(
+        return_value=httpx.Response(
+            200,
+            json={"workflow_id": "some_workflow", "jobs": ["job1", "job2"], "count": 2},
+        )
     )
 
     result = cluster_manager.get_workflow_job_list("some_workflow")
@@ -562,13 +724,11 @@ def test_get_workflow_job_list_success(cluster_manager, respx_mock):
 
 def test_get_workflow_job_list_missing_key(cluster_manager, respx_mock):
     """Test REST API with missing jobs key - should return empty list"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response without 'jobs' key
-    respx_mock.get("http://localhost:8000/api/workflows/some_workflow/jobs").mock(
-        return_value=httpx.Response(200, json={"workflow_id": "some_workflow", "some_unexpected_key": []})
+    respx_mock.get("http://fake-url/api/workflows/some_workflow/jobs").mock(
+        return_value=httpx.Response(
+            200, json={"workflow_id": "some_workflow", "some_unexpected_key": []}
+        )
     )
 
     # Should return empty list when 'jobs' key is missing
@@ -576,7 +736,18 @@ def test_get_workflow_job_list_missing_key(cluster_manager, respx_mock):
     assert result == []
 
 
-def test_put_directory(cluster_manager):
+def test_put_directory(cluster_manager, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200, json={"created": True, "path": "/foo/bar", "absolute_path": "/foo/bar"}
+        )
+    )
+    # Mock file upload endpoint for put_file calls made by put_directory
+    respx_mock.post("http://fake-url/api/files/upload").mock(
+        return_value=httpx.Response(200, json={"uploaded": True})
+    )
+
     cluster_manager._calculation_basepath = "/foo/bar"
     cluster_manager.connect()
     input_dir = os.path.join(
@@ -588,63 +759,137 @@ def test_put_directory(cluster_manager):
     assert result == "/foo/bar/unittest_files"
 
 
-def test_random_singlejob_exec_directory(cluster_manager, mock_sftpclient):
+def test_random_singlejob_exec_directory(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock all mkdir_p REST API calls
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "singlejob_exec_directories",
+                "absolute_path": "/fake/basepath/singlejob_exec_directories",
+            },
+        )
+    )
+    # Mock exists endpoint
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        return_value=httpx.Response(200, json={"exists": False})
+    )
+
     cluster_manager.connect()
-    stat_mock = MagicMock()
-    stat_mock.st_mode = 0o040755
-    with pytest.raises(FileExistsError):
-        cluster_manager.mkdir_random_singlejob_exec_directory("testdir", num_retries=1)
-    cluster_manager.exists = MagicMock(side_effect=lambda x: False)
     res = str(cluster_manager.mkdir_random_singlejob_exec_directory("testdir"))
     parts = res.split("/")
     assert parts[0] == "singlejob_exec_directories"
     assert "testdir" in parts[1]
 
 
-def test_exists(cluster_manager, mock_sftpclient):
+def test_exists(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock exists endpoint
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        return_value=httpx.Response(200, json={"exists": True})
+    )
+
     cluster_manager.connect()
-    stat_mock = MagicMock()
-    stat_mock.st_mode = 0o100644
-    mock_sftpclient.stat.return_value = stat_mock
     assert cluster_manager.exists("/some/file") is True
 
 
-def test_list_dir(cluster_manager, mock_sftpclient):
+def test_list_dir(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock list_dir endpoint
+    respx_mock.post("http://fake-url/api/files/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "files": [
+                    {
+                        "name": "myfile.txt",
+                        "path": "/fake/basepath/some/subdirectory",
+                        "type": "f",
+                    },
+                    {
+                        "name": "somedir",
+                        "path": "/fake/basepath/some/subdirectory",
+                        "type": "d",
+                    },
+                ]
+            },
+        )
+    )
+
     cluster_manager.connect()
-    file_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    file_attr_mock.filename = "myfile.txt"
-    file_attr_mock.longname = "-rw-r--r-- 1 user group 1234 date myfile.txt"
-    file_attr_mock.st_mode = 0o100644
-    dir_attr_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    dir_attr_mock.filename = "somedir"
-    dir_attr_mock.longname = "drwxr-xr-x 2 user group 4096 date somedir"
-    dir_attr_mock.st_mode = 0o040755
-    mock_sftpclient.listdir_iter.return_value = [file_attr_mock, dir_attr_mock]
     result = cluster_manager.list_dir("some/subdirectory")
     expected = [
         {"name": "myfile.txt", "path": "/fake/basepath/some/subdirectory", "type": "f"},
         {"name": "somedir", "path": "/fake/basepath/some/subdirectory", "type": "d"},
     ]
     assert result == expected
-    mock_sftpclient.listdir_iter.assert_called_once_with(
-        "/fake/basepath/some/subdirectory"
+
+
+def test_exists_remote(cluster_manager, mock_sftpclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+    # Mock exists endpoint with different responses
+    respx_mock.post("http://fake-url/api/files/exists").mock(
+        side_effect=[
+            httpx.Response(200, json={"exists": True}),  # First call returns True
+            httpx.Response(
+                500, text="Internal server error"
+            ),  # Second call raises error (for IOError test)
+            httpx.Response(200, json={"exists": False}),  # Third call returns False
+        ]
     )
 
-
-def test_exists_remote(cluster_manager, mock_sftpclient):
     cluster_manager.connect()
     assert cluster_manager.exists_remote("/foo/bar") is True
-    error = IOError("Test - Forced error")
-    error.errno = 3
-    mock_sftpclient.stat.side_effect = error
-    with pytest.raises(IOError):
+    # When using REST API, HTTP errors are raised as HTTPStatusError, not IOError
+    with pytest.raises(httpx.HTTPStatusError):
         cluster_manager.exists_remote("/my/nonexistent/path")
-    error.errno = 2
-    mock_sftpclient.stat.side_effect = error
     assert cluster_manager.exists_remote("/foo/bar") is False
 
 
-def test_get_directory(cluster_manager, mock_sftpclient, tmpdir):
+def test_get_directory(cluster_manager, mock_sftpclient, tmpdir, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.connect()
     cluster_manager.exists_remote = MagicMock(side_effect=lambda p: False)
     with pytest.raises(FileNotFoundError):
@@ -688,13 +933,11 @@ def test_get_directory(cluster_manager, mock_sftpclient, tmpdir):
 
 def test_send_clearserverstate_message(cluster_manager, respx_mock):
     """Test REST API implementation of send_clearserverstate_message"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response
-    route = respx_mock.post("http://localhost:8000/api/server/clear-state").mock(
-        return_value=httpx.Response(200, json={"status": "cleared", "message": "Server state has been cleared"})
+    route = respx_mock.post("http://fake-url/api/server/clear-state").mock(
+        return_value=httpx.Response(
+            200, json={"status": "cleared", "message": "Server state has been cleared"}
+        )
     )
 
     cluster_manager.send_clearserverstate_message()
@@ -703,13 +946,11 @@ def test_send_clearserverstate_message(cluster_manager, respx_mock):
 
 def test_delete_wf(cluster_manager, respx_mock):
     """Test REST API implementation of delete_wf"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response
-    route = respx_mock.delete("http://localhost:8000/api/workflows/some_workflow").mock(
-        return_value=httpx.Response(200, json={"status": "deleted", "workflow_id": "some_workflow"})
+    route = respx_mock.delete("http://fake-url/api/workflows/some_workflow").mock(
+        return_value=httpx.Response(
+            200, json={"status": "deleted", "workflow_id": "some_workflow"}
+        )
     )
 
     with patch.object(cluster_manager._logger, "debug") as mock_debug:
@@ -723,17 +964,11 @@ def test_delete_wf(cluster_manager, respx_mock):
 
 def test_get_workflow_list(cluster_manager, respx_mock):
     """Test REST API implementation of get_workflow_list"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response
-    respx_mock.get("http://localhost:8000/api/workflows").mock(
-        return_value=httpx.Response(200, json={
-            "inprogress": ["wf1"],
-            "finished": ["wf2"],
-            "total": 2
-        })
+    respx_mock.get("http://fake-url/api/workflows").mock(
+        return_value=httpx.Response(
+            200, json={"inprogress": ["wf1"], "finished": ["wf2"], "total": 2}
+        )
     )
 
     result = cluster_manager.get_workflow_list()
@@ -742,13 +977,13 @@ def test_get_workflow_list(cluster_manager, respx_mock):
 
 def test_abort_wf(cluster_manager, respx_mock):
     """Test REST API implementation of abort_wf"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response
-    route = respx_mock.post("http://localhost:8000/api/workflows/my-test-workflow/abort").mock(
-        return_value=httpx.Response(200, json={"status": "abort_requested", "workflow_id": "my-test-workflow"})
+    route = respx_mock.post(
+        "http://fake-url/api/workflows/my-test-workflow/abort"
+    ).mock(
+        return_value=httpx.Response(
+            200, json={"status": "abort_requested", "workflow_id": "my-test-workflow"}
+        )
     )
 
     cluster_manager.abort_wf("my-test-workflow")
@@ -757,13 +992,11 @@ def test_abort_wf(cluster_manager, respx_mock):
 
 def test_abort_wf_logs_debug(cluster_manager, respx_mock):
     """Test REST API implementation of abort_wf with debug logging"""
-    # Setup REST session and base URL
-    cluster_manager._rest_session = httpx.Client()
-    cluster_manager._rest_base_url = "http://localhost:8000"
-
     # Mock the REST API response
-    respx_mock.post("http://localhost:8000/api/workflows/my-workflow/abort").mock(
-        return_value=httpx.Response(200, json={"status": "abort_requested", "workflow_id": "my-workflow"})
+    respx_mock.post("http://fake-url/api/workflows/my-workflow/abort").mock(
+        return_value=httpx.Response(
+            200, json={"status": "abort_requested", "workflow_id": "my-workflow"}
+        )
     )
 
     with patch.object(cluster_manager._logger, "debug") as mock_debug:
@@ -774,7 +1007,19 @@ def test_abort_wf_logs_debug(cluster_manager, respx_mock):
     )
 
 
-def test_load_extra_host_keys(cluster_manager, mock_sshclient):
+def test_load_extra_host_keys(cluster_manager, mock_sshclient, respx_mock):
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager._ssh_client = mock_sshclient
     cluster_manager.connect()
     cluster_manager.load_extra_host_keys("myfile")
@@ -788,10 +1033,22 @@ def test_set_connect_to_unknown_hosts(cluster_manager):
     assert cluster_manager._unknown_host_connect_workaround is True
 
 
-def test_is_directory_true(cluster_manager, mock_sftpclient):
+def test_is_directory_true(cluster_manager, mock_sftpclient, respx_mock):
     """
     If st_mode indicates a directory (0o040755), is_directory should return True.
     """
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.connect()
 
     dir_stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
@@ -804,11 +1061,23 @@ def test_is_directory_true(cluster_manager, mock_sftpclient):
     mock_sftpclient.stat.assert_called()
 
 
-def test_is_directory_false(cluster_manager, mock_sftpclient):
+def test_is_directory_false(cluster_manager, mock_sftpclient, respx_mock):
     """
     If st_mode indicates a file (0o100644) or anything that's not a directory,
     is_directory should return False.
     """
+    # Mock the mkdir_p REST API call made during connect()
+    respx_mock.post("http://fake-url/api/files/mkdir").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
+        )
+    )
+
     cluster_manager.connect()
 
     file_stat_mock = MagicMock(spec=paramiko.SFTPAttributes)

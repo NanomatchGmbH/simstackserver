@@ -412,12 +412,14 @@ def test_empty_job_list(test_client, mock_workflow_manager):
 def test_submit_workflow(test_client, mock_simstack_server):
     """Test submitting a workflow for execution"""
     from queue import Queue
+
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/home/user/{x}"
+    mock_simstack_server._remote_relative_to_absolute_filename = (
+        lambda x: f"/home/user/{x}"
+    )
 
     response = test_client.post(
-        "/api/workflows/submit",
-        json={"filename": "path/to/workflow.xml"}
+        "/api/workflows/submit", json={"filename": "path/to/workflow.xml"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -434,12 +436,14 @@ def test_submit_workflow(test_client, mock_simstack_server):
 def test_submit_workflow_absolute_path(test_client, mock_simstack_server):
     """Test submitting a workflow with absolute path"""
     from queue import Queue
+
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: x if x.startswith('/') else f"/home/user/{x}"
+    mock_simstack_server._remote_relative_to_absolute_filename = (
+        lambda x: x if x.startswith("/") else f"/home/user/{x}"
+    )
 
     response = test_client.post(
-        "/api/workflows/submit",
-        json={"filename": "/absolute/path/to/workflow.xml"}
+        "/api/workflows/submit", json={"filename": "/absolute/path/to/workflow.xml"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -452,6 +456,7 @@ def test_submit_workflow_absolute_path(test_client, mock_simstack_server):
 def test_submit_singlejob(test_client, mock_simstack_server):
     """Test submitting a single job for execution"""
     from queue import Queue
+
     mock_simstack_server._submitted_singlejob_queue = Queue()
     mock_simstack_server._external_job_uid_to_jobid = {}
 
@@ -462,10 +467,7 @@ def test_submit_singlejob(test_client, mock_simstack_server):
         "resources": {"queueing_system": "Internal"},
     }
 
-    response = test_client.post(
-        "/api/singlejobs/submit",
-        json={"wfem": wfem_dict}
-    )
+    response = test_client.post("/api/singlejobs/submit", json={"wfem": wfem_dict})
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "submitted"
@@ -481,12 +483,13 @@ def test_submit_singlejob(test_client, mock_simstack_server):
 def test_get_http_server_new_server(test_client, mock_simstack_server, fastapi_thread):
     """Test getting HTTP server info when no server exists"""
     mock_simstack_server._http_server = None
-    mock_simstack_server._start_http_server = Mock(return_value=("testuser", "testpass", 8080))
+    mock_simstack_server._start_http_server = Mock(
+        return_value=("testuser", "testpass", 8080)
+    )
     mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
     response = test_client.post(
-        "/api/http-server",
-        json={"basefolder": "path/to/folder"}
+        "/api/http-server", json={"basefolder": "path/to/folder"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -498,10 +501,14 @@ def test_get_http_server_new_server(test_client, mock_simstack_server, fastapi_t
     assert "/http/browse/" in data["url"]
 
     # Verify start_http_server was called for backwards compatibility
-    mock_simstack_server._start_http_server.assert_called_once_with(directory="path/to/folder")
+    mock_simstack_server._start_http_server.assert_called_once_with(
+        directory="path/to/folder"
+    )
 
 
-def test_get_http_server_existing_server(test_client, mock_simstack_server, fastapi_thread):
+def test_get_http_server_existing_server(
+    test_client, mock_simstack_server, fastapi_thread
+):
     """Test getting HTTP server info when server already exists"""
     mock_http_server = Mock()
     mock_http_server.is_alive.return_value = True
@@ -512,8 +519,7 @@ def test_get_http_server_existing_server(test_client, mock_simstack_server, fast
     mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
     response = test_client.post(
-        "/api/http-server",
-        json={"basefolder": "path/to/folder"}
+        "/api/http-server", json={"basefolder": "path/to/folder"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -530,12 +536,13 @@ def test_get_http_server_dead_server(test_client, mock_simstack_server, fastapi_
     mock_http_server = Mock()
     mock_http_server.is_alive.return_value = False
     mock_simstack_server._http_server = mock_http_server
-    mock_simstack_server._start_http_server = Mock(return_value=("newuser", "newpass", 8081))
+    mock_simstack_server._start_http_server = Mock(
+        return_value=("newuser", "newpass", 8081)
+    )
     mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
     response = test_client.post(
-        "/api/http-server",
-        json={"basefolder": "path/to/folder"}
+        "/api/http-server", json={"basefolder": "path/to/folder"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -585,11 +592,12 @@ def test_clear_server_state(test_client, mock_simstack_server):
 
 def test_submit_workflow_error(test_client, mock_simstack_server):
     """Test error handling when workflow submission fails"""
-    mock_simstack_server._remote_relative_to_absolute_filename = Mock(side_effect=Exception("Path resolution failed"))
+    mock_simstack_server._remote_relative_to_absolute_filename = Mock(
+        side_effect=Exception("Path resolution failed")
+    )
 
     response = test_client.post(
-        "/api/workflows/submit",
-        json={"filename": "bad/path/workflow.xml"}
+        "/api/workflows/submit", json={"filename": "bad/path/workflow.xml"}
     )
     assert response.status_code == 500
     assert "Path resolution failed" in response.json()["detail"]
@@ -598,11 +606,14 @@ def test_submit_workflow_error(test_client, mock_simstack_server):
 def test_submit_singlejob_error(test_client, mock_simstack_server):
     """Test error handling when single job submission fails"""
     from queue import Queue
+
     mock_simstack_server._submitted_singlejob_queue = Queue()
     mock_simstack_server._external_job_uid_to_jobid = {}
 
     # Mock Queue.put to raise an exception
-    mock_simstack_server._submitted_singlejob_queue.put = Mock(side_effect=Exception("Queue full"))
+    mock_simstack_server._submitted_singlejob_queue.put = Mock(
+        side_effect=Exception("Queue full")
+    )
 
     # Provide a minimal valid WFEM dict
     wfem_dict = {
@@ -611,10 +622,7 @@ def test_submit_singlejob_error(test_client, mock_simstack_server):
         "resources": {"queueing_system": "Internal"},
     }
 
-    response = test_client.post(
-        "/api/singlejobs/submit",
-        json={"wfem": wfem_dict}
-    )
+    response = test_client.post("/api/singlejobs/submit", json={"wfem": wfem_dict})
     assert response.status_code == 500
     assert "Queue full" in response.json()["detail"]
 
@@ -622,11 +630,12 @@ def test_submit_singlejob_error(test_client, mock_simstack_server):
 def test_get_http_server_error(test_client, mock_simstack_server):
     """Test error handling when HTTP server startup fails"""
     mock_simstack_server._http_server = None
-    mock_simstack_server._start_http_server = Mock(side_effect=Exception("Port already in use"))
+    mock_simstack_server._start_http_server = Mock(
+        side_effect=Exception("Port already in use")
+    )
 
     response = test_client.post(
-        "/api/http-server",
-        json={"basefolder": "path/to/folder"}
+        "/api/http-server", json={"basefolder": "path/to/folder"}
     )
     assert response.status_code == 500
     assert "Port already in use" in response.json()["detail"]
@@ -637,7 +646,7 @@ def test_shutdown_server_error(test_client, mock_simstack_server):
     # Make setting _stop_main raise an exception
     type(mock_simstack_server)._stop_main = property(
         lambda self: None,
-        lambda self, value: (_ for _ in ()).throw(Exception("Cannot shutdown"))
+        lambda self, value: (_ for _ in ()).throw(Exception("Cannot shutdown")),
     )
 
     response = test_client.post("/api/server/shutdown")
@@ -647,7 +656,9 @@ def test_shutdown_server_error(test_client, mock_simstack_server):
 
 def test_clear_server_state_error(test_client, mock_simstack_server):
     """Test error handling when clearing server state fails"""
-    mock_simstack_server._clear_server_state = Mock(side_effect=Exception("Clear failed"))
+    mock_simstack_server._clear_server_state = Mock(
+        side_effect=Exception("Clear failed")
+    )
 
     response = test_client.post("/api/server/clear-state")
     assert response.status_code == 500
@@ -660,15 +671,15 @@ def test_clear_server_state_error(test_client, mock_simstack_server):
 def test_submit_multiple_workflows(test_client, mock_simstack_server):
     """Test submitting multiple workflows"""
     from queue import Queue
+
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/home/user/{x}"
+    mock_simstack_server._remote_relative_to_absolute_filename = (
+        lambda x: f"/home/user/{x}"
+    )
 
     workflows = ["wf1.xml", "wf2.xml", "wf3.xml"]
     for wf in workflows:
-        response = test_client.post(
-            "/api/workflows/submit",
-            json={"filename": wf}
-        )
+        response = test_client.post("/api/workflows/submit", json={"filename": wf})
         assert response.status_code == 200
 
     # Verify all workflows were queued
@@ -678,6 +689,7 @@ def test_submit_multiple_workflows(test_client, mock_simstack_server):
 def test_submit_multiple_singlejobs(test_client, mock_simstack_server):
     """Test submitting multiple single jobs"""
     from queue import Queue
+
     mock_simstack_server._submitted_singlejob_queue = Queue()
     mock_simstack_server._external_job_uid_to_jobid = {}
 
@@ -688,10 +700,7 @@ def test_submit_multiple_singlejobs(test_client, mock_simstack_server):
             "storage": f"/path/to/{uid}",
             "resources": {"queueing_system": "Internal"},
         }
-        response = test_client.post(
-            "/api/singlejobs/submit",
-            json={"wfem": wfem_dict}
-        )
+        response = test_client.post("/api/singlejobs/submit", json={"wfem": wfem_dict})
         assert response.status_code == 200
 
     # Verify all jobs were queued
@@ -700,16 +709,20 @@ def test_submit_multiple_singlejobs(test_client, mock_simstack_server):
         assert uid in mock_simstack_server._external_job_uid_to_jobid
 
 
-def test_workflow_lifecycle_via_api(test_client, mock_simstack_server, mock_workflow_manager):
+def test_workflow_lifecycle_via_api(
+    test_client, mock_simstack_server, mock_workflow_manager
+):
     """Test complete workflow lifecycle: submit -> list -> abort -> delete"""
     from queue import Queue
+
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/home/user/{x}"
+    mock_simstack_server._remote_relative_to_absolute_filename = (
+        lambda x: f"/home/user/{x}"
+    )
 
     # Submit
     response = test_client.post(
-        "/api/workflows/submit",
-        json={"filename": "lifecycle_test.xml"}
+        "/api/workflows/submit", json={"filename": "lifecycle_test.xml"}
     )
     assert response.status_code == 200
 
@@ -755,7 +768,9 @@ def mock_simstack_server_with_basepath(mock_workflow_manager, temp_basepath):
 @pytest.fixture
 def file_ops_test_client(mock_simstack_server_with_basepath):
     """Create a TestClient for file operations testing"""
-    thread = FastAPIThread(mock_simstack_server_with_basepath, host="127.0.0.1", port=8010)
+    thread = FastAPIThread(
+        mock_simstack_server_with_basepath, host="127.0.0.1", port=8010
+    )
     return TestClient(thread.app)
 
 
@@ -767,8 +782,7 @@ def test_file_exists_endpoint_file_exists(file_ops_test_client, temp_basepath):
         f.write("test content")
 
     response = file_ops_test_client.post(
-        "/api/files/exists",
-        json={"filename": test_file}
+        "/api/files/exists", json={"filename": test_file}
     )
     assert response.status_code == 200
     data = response.json()
@@ -784,8 +798,7 @@ def test_file_exists_endpoint_directory_exists(file_ops_test_client, temp_basepa
     os.makedirs(os.path.join(temp_basepath, test_dir))
 
     response = file_ops_test_client.post(
-        "/api/files/exists",
-        json={"filename": test_dir}
+        "/api/files/exists", json={"filename": test_dir}
     )
     assert response.status_code == 200
     data = response.json()
@@ -797,8 +810,7 @@ def test_file_exists_endpoint_directory_exists(file_ops_test_client, temp_basepa
 def test_file_exists_endpoint_not_exists(file_ops_test_client):
     """Test checking if a file exists - file does not exist"""
     response = file_ops_test_client.post(
-        "/api/files/exists",
-        json={"filename": "nonexistent_file.txt"}
+        "/api/files/exists", json={"filename": "nonexistent_file.txt"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -817,10 +829,7 @@ def test_list_directory_success(file_ops_test_client, temp_basepath):
         f.write("content2")
     os.makedirs(os.path.join(temp_basepath, "test_dir", "subdir"))
 
-    response = file_ops_test_client.post(
-        "/api/files/list",
-        json={"path": "test_dir"}
-    )
+    response = file_ops_test_client.post("/api/files/list", json={"path": "test_dir"})
     assert response.status_code == 200
     data = response.json()
     assert data["count"] == 3
@@ -836,8 +845,7 @@ def test_list_directory_success(file_ops_test_client, temp_basepath):
 def test_list_directory_not_found(file_ops_test_client):
     """Test listing a directory that doesn't exist"""
     response = file_ops_test_client.post(
-        "/api/files/list",
-        json={"path": "nonexistent_dir"}
+        "/api/files/list", json={"path": "nonexistent_dir"}
     )
     assert response.status_code == 404
     assert "Directory not found" in response.json()["detail"]
@@ -850,8 +858,7 @@ def test_list_directory_not_a_directory(file_ops_test_client, temp_basepath):
         f.write("content")
 
     response = file_ops_test_client.post(
-        "/api/files/list",
-        json={"path": "not_a_dir.txt"}
+        "/api/files/list", json={"path": "not_a_dir.txt"}
     )
     assert response.status_code == 400
     assert "not a directory" in response.json()["detail"]
@@ -860,8 +867,7 @@ def test_list_directory_not_a_directory(file_ops_test_client, temp_basepath):
 def test_create_directory_success(file_ops_test_client, temp_basepath):
     """Test creating a directory"""
     response = file_ops_test_client.post(
-        "/api/files/mkdir",
-        json={"directory": "new_dir/nested/deeply"}
+        "/api/files/mkdir", json={"directory": "new_dir/nested/deeply"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -875,8 +881,7 @@ def test_create_directory_already_exists(file_ops_test_client, temp_basepath):
     os.makedirs(os.path.join(temp_basepath, "existing_dir"))
 
     response = file_ops_test_client.post(
-        "/api/files/mkdir",
-        json={"directory": "existing_dir"}
+        "/api/files/mkdir", json={"directory": "existing_dir"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -890,8 +895,7 @@ def test_create_directory_path_is_file(file_ops_test_client, temp_basepath):
         f.write("content")
 
     response = file_ops_test_client.post(
-        "/api/files/mkdir",
-        json={"directory": "existing_file.txt"}
+        "/api/files/mkdir", json={"directory": "existing_file.txt"}
     )
     assert response.status_code == 400
     assert "not a directory" in response.json()["detail"]
@@ -906,9 +910,7 @@ def test_delete_file_success(file_ops_test_client, temp_basepath):
         f.write("content")
 
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/delete",
-        json={"filename": test_file}
+        "DELETE", "/api/files/delete", json={"filename": test_file}
     )
     assert response.status_code == 200
     data = response.json()
@@ -920,9 +922,7 @@ def test_delete_file_success(file_ops_test_client, temp_basepath):
 def test_delete_file_not_found(file_ops_test_client):
     """Test deleting a file that doesn't exist"""
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/delete",
-        json={"filename": "nonexistent.txt"}
+        "DELETE", "/api/files/delete", json={"filename": "nonexistent.txt"}
     )
     assert response.status_code == 404
     assert "File not found" in response.json()["detail"]
@@ -933,9 +933,7 @@ def test_delete_file_is_directory(file_ops_test_client, temp_basepath):
     os.makedirs(os.path.join(temp_basepath, "is_a_dir"))
 
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/delete",
-        json={"filename": "is_a_dir"}
+        "DELETE", "/api/files/delete", json={"filename": "is_a_dir"}
     )
     assert response.status_code == 400
     assert "use /api/files/rmtree" in response.json()["detail"]
@@ -952,9 +950,7 @@ def test_remove_directory_tree_success(file_ops_test_client, temp_basepath):
         f.write("content2")
 
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/rmtree",
-        json={"dirname": "dir_to_remove"}
+        "DELETE", "/api/files/rmtree", json={"dirname": "dir_to_remove"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -966,9 +962,7 @@ def test_remove_directory_tree_success(file_ops_test_client, temp_basepath):
 def test_remove_directory_tree_not_exists(file_ops_test_client):
     """Test removing a directory that doesn't exist"""
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/rmtree",
-        json={"dirname": "nonexistent_dir"}
+        "DELETE", "/api/files/rmtree", json={"dirname": "nonexistent_dir"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -982,9 +976,7 @@ def test_remove_directory_tree_not_a_directory(file_ops_test_client, temp_basepa
         f.write("content")
 
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/rmtree",
-        json={"dirname": "is_a_file.txt"}
+        "DELETE", "/api/files/rmtree", json={"dirname": "is_a_file.txt"}
     )
     assert response.status_code == 400
     assert "not a directory" in response.json()["detail"]
@@ -996,9 +988,7 @@ def test_upload_file_success(file_ops_test_client, temp_basepath):
     files = {"file": ("test_upload.txt", BytesIO(file_content), "text/plain")}
 
     response = file_ops_test_client.post(
-        "/api/files/upload",
-        files=files,
-        data={"to_file": "uploads/test_upload.txt"}
+        "/api/files/upload", files=files, data={"to_file": "uploads/test_upload.txt"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -1017,10 +1007,7 @@ def test_upload_file_default_name(file_ops_test_client, temp_basepath):
     file_content = b"Test file content"
     files = {"file": ("default_name.txt", BytesIO(file_content), "text/plain")}
 
-    response = file_ops_test_client.post(
-        "/api/files/upload",
-        files=files
-    )
+    response = file_ops_test_client.post("/api/files/upload", files=files)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
@@ -1039,8 +1026,7 @@ def test_download_file_success(file_ops_test_client, temp_basepath):
         f.write(file_content)
 
     response = file_ops_test_client.get(
-        "/api/files/download",
-        params={"from_file": test_file}
+        "/api/files/download", params={"from_file": test_file}
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/octet-stream"
@@ -1050,8 +1036,7 @@ def test_download_file_success(file_ops_test_client, temp_basepath):
 def test_download_file_not_found(file_ops_test_client):
     """Test downloading a file that doesn't exist"""
     response = file_ops_test_client.get(
-        "/api/files/download",
-        params={"from_file": "nonexistent.txt"}
+        "/api/files/download", params={"from_file": "nonexistent.txt"}
     )
     assert response.status_code == 404
     assert "File not found" in response.json()["detail"]
@@ -1062,8 +1047,7 @@ def test_download_file_is_directory(file_ops_test_client, temp_basepath):
     os.makedirs(os.path.join(temp_basepath, "is_a_dir"))
 
     response = file_ops_test_client.get(
-        "/api/files/download",
-        params={"from_file": "is_a_dir"}
+        "/api/files/download", params={"from_file": "is_a_dir"}
     )
     assert response.status_code == 400
     assert "directory" in response.json()["detail"]
@@ -1080,7 +1064,7 @@ def test_basepath_override(file_ops_test_client, temp_basepath):
 
         response = file_ops_test_client.post(
             "/api/files/exists",
-            json={"filename": "test.txt", "basepath_override": override_path}
+            json={"filename": "test.txt", "basepath_override": override_path},
         )
         assert response.status_code == 200
         data = response.json()
@@ -1094,8 +1078,7 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
     # Create nested directories
     nested_path = "level1/level2/level3"
     response = file_ops_test_client.post(
-        "/api/files/mkdir",
-        json={"directory": nested_path}
+        "/api/files/mkdir", json={"directory": nested_path}
     )
     assert response.status_code == 200
 
@@ -1103,17 +1086,12 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
     file_content = b"Nested file content"
     files = {"file": ("nested.txt", BytesIO(file_content), "text/plain")}
     response = file_ops_test_client.post(
-        "/api/files/upload",
-        files=files,
-        data={"to_file": f"{nested_path}/nested.txt"}
+        "/api/files/upload", files=files, data={"to_file": f"{nested_path}/nested.txt"}
     )
     assert response.status_code == 200
 
     # List the nested directory
-    response = file_ops_test_client.post(
-        "/api/files/list",
-        json={"path": nested_path}
-    )
+    response = file_ops_test_client.post("/api/files/list", json={"path": nested_path})
     assert response.status_code == 200
     data = response.json()
     assert data["count"] == 1
@@ -1121,17 +1099,14 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
 
     # Download the file
     response = file_ops_test_client.get(
-        "/api/files/download",
-        params={"from_file": f"{nested_path}/nested.txt"}
+        "/api/files/download", params={"from_file": f"{nested_path}/nested.txt"}
     )
     assert response.status_code == 200
     assert response.content == file_content
 
     # Delete the entire tree
     response = file_ops_test_client.request(
-        "DELETE",
-        "/api/files/rmtree",
-        json={"dirname": "level1"}
+        "DELETE", "/api/files/rmtree", json={"dirname": "level1"}
     )
     assert response.status_code == 200
     assert not os.path.exists(os.path.join(temp_basepath, "level1"))
@@ -1143,7 +1118,9 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
 @pytest.fixture
 def http_browse_test_client(mock_simstack_server_with_basepath, temp_basepath):
     """Create a TestClient for HTTP browsing with base directory set"""
-    thread = FastAPIThread(mock_simstack_server_with_basepath, host="127.0.0.1", port=8011)
+    thread = FastAPIThread(
+        mock_simstack_server_with_basepath, host="127.0.0.1", port=8011
+    )
     # Set base directory for browsing
     thread._http_base_directory = temp_basepath
     return TestClient(thread.app), temp_basepath
@@ -1153,7 +1130,10 @@ def test_serve_static_css(test_client):
     """Test serving static CSS file"""
     response = test_client.get("/http/static/dirlist.css")
     assert response.status_code == 200
-    assert "text/css" in response.headers["content-type"] or "text/plain" in response.headers["content-type"]
+    assert (
+        "text/css" in response.headers["content-type"]
+        or "text/plain" in response.headers["content-type"]
+    )
 
 
 def test_serve_static_favicon(test_client):
@@ -1370,15 +1350,11 @@ def test_guess_mime_type_helper():
 
 def test_http_server_endpoint_sets_base_directory(test_client, mock_simstack_server):
     """Test that /api/http-server sets the base directory for browsing"""
-    from queue import Queue
     mock_simstack_server._http_server = None
     mock_simstack_server._start_http_server = Mock(return_value=("user", "pass", 8080))
     mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
 
-    response = test_client.post(
-        "/api/http-server",
-        json={"basefolder": "test/folder"}
-    )
+    response = test_client.post("/api/http-server", json={"basefolder": "test/folder"})
     assert response.status_code == 200
     data = response.json()
 
