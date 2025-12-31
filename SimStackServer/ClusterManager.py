@@ -11,6 +11,7 @@ import random
 
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
+import httpx
 
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
@@ -21,11 +22,7 @@ import posixpath
 from pathlib import Path
 
 import sshtunnel
-import zmq
 
-
-from SimStackServer.MessageTypes import Message
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import (
     split_directory_in_subdirectories,
     filewalker,
@@ -46,16 +43,18 @@ class ClusterManager:
         queueing_system,
         default_queue,
         software_directory=None,
+        rest_port=None,
     ):
         """
 
         :param default_queue:
         :param url (str): URL to connect to (int-nanomatchcluster.int.kit.edu, ipv4, ipv6)
-        :param port (int): Port to connect to, i.e. 22
+        :param port (int): Port to connect to, i.e. 22 for SSH or 8000 for REST API
         :param calculation_basepath (str): Where everything will be stored by default. "" == home directory.
         :param user (str): Username on the respective server.
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
+        :param rest_port (int): Port the rest session runs on
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
@@ -75,17 +74,23 @@ class ClusterManager:
         self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
-        self._context = zmq.Context.instance()
-        self._socket = None
         self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
         self._http_server_tunnel = None
-        self._zmq_ssh_tunnel = None
         self._http_user = None
         self._http_pass = None
         self._http_base_address = None
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
         self._software_directory = software_directory
+        self._rest_port = rest_port
+        self._init_client()
+
+    def _init_client(self):
+        if self._rest_port:
+            base_url = f"http://{self._url}:{self._rest_port}"
+        else:
+            base_url = f"http://{self._url}"
+        self._client = httpx.Client(base_url=base_url)
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -180,19 +185,15 @@ class ClusterManager:
             self.disconnect()
 
     def connect_ssh_and_zmq_if_disconnected(self, connect_http=True, verbose=True):
+        """Legacy method - now just connects SSH if needed"""
         if not self.is_connected():
             self.connect()
-            com = self._get_server_command()
-            self.connect_zmq_tunnel(com, connect_http=connect_http, verbose=verbose)
 
     def disconnect(self):
         """
         disconnect the ssh client
         :return: Nothing
         """
-        if self._socket is not None:
-            self._socket.close()
-
         if self._sftp_client is not None:
             self._sftp_client.close()
 
@@ -205,14 +206,6 @@ class ClusterManager:
 
             self._http_server_tunnel._transport.close()
             self._http_server_tunnel.stop()
-            # print("http server stopped")
-
-        # print("Killing ZMQ tunnel")
-        if self._zmq_ssh_tunnel is not None:
-            if hasattr(self._zmq_ssh_tunnel, "kill"):
-                # This is because it can be that the tunnel was not done via paramiko subprocess
-                self._zmq_ssh_tunnel.kill()
-                # print("Killed zmq tunnel")
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
@@ -221,8 +214,19 @@ class ClusterManager:
         return basepath_override + "/" + filename
 
     def delete_file(self, filename, basepath_override=None):
-        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
-        self._sftp_client.remove(resolved_filename)
+        """Delete a file using REST API"""
+        if self._client:
+            response = self._client.request(
+                "DELETE",
+                "/api/files/delete",
+                json={"filename": filename, "basepath_override": basepath_override},
+            )
+            response.raise_for_status()
+        else:
+            resolved_filename = self.resolve_file_in_basepath(
+                filename, basepath_override
+            )
+            self._sftp_client.remove(resolved_filename)
 
     def __rmtree_helper(self, abspath):
         postremove_files = []
@@ -241,10 +245,19 @@ class ClusterManager:
         # print("Im deleting %s"%abspath)
 
     def rmtree(self, dirname, basepath_override=None):
-        abspath = self.resolve_file_in_basepath(dirname, basepath_override)
-        if not self.exists_as_directory(abspath):
-            return
-        self.__rmtree_helper(abspath)
+        """Delete a directory tree using REST API"""
+        if self._client:
+            response = self._client.request(
+                "DELETE",
+                "/api/files/rmtree",
+                json={"dirname": dirname, "basepath_override": basepath_override},
+            )
+            response.raise_for_status()
+        else:
+            abspath = self.resolve_file_in_basepath(dirname, basepath_override)
+            if not self.exists_as_directory(abspath):
+                return
+            self.__rmtree_helper(abspath)
 
     def put_directory(
         self,
@@ -265,14 +278,23 @@ class ClusterManager:
         )
 
     def exists_remote(self, path):
-        try:
-            self._sftp_client.stat(path)
-        except IOError as e:
-            if e.errno == errno.ENOENT:
-                return False
-            raise
+        """Check if a path exists using REST API"""
+        if self._client:
+            # For absolute paths, use empty basepath_override
+            response = self._client.post(
+                "/api/files/exists", json={"filename": path, "basepath_override": ""}
+            )
+            response.raise_for_status()
+            return response.json()["exists"]
         else:
-            return True
+            try:
+                self._sftp_client.stat(path)
+            except IOError as e:
+                if e.errno == errno.ENOENT:
+                    return False
+                raise
+            else:
+                return True
 
     def get_directory(
         self,
@@ -322,7 +344,7 @@ class ClusterManager:
 
         :param from_file (str): Existing file on host
         :param to_file (str): Remote file (will be overwritten)
-        :param optional_callWorkback (function): Function looking like this: callback(bytes_written, total_bytes)
+        :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :param basepath_override (str): Overrides the basepath in case of uploads somewhere else.
         :return: Nothing
         """
@@ -330,33 +352,53 @@ class ClusterManager:
             raise FileNotFoundError(
                 "File %s was not found during ssh put file on local host" % (from_file)
             )
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
-        abstofile = basepath_override + "/" + to_file
-        # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
-        if self.exists_as_directory(abstofile):
-            abstofile += "/" + posixpath.basename(from_file)
-        self._sftp_client.put(from_file, abstofile, optional_callback)
+
+        if self._client:
+            # Use REST API for file upload
+            with open(from_file, "rb") as f:
+                files = {"file": (posixpath.basename(from_file), f)}
+                data = {"to_file": to_file, "basepath_override": basepath_override}
+                response = self._client.post(
+                    "/api/files/upload", files=files, data=data
+                )
+                response.raise_for_status()
+        else:
+            if basepath_override is None:
+                basepath_override = self._calculation_basepath
+            abstofile = basepath_override + "/" + to_file
+            # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
+            if self.exists_as_directory(abstofile):
+                abstofile += "/" + posixpath.basename(from_file)
+            self._sftp_client.put(from_file, abstofile, optional_callback)
 
     def remote_open(self, filename, mode, basepath_override=None):
         abspath = self.resolve_file_in_basepath(filename, basepath_override)
         return self._sftp_client.open(abspath, mode)
 
     def list_dir(self, path, basepath_override=None):
-        files = []
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
+        """List directory contents using REST API"""
+        if self._client:
+            response = self._client.post(
+                "/api/files/list",
+                json={"path": path, "basepath_override": basepath_override},
+            )
+            response.raise_for_status()
+            return response.json()["files"]
+        else:
+            files = []
+            if basepath_override is None:
+                basepath_override = self._calculation_basepath
 
-        abspath = basepath_override + "/" + path
+            abspath = basepath_override + "/" + path
 
-        for file_attr in self._sftp_client.listdir_iter(abspath):
-            file_attr: SFTPAttributes
-            file_char = "d" if stat.S_ISDIR(file_attr.st_mode) else "f"
-            fname = file_attr.filename
-            longname = file_attr.longname
-            print(fname, longname, file_char)
-            files.append({"name": fname, "path": abspath, "type": file_char})
-        return files
+            for file_attr in self._sftp_client.listdir_iter(abspath):
+                file_attr: SFTPAttributes
+                file_char = "d" if stat.S_ISDIR(file_attr.st_mode) else "f"
+                fname = file_attr.filename
+                longname = file_attr.longname
+                print(fname, longname, file_char)
+                files.append({"name": fname, "path": abspath, "type": file_char})
+            return files
 
     def get_default_queue(self):
         """
@@ -392,7 +434,7 @@ class ClusterManager:
         """
         Transfer a file from_file (remote) to to_file(local)
 
-        Throws FileNotFoundError in case file does not exist on remote host. TODO
+        Throws FileNotFoundError in case file does not exist on remote host.
 
         :param from_file (str): Existing file on remote
         :param to_file (str): Local file (will be overwritten)
@@ -400,11 +442,22 @@ class ClusterManager:
         :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
+        if self._client:
+            # Use REST API for file download
+            params = {"from_file": from_file, "basepath_override": basepath_override}
+            with self._client.stream(
+                "GET", "/api/files/download", params=params
+            ) as response:
+                response.raise_for_status()
+                with open(to_file, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
+        else:
+            if basepath_override is None:
+                basepath_override = self._calculation_basepath
 
-        getpath = basepath_override + "/" + from_file
-        self._sftp_client.get(getpath, to_file, optional_callback)
+            getpath = basepath_override + "/" + from_file
+            self._sftp_client.get(getpath, to_file, optional_callback)
 
     def exec_command(self, command):
         """
@@ -491,7 +544,7 @@ class ClusterManager:
         software_dir = self._software_directory
         return self.get_server_command_from_software_directory(software_dir)
 
-    def connect_zmq_tunnel(self, command, connect_http=True, verbose=True):
+    def start_server_remote(self, command):
         """
         Executes the servercommand command and sets up the ZMQ tunnel
 
@@ -540,9 +593,8 @@ class ClusterManager:
             command = '"%s"' % command
 
         stdout, stderr = self.exec_command("bash -c %s" % command)
-        stderrmessage = None
+
         password = None
-        port = None
         for line in stdout:
             firstline = line[:-1]
             myline = firstline.split()
@@ -553,6 +605,8 @@ class ClusterManager:
                 )
             password = myline[3]
             port = int(myline[2])
+            self._rest_port = port
+            self._init_client()
             server_zmq_version_string = myline[4].strip()
             if server_zmq_version_string.startswith("SERVER"):
                 # Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION
@@ -603,24 +657,13 @@ class ClusterManager:
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
 
-        if verbose:
-            print("Connecting to ZMQ serve at %d with password %s" % (port, password))
+        # socket.plain_username = b"simstack_client"
+        # socket.plain_password = password.encode("utf8").strip()
 
-        self._socket = self._context.socket(zmq.REQ)
-
-        socket = self._socket
-        socket.plain_username = b"simstack_client"
-        socket.plain_password = password.encode("utf8").strip()
-        socket.setsockopt(zmq.LINGER, True)
-        socket.setsockopt(zmq.SNDTIMEO, 2000)
-        socket.setsockopt(zmq.RCVTIMEO, 2000)
-
-        from zmq import ssh
-
-        key_filename = None
-        if self._sshprivatekeyfilename != "UseSystemDefault":
-            key_filename = self._sshprivatekeyfilename
-
+        # key_filename = None
+        # if self._sshprivatekeyfilename != "UseSystemDefault":
+        #    key_filename = self._sshprivatekeyfilename
+        """
         connect_address = "tcp://127.0.0.1:%d" % port
         if self._url != "localhost":
             ssh_url = self.get_ssh_url()
@@ -631,123 +674,135 @@ class ClusterManager:
             self._zmq_ssh_tunnel = None
             socket.connect(connect_address)
             print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
-        # For testing if localhost == jump host, don't do anything. Otherwise, test with different user
-        socket.send(Message.connect_message())
-        # Windows somehow needs this amount of time before the socket is ready:
-        time.sleep(0.25)
-        for i in range(0, 10):
-            try:
-                data = socket.recv()
-                break
-            except zmq.error.Again:
-                print(
-                    "Port was not setup in time. Trying to connect again. Trial %d of 10."
-                    % i
-                )
-                time.sleep(0.15)
-        messagetype, message = Message.unpack(data)
-        if messagetype == MTS.CONNECT:
-            self._should_be_connected = True
-        else:
-            raise ConnectionError(
-                "Received message different from connect: %s" % message
-            )
-
-        if not connect_http:
-            return
-
-        try:
-            self._http_base_address = self.get_http_server_address()
-            if verbose:
-                print("Connected HTTP", self._http_base_address)
-        except Exception as e:
-            print(e)
-            raise ConnectionError(
-                "Could not connect http tunnel. Error was: %s" % e
-            ) from e
-
-    def _recv_ack_message(self):
-        messagetype, message = self._recv_message()
-        if not messagetype == MTS.ACK:
-            raise ConnectionAbortedError(
-                "Did not receive acknowledge after workflow submission."
-            )
+        """
 
     def get_url_for_workflow(self, workflow):
         if not workflow.startswith("/"):
             workflow = "/%s" % workflow
         return self._http_base_address + workflow
 
-    def _recv_message(self):
-        messagetype, message = Message.unpack(self._socket.recv())
-        return messagetype, message
-
     def submit_wf(self, filename, basepath_override=None):
-        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
-        self._socket.send(Message.submit_wf_message(resolved_filename))
-        self._recv_ack_message()
+        """Submit a workflow using REST API"""
+        if self._client:
+            response = self._client.post(
+                "/api/workflows/submit", json={"filename": filename}
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ submission not available with REST session"
+            )
 
     def submit_single_job(self, wfem):
-        self._socket.send(Message.submit_single_job_message(wfem))
-        self._recv_ack_message()
+        """Submit a single job using REST API"""
+        if self._client:
+            response = self._client.post(
+                "/api/singlejobs/submit", json={"wfem": wfem.to_dict()}
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ submission not available with REST session"
+            )
 
     def send_jobstatus_message(self, wfem_uid: str):
-        message = Message.getsinglejobstatus_message(wfem_uid=wfem_uid)
-        self._socket.send(message)
-        # This has to be the actual answer message:
-        messagetype, message = self._recv_message()
-        return message
+        """Get single job status using REST API"""
+        if self._client:
+            response = self._client.get(f"/api/singlejobs/{wfem_uid}/status")
+            response.raise_for_status()
+            return response.json()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def send_abortsinglejob_message(self, wfem_uid: str):
-        message = Message.abortsinglejob_message(wfem_uid=wfem_uid)
-        self._socket.send(message)
-        # This has to be the actual answer message:
-        self._recv_message()
+        """Abort a single job using REST API"""
+        if self._client:
+            response = self._client.post(f"/api/singlejobs/{wfem_uid}/abort")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def send_noop_message(self):
-        self._socket.send(Message.noop_message())
-        self._recv_ack_message()
+        """No-op - not needed with REST API"""
+        pass
 
     def send_shutdown_message(self):
-        self._socket.send(Message.shutdown_message())
-        self._recv_ack_message()
+        """Shutdown server using REST API"""
+        if self._client:
+            response = self._client.post("/api/server/shutdown")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def abort_wf(self, workflow_submitname):
+        """Abort a workflow using REST API"""
         self._logger.debug(
             "Sent Abort WF message for submitname %s" % (workflow_submitname)
         )
-        self._socket.send(Message.abort_wf_message(workflow_submitname))
-        self._recv_ack_message()
+        if self._client:
+            response = self._client.post(f"/api/workflows/{workflow_submitname}/abort")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def send_clearserverstate_message(self):
-        self._socket.send(Message.clearserverstate_message())
-        self._recv_ack_message()
+        """Clear server state using REST API"""
+        if self._client:
+            response = self._client.post("/api/server/clear-state")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def delete_wf(self, workflow_submitname):
+        """Delete a workflow using REST API"""
         self._logger.debug(
             "Sent delete WF message for submitname %s" % (workflow_submitname)
         )
-        self._socket.send(Message.delete_wf_message(workflow_submitname))
-        self._recv_ack_message()
-
-    def get_workflow_list(self):
-        self._socket.send(Message.list_wfs_message())
-        messagetype, message = self._recv_message()
-        workflows = message["workflows"]
-        return workflows
-
-    def get_workflow_job_list(self, workflow):
-        self._socket.send(
-            Message.list_jobs_of_wf_message(workflow_submit_name=workflow)
-        )
-        messagetype, message = self._recv_message()
-        if "list_of_jobs" not in message:
-            raise ConnectionError(
-                "Could not read message in workflow job list update %s" % message
+        if self._client:
+            response = self._client.delete(f"/api/workflows/{workflow_submitname}")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
             )
 
-        files = message["list_of_jobs"]
-        return files
+    def get_workflow_list(self):
+        """Get list of workflows using REST API"""
+        if self._client:
+            response = self._client.get("/api/workflows")
+            response.raise_for_status()
+            data = response.json()
+            workflows = {
+                "inprogress": data.get("inprogress", []),
+                "finished": data.get("finished", []),
+            }
+            return workflows
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
+
+    def get_workflow_job_list(self, workflow):
+        """Get job list for a workflow using REST API"""
+        if self._client:
+            response = self._client.get(f"/api/workflows/{workflow}/jobs")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("jobs", [])
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
 
     def is_connected(self):
         """
@@ -760,10 +815,19 @@ class ClusterManager:
         return transport.is_active()
 
     def exists(self, path):
-        try:
-            return self.exists_as_directory(path)
-        except SSHExpectedDirectoryError:
-            return True
+        """Check if a path exists (file or directory) using REST API"""
+        if self._client:
+            response = self._client.post(
+                "/api/files/exists",
+                json={"filename": str(path), "basepath_override": ""},
+            )
+            response.raise_for_status()
+            return response.json()["exists"]
+        else:
+            try:
+                return self.exists_as_directory(path)
+            except SSHExpectedDirectoryError:
+                return True
 
     def get_newest_version_directory(self, path):
         largest_version = -1
@@ -800,46 +864,23 @@ class ClusterManager:
         """
         Function, which communicates with the server asking for the server port and setting up the
         server tunnel if it is not present.
-        :return:
+        :return: HTTP server URL
         """
-        self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
-
-        if self._http_server_tunnel is None or not self._http_server_tunnel.is_alive:
-            if self._http_server_tunnel is not None:
-                self._http_server_tunnel.stop()
-            """ Reconnect starting here """
-            self._socket.send(
-                Message.get_http_server_request_message(
-                    basefolder=self.get_calculation_basepath()
-                )
+        if self._client:
+            # Use REST API to get HTTP server info
+            response = self._client.post(
+                "/api/http-server", json={"basefolder": self.get_calculation_basepath()}
             )
-            messagetype, message = self._recv_message()
-            if "http_port" not in message:
-                raise ConnectionError("Could not read message in http job starter.")
-            # print(message)
-            myport = int(message["http_port"])
-            self._http_user = message["http_user"]
-            self._http_pass = message["http_pass"]
-            key_filename = None
-            if self._sshprivatekeyfilename != "UseSystemDefault":
-                key_filename = self._sshprivatekeyfilename
-            self._http_server_tunnel = sshtunnel.SSHTunnelForwarder(
-                (self._url, self._port),
-                ssh_username=self._user,
-                ssh_pkey=key_filename,
-                threaded=False,
-                remote_bind_address=("127.0.0.1", myport),
+            response.raise_for_status()
+            data = response.json()
+            self._http_user = data.get("user")
+            self._http_pass = data.get("password")
+            # Return the URL from the FastAPI server
+            return data.get("url")
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ HTTP server not available with REST session"
             )
-            self._http_server_tunnel.start()
-
-        if not self._http_server_tunnel.is_alive:
-            raise sshtunnel.BaseSSHTunnelForwarderError("Cannot start ssh tunnel.")
-
-        return "http://%s:%s@localhost:%d" % (
-            self._http_user,
-            self._http_pass,
-            self._http_server_tunnel.local_bind_port,
-        )
 
     def exists_as_directory(self, path):
         """
@@ -847,51 +888,77 @@ class ClusterManager:
         :param path (str): The path to check
         :return bool: Exists, does not exist
         """
-        try:
-            sftpa: SFTPAttributes = self._sftp_client.stat(str(path))
-        except FileNotFoundError:
-            return False
-        if stat.S_ISDIR(sftpa.st_mode):
-            return True
-        raise SSHExpectedDirectoryError(
-            "Path <%s> to expected directory exists, but was not directory" % path
-        )
+        if self._client:
+            response = self._client.post(
+                "/api/files/exists", json={"filename": path, "basepath_override": ""}
+            )
+            response.raise_for_status()
+            result = response.json()
+            if not result["exists"]:
+                return False
+            if result["is_directory"]:
+                return True
+            raise SSHExpectedDirectoryError(
+                "Path <%s> to expected directory exists, but was not directory" % path
+            )
+        else:
+            try:
+                sftpa: SFTPAttributes = self._sftp_client.stat(str(path))
+            except FileNotFoundError:
+                return False
+            if stat.S_ISDIR(sftpa.st_mode):
+                return True
+            raise SSHExpectedDirectoryError(
+                "Path <%s> to expected directory exists, but was not directory" % path
+            )
 
     def mkdir_p(self, directory, basepath_override=None, mode_override=None):
         """
         Creates a directory, if not existing. Does nothing if it exists. Throws if the path cannot be generated or is a file
         The function will make sure every directory in "directory" is generated but not in basepath or basepath_override.
-        Bug: Mode is still ignored! I think this might be a bug in ubuntu 14.04 ssh and we should try again later.
         :param directory (str): Directory to be generated on the server. basepath will be appended
         :param basepath_override (str): If set, a custom basepath is used. If you want create a specific absolute directory, used basepath_override=""
-        :param mode_override (int): Mode such as 1777
+        :param mode_override (int): Mode such as 0o770
         :return (str): The absolute path of the generated directory.
         """
         if isinstance(directory, pathlib.Path):
             directory = str(directory)
 
-        if mode_override is None:
-            mode_override = self._default_mode
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
+        if self._client:
+            # Use REST API for directory creation
+            response = self._client.post(
+                "/api/files/mkdir",
+                json={
+                    "directory": directory,
+                    "basepath_override": basepath_override,
+                    "mode_override": mode_override or self._default_mode,
+                },
+            )
+            response.raise_for_status()
+            return directory
+        else:
+            if mode_override is None:
+                mode_override = self._default_mode
+            if basepath_override is None:
+                basepath_override = self._calculation_basepath
 
-        if not self._calculation_basepath == "":
-            if directory.startswith("/"):
-                directory = directory[1:]
+            if not self._calculation_basepath == "":
+                if directory.startswith("/"):
+                    directory = directory[1:]
 
-        subdirs = split_directory_in_subdirectories(directory)
-        complete_subdirs = []
-        for mydir in subdirs:
-            complete_subdirs.append(posixpath.join(basepath_override, mydir))
+            subdirs = split_directory_in_subdirectories(directory)
+            complete_subdirs = []
+            for mydir in subdirs:
+                complete_subdirs.append(posixpath.join(basepath_override, mydir))
 
-        for dir in complete_subdirs:
-            if self.exists_as_directory(dir):
-                continue
-            else:
-                # self._sftp_client.mkdir(dir,mode = mode_override)
-                self._sftp_client.mkdir(dir)
+            for dir in complete_subdirs:
+                if self.exists_as_directory(dir):
+                    continue
+                else:
+                    # self._sftp_client.mkdir(dir,mode = mode_override)
+                    self._sftp_client.mkdir(dir)
 
-        return directory
+            return directory
 
     def get_calculation_basepath(self):
         return self._calculation_basepath
@@ -904,18 +971,8 @@ class ClusterManager:
         We make sure that the connections are closed on destruction.
         :return:
         """
-        if self._socket is not None:
-            self._socket.close()
         if self._sftp_client is not None:
             self._sftp_client.close()
         self._ssh_client.close()
-        if (
-            self._http_server_tunnel is not None
-            and not self._http_server_tunnel.is_alive
-        ):
+        if self._http_server_tunnel is not None and self._http_server_tunnel.is_alive:
             self._http_server_tunnel.stop()
-
-        if self._zmq_ssh_tunnel is not None:
-            if hasattr(self._zmq_ssh_tunnel, "kill"):
-                # This is because it can be that the tunnel was not done via paramiko subprocess
-                self._zmq_ssh_tunnel.kill()

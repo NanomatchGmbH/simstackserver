@@ -5,7 +5,6 @@ import os
 import time
 import lockfile
 import logging
-import zmq
 import contextlib
 
 
@@ -46,13 +45,16 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
     with open(myfile, "rt") as infile:
         line = infile.read()
         splitline = line.split()
-        if not len(splitline) == 5:
+        if not len(splitline) >= 4:
             raise InputFileError(
-                "Input of portconfig was expected to be four fields, got <%s>" % line
+                "Input of portconfig was expected to be at least four fields, got <%s>"
+                % line
             )
         port = int(splitline[2])
         mypass = splitline[3].strip()
-        print("Port Pass %d %s %s" % (port, mypass, zmq.zmq_version()))
+        # Print without ZMQ version (removed dependency)
+        version_info = splitline[4] if len(splitline) > 4 else "N/A"
+        print("Port Pass %d %s %s" % (port, mypass, version_info))
 
 
 def main():
@@ -108,7 +110,7 @@ def main():
         with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
             from SimStackServer import __version__ as server_version
 
-            allversions = f"SERVER,{server_version},ZMQ,{zmq.zmq_version()}"
+            allversions = f"SERVER,{server_version},REST,1.0"
             towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
             outfile.write(towrite)
             print(towrite[:-1])
@@ -149,8 +151,11 @@ def main():
                 logger.info("SimStackServer Daemon Startup")
             mypidfile.update_pid_to_current_process()  # "PIDFILE TAKEOVER
             logger.debug("PID written")
-            ss.setup_zmq_port(myport, mysecret)
-            logger.debug("ZMQ port setup finished")
+
+            # Start FastAPI server
+            fastapi_port = ss._start_fastapi_server(host="127.0.0.1", port=myport)
+            logger.info(f"FastAPI server started on port {fastapi_port}")
+
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()

@@ -16,12 +16,9 @@ from paramiko.hostkeys import HostKeys
 from paramiko.rsakey import RSAKey
 
 import sshtunnel
-import zmq
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
-from SimStackServer.MessageTypes import Message, SSS_MESSAGETYPE as MTS
 from SimStackServer.LocalClusterManager import LocalClusterManager
-import SimStackServer
 
 
 #############################
@@ -81,26 +78,14 @@ def mock_sshtunnel_forwarder():
 
 
 @pytest.fixture
-def mock_zmq_context():
-    """Return a MagicMock for a zmq.Context and its socket."""
-    ctx = MagicMock(spec=zmq.Context)
-    sock = MagicMock(spec=zmq.Socket)
-    ctx.socket.return_value = sock
-    return ctx
-
-
-@pytest.fixture
 @patch("paramiko.SSHClient", autospec=True)
 @patch("sshtunnel.SSHTunnelForwarder", autospec=True)
-@patch("zmq.Context.instance", autospec=True)
 def cluster_manager(
-    mock_zmq_context_class,
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,
     mock_sshclient,
     mock_sftpclient,
     mock_sshtunnel_forwarder,
-    mock_zmq_context,
 ):
     """
     Return a LocalClusterManager instance with patched dependencies.
@@ -109,8 +94,6 @@ def cluster_manager(
     mock_sshclient_class.return_value = mock_sshclient
     # Whenever SSHTunnelForwarder is constructed, return our mock.
     mock_sshtunnel_forwarder_class.return_value = mock_sshtunnel_forwarder
-    # Whenever zmq.Context.instance() is called, return our mock context.
-    mock_zmq_context_class.return_value = mock_zmq_context
 
     lcm = LocalClusterManager(
         url="fake-url",
@@ -165,7 +148,7 @@ def test_get_ssh_url(cluster_manager):
 def test_connection_context_already_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=True)
     with patch.object(
-        cluster_manager, "connect_ssh_and_zmq_if_disconnected"
+        cluster_manager, "connect_if_disconnected"
     ) as mock_conn, patch.object(cluster_manager, "disconnect") as mock_disconn:
         with cluster_manager.connection_context() as result:
             assert result is None
@@ -177,60 +160,38 @@ def test_connection_context_not_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=False)
     with patch.object(
         cluster_manager,
-        "connect_ssh_and_zmq_if_disconnected",
-        return_value="tunnel_info",
+        "connect_if_disconnected",
+        return_value=None,
     ) as mock_conn, patch.object(cluster_manager, "disconnect") as mock_disconn:
         with cluster_manager.connection_context() as result:
-            assert result == "tunnel_info"
-            mock_conn.assert_called_once_with(connect_http=False, verbose=False)
+            assert result is None
+            mock_conn.assert_called_once()
         mock_disconn.assert_called_once()
 
 
-def test_connect_ssh_and_zmq_if_disconnected_already_connected(cluster_manager):
+def test_connect_if_disconnected_already_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=True)
-    with patch.object(cluster_manager, "connect") as mock_connect, patch.object(
-        cluster_manager, "connect_zmq_tunnel"
-    ) as mock_tunnel, patch.object(cluster_manager, "_get_server_command") as mock_cmd:
-        cluster_manager.connect_ssh_and_zmq_if_disconnected(
-            connect_http=False, verbose=False
-        )
+    with patch.object(cluster_manager, "connect") as mock_connect:
+        cluster_manager.connect_if_disconnected()
     mock_connect.assert_not_called()
-    mock_cmd.assert_not_called()
-    mock_tunnel.assert_not_called()
 
 
-def test_connect_ssh_and_zmq_if_disconnected_not_connected(cluster_manager):
+def test_connect_if_disconnected_not_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=False)
-    with patch.object(cluster_manager, "connect") as mock_connect, patch.object(
-        cluster_manager, "_get_server_command", return_value="cmd"
-    ) as mock_cmd, patch.object(cluster_manager, "connect_zmq_tunnel") as mock_tunnel:
-        cluster_manager.connect_ssh_and_zmq_if_disconnected(
-            connect_http=True, verbose=True
-        )
+    with patch.object(cluster_manager, "connect") as mock_connect:
+        cluster_manager.connect_if_disconnected()
     mock_connect.assert_called_once()
-    mock_cmd.assert_called_once()
-    mock_tunnel.assert_called_once_with("cmd", connect_http=True, verbose=True)
 
 
 def test_disconnect_all_set(cluster_manager):
-    # Create mocks for all connections.
-    mock_socket = MagicMock()
-    mock_sftp = MagicMock()
-    mock_ssh = MagicMock()
+    # Create mocks for all connections (without ZMQ).
     mock_http = MagicMock()
     mock_http._server_list = [MagicMock(), MagicMock()]
     for srv in mock_http._server_list:
         srv.timeout = None
     mock_http._transport = MagicMock()
-    mock_zmq = MagicMock()
-    mock_zmq.kill = MagicMock()
-    cluster_manager._socket = mock_socket
-    cluster_manager._sftp_client = mock_sftp
-    cluster_manager._ssh_client = mock_ssh
     cluster_manager._http_server_tunnel = mock_http
-    cluster_manager._zmq_ssh_tunnel = mock_zmq
     cluster_manager.disconnect()
-    mock_socket.close.assert_called_once()
     for srv in mock_http._server_list:
         assert srv.timeout == 0.01
     mock_http._transport.close.assert_called_once()
@@ -446,33 +407,6 @@ def test_connection_is_localhost_and_same_user(cluster_manager):
     assert cluster_manager.connection_is_localhost_and_same_user() is False
 
 
-def test_get_http_server_address_port_error(cluster_manager, mock_zmq_context):
-    # For brevity, we only test that an exception is raised when
-    # the tunnel is not alive.
-    with patch("sshtunnel.SSHTunnelForwarder") as mock_forwarder_cls:
-        mock_forwarder = MagicMock()
-        mock_forwarder.is_alive = False
-        mock_forwarder_cls.return_value = mock_forwarder
-        # Prepare a dummy response message.
-        sock = mock_zmq_context.socket.return_value
-        sock.recv.return_value = Message.dict_message(
-            MTS.ACK, {"http_user": "dummy", "http_pass": "404"}
-        )
-        cluster_manager._socket = sock
-        cluster_manager.connect()
-        with pytest.raises(ConnectionError):
-            cluster_manager.get_http_server_address()
-        sock.recv.return_value = Message.dict_message(
-            MTS.ACK, {"http_port": "505", "http_user": "dummy", "http_pass": "404"}
-        )
-        cluster_manager._socket = sock
-        cluster_manager.connect()
-        assert (
-            cluster_manager.get_http_server_address()
-            == "http://dummy:404@localhost:505"
-        )
-
-
 def test_exists_as_directory(cluster_manager, tmpdir, tmpfile):
     with patch.object(
         cluster_manager, "connection_is_localhost_and_same_user", return_value=True
@@ -489,75 +423,6 @@ def test_exists(cluster_manager, tmpdir, tmpfile):
     ):
         assert cluster_manager.exists(tmpdir) is True
         assert cluster_manager.exists(tmpfile) is True
-
-
-def test_get_workflow_job_list(cluster_manager, mock_zmq_context):
-    sock = mock_zmq_context.socket.return_value
-    cluster_manager._socket = sock
-    cluster_manager._recv_message = MagicMock(
-        return_value=(MTS.ACK, {"list_of_jobs": ["job1", "job2"]})
-    )
-    result = cluster_manager.get_workflow_job_list("wf")
-    expected_send = Message.list_jobs_of_wf_message(workflow_submit_name="wf")
-    sock.send.assert_called_once_with(expected_send)
-    cluster_manager._recv_message.assert_called_once()
-    assert result == ["job1", "job2"]
-
-    cluster_manager._recv_message = MagicMock(
-        return_value=(MTS.ACK, {"somkey": "somevalue"})
-    )
-    with pytest.raises(ConnectionError):
-        cluster_manager.get_workflow_job_list("wf")
-
-
-def test_abort_wf(cluster_manager, mock_zmq_context):
-    sock = mock_zmq_context.socket.return_value
-    cluster_manager._socket = sock
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_ack:
-        cluster_manager.abort_wf("wf123")
-    expected_msg = Message.abort_wf_message("wf123")
-    sock.send.assert_called_once_with(expected_msg)
-    mock_ack.assert_called_once()
-
-
-def test_send_clearserverstate_message(cluster_manager, mock_zmq_context):
-    sock = mock_zmq_context.socket.return_value
-    cluster_manager._socket = sock
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_ack:
-        cluster_manager.send_clearserverstate_message()
-    sock.send.assert_called_once_with(Message.clearserverstate_message())
-    mock_ack.assert_called_once()
-
-
-def test_delete_wf(cluster_manager, mock_zmq_context):
-    sock = mock_zmq_context.socket.return_value
-    cluster_manager._socket = sock
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_ack, patch.object(
-        cluster_manager._logger, "debug"
-    ) as mock_debug:
-        cluster_manager.delete_wf("wf_del")
-    sock.send.assert_called_once_with(Message.delete_wf_message("wf_del"))
-    mock_ack.assert_called_once()
-    mock_debug.assert_called_once_with(
-        "Sent delete WF message for submitname %s" % ("wf_del")
-    )
-
-
-def test_get_workflow_list(cluster_manager, mock_zmq_context):
-    sock = mock_zmq_context.socket.return_value
-    cluster_manager._socket = sock
-    with patch.object(
-        cluster_manager,
-        "_recv_message",
-        return_value=(MTS.ACK, {"workflows": ["wf1", "wf2"]}),
-    ) as mock_recv:
-        result = cluster_manager.get_workflow_list()
-    sock.send.assert_called_once_with(Message.list_wfs_message())
-    mock_recv.assert_called_once()
-    assert result == ["wf1", "wf2"]
-
-    cluster_manager._filegen_mode = True
-    assert cluster_manager.get_workflow_list() == []
 
 
 def test_get_url_for_workflow(cluster_manager):
@@ -623,7 +488,7 @@ def test__is_socket_closed_unexpected_exception():
 
 def test___del___(cluster_manager):
     mock_http_server_tunnel = MagicMock()
-    mock_http_server_tunnel.is_alive = False
+    mock_http_server_tunnel.is_alive = True
     cluster_manager._http_server_tunnel = mock_http_server_tunnel
     cluster_manager.connect()
     cluster_manager.__del__()
@@ -717,386 +582,6 @@ def test_is_connected(cluster_manager):
     # Patch getpass.getuser to return "testuser"
     with patch("getpass.getuser", return_value="testuser"):
         assert cluster_manager.is_connected() is False
-
-
-# Test for submit_single_job
-def test_submit_single_job(cluster_manager, mock_zmq_context):
-    # Use the mock socket from the zmq context fixture.
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch(
-        "SimStackServer.MessageTypes.Message.submit_single_job_message",
-        return_value="test_message",
-    ):  # Patch _recv_ack_message so we don't have to simulate a real ACK.
-        with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-            wfem = {"job": "details"}  # Dummy job details
-            cluster_manager.submit_single_job(wfem)
-
-    # Check that the socket sent the correct message.
-    expected_msg = "test_message"
-    mock_socket.send.assert_called_once_with(expected_msg)
-    # And that the ack method was called.
-    mock_recv_ack.assert_called_once()
-
-
-# Test for send_jobstatus_message
-def test_send_jobstatus_message(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-
-    wfem_uid = "job123"
-    # Create a dummy response that _recv_message should return.
-    dummy_response = (MTS.ACK, {"job_status": "running"})
-    with patch.object(
-        cluster_manager, "_recv_message", return_value=dummy_response
-    ) as mock_recv:
-        result = cluster_manager.send_jobstatus_message(wfem_uid)
-
-    expected_msg = Message.getsinglejobstatus_message(wfem_uid=wfem_uid)
-    mock_socket.send.assert_called_once_with(expected_msg)
-    mock_recv.assert_called_once()
-    # The function should return the message part of the response.
-    assert result == {"job_status": "running"}
-
-
-# Test for send_abortsinglejob_message
-def test_send_abortsinglejob_message(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-
-    wfem_uid = "job123"
-    # Patch _recv_message to simulate receiving an answer.
-    with patch.object(cluster_manager, "_recv_message") as mock_recv:
-        cluster_manager.send_abortsinglejob_message(wfem_uid)
-
-    expected_msg = Message.abortsinglejob_message(wfem_uid=wfem_uid)
-    mock_socket.send.assert_called_once_with(expected_msg)
-    mock_recv.assert_called_once()
-
-
-# Test for send_noop_message
-def test_send_noop_message(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-        cluster_manager.send_noop_message()
-
-    expected_msg = Message.noop_message()
-    mock_socket.send.assert_called_once_with(expected_msg)
-    mock_recv_ack.assert_called_once()
-
-
-# Test for send_shutdown_message
-def test_send_shutdown_message(cluster_manager, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-        cluster_manager.send_shutdown_message()
-
-    expected_msg = Message.shutdown_message()
-    mock_socket.send.assert_called_once_with(expected_msg)
-    mock_recv_ack.assert_called_once()
-
-
-def test_submit_wf(cluster_manager, tmpfileWaNoXml, mock_zmq_context):
-    mock_socket = mock_zmq_context.socket.return_value
-    cluster_manager._socket = mock_socket
-    with patch.object(cluster_manager, "_recv_ack_message") as mock_recv_ack:
-        with patch(
-            "SimStackServer.MessageTypes.Message.submit_wf_message",
-            return_value="test_message",
-        ):  # Patch _recv_ack_message so we don't have to simulate a real ACK.
-            cluster_manager.submit_wf(str(tmpfileWaNoXml))
-            expected_msg = "test_message"
-            mock_socket.send.assert_called_once_with(expected_msg)
-            # And that the ack method was called.
-            mock_recv_ack.assert_called_once()
-
-
-def test_submit_wf_filegen_mode(cluster_manager):
-    # Force file-generation mode so the workflow branch is taken.
-    cluster_manager._filegen_mode = True
-    # Override resolve_file_in_basepath to return a known value.
-    cluster_manager.resolve_file_in_basepath = (
-        lambda filename, base_override: "resolved.xml"
-    )
-
-    # Create a dummy workflow object.
-    dummy_workflow = MagicMock()
-    # Simulate that the workflow's "storage" field is a relative path.
-    dummy_workflow.get_field_value.return_value = "relative_storage"
-    dummy_workflow.jobloop.return_value = None
-
-    # Create a dummy WorkflowManager instance.
-    dummy_wm = MagicMock()
-    dummy_wm.restore.return_value = None
-    dummy_wm.add_finished_workflow.return_value = None
-    dummy_wm.backup_and_save.return_value = None
-
-    with patch(
-        "SimStackServer.WorkflowModel.Workflow.new_instance_from_xml",
-        return_value=dummy_workflow,
-    ) as wf_patch:
-        with patch(
-            "SimStackServer.LocalClusterManager.WorkflowManager", autospec=True
-        ) as WM_patch:
-            WM_patch.return_value = dummy_wm
-
-            # Now call submit_wf.
-            cluster_manager.submit_wf("workflow.xml")
-
-            # Verify that the workflow was instantiated with the resolved filename.
-            wf_patch.assert_called_once_with("resolved.xml")
-
-            # Verify that the workflow's storage was checked and then updated.
-            dummy_workflow.get_field_value.assert_called_once_with("storage")
-            # Since get_field_value returns "relative_storage" (not starting with "/"),
-            # the code should update the storage field to be absolute by prepending Path.home()
-            dummy_workflow.set_field_value.assert_called_once_with(
-                "storage", str(pathlib.Path.home() / "relative_storage")
-            )
-
-            # Verify that the WorkflowManager instance was created and its methods were called.
-            dummy_wm.restore.assert_called_once()
-            dummy_wm.add_finished_workflow.assert_called_once_with("resolved.xml")
-            dummy_workflow.jobloop.assert_called_once()
-            dummy_wm.backup_and_save.assert_called_once()
-
-
-def test_recv_ack_message_success(cluster_manager):
-    # Simulate a successful ACK response.
-    dummy_message = {"status": "ok"}
-    cluster_manager._recv_message = lambda: (MTS.ACK, dummy_message)
-
-    # This call should complete without raising an exception.
-    # _recv_ack_message doesn't return a value, so we just call it.
-    cluster_manager._recv_ack_message()
-
-
-def test_recv_ack_message_failure(cluster_manager):
-    # Simulate a response that is not an ACK.
-    dummy_message = {"error": "failed"}
-    cluster_manager._recv_message = lambda: (MTS.CONNECT, dummy_message)
-
-    with pytest.raises(
-        ConnectionAbortedError,
-        match="Did not receive acknowledge after workflow submission.",
-    ):
-        cluster_manager._recv_ack_message()
-
-
-def test_connect_zmq_tunnel_success(cluster_manager, mock_zmq_context):
-    """
-    Test a successful execution of connect_zmq_tunnel() when:
-      - _queueing_system is not "Internal", "AiiDA" or "Filegenerator"
-      - _extra_config starts with "None" (so extra_conf_mode is False)
-      - exec_command returns valid output simulating:
-            "dummy 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"
-        so that:
-            password = "secretkey" and port = 555.
-      - Message.unpack returns (MTS.CONNECT, {...})
-      - connect_http is False so get_http_server_address() is not called.
-    """
-    cluster_manager._queueing_system = "Filegenerator"
-    assert cluster_manager.connect_zmq_tunnel("some command") is None
-    cluster_manager._queueing_system = "pbs"
-    cluster_manager._extra_config = "SomeConfigNotNone"
-    cluster_manager.exists = lambda x: False
-    with pytest.raises(ConnectionError):
-        cluster_manager.connect_zmq_tunnel("some command")
-
-    # Set up the instance so that the queue branch is triggered.
-    cluster_manager._queueing_system = "pbs"  # not Internal/AiiDA/Filegenerator
-    cluster_manager.exists = lambda x: True  # Dummy; not used in this branch
-
-    # Prepare dummy stdout/stderr from exec_command.
-    # For the first exec_command call (for the queue check), the command is built as:
-    #   "bash -c \"which qsub\""
-    # We simulate its output as a valid line:
-    #   "dummy 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"
-    dummy_stdout = ["dummy 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
-    dummy_stderr = []
-    # Have exec_command always return these values.
-    cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-
-    # Patch time.sleep to avoid delays.
-    with patch("time.sleep", return_value=None):
-        with patch(
-            "SimStackServer.MessageTypes.Message.unpack",
-            return_value=(MTS.CONNECT, {"dummy": "data"}),
-        ):
-            # Ensure that _context is our mocked zmq context.
-            cluster_manager._context = mock_zmq_context
-            # Get the mock socket from the context.
-            mock_socket = mock_zmq_context.socket.return_value
-            # When socket.recv() is called, return some dummy bytes.
-            mock_socket.recv.return_value = b"dummy_recv_data"
-            dummy_stdout = ["dummy 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
-            dummy_stderr = []
-            # Have exec_command always return these values.
-            cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-
-            # Call the function with connect_http False.
-            with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel(
-                    "some_command", connect_http=False, verbose=True
-                )
-
-            dummy_stdout = ["qsub\n"]
-            dummy_stderr = []
-            # Have exec_command always return these values.
-            cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-            with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel(
-                    "some_command", connect_http=False, verbose=True
-                )
-
-            cluster_manager._queueing_system = "Internal"
-            dummy_stdout = ["qsub 0 555 secretkey SERVER,6,ZMQ,4.2.4\n"]
-            dummy_stderr = []
-            cluster_manager.connect_zmq_tunnel(
-                "some_command", connect_http=False, verbose=True
-            )
-            with patch.object(SimStackServer, "__version__", "8.1.1"):
-                cluster_manager.connect_zmq_tunnel(
-                    "some_command", connect_http=False, verbose=True
-                )
-            mock_socket.connect.assert_called_with("tcp://127.0.0.1:555")
-            assert mock_socket.plain_username == b"simstack_client"
-            assert mock_socket.plain_password == b"secretkey"
-
-            dummy_stdout = ["qsub 0 555 secretkey NOSERVER,6,ZMQ,4.3.4\n"]
-            dummy_stderr = []
-            cluster_manager.connect_zmq_tunnel(
-                "some_command", connect_http=False, verbose=True
-            )
-            mock_socket.connect.assert_called_with("tcp://127.0.0.1:555")
-            assert mock_socket.plain_username == b"simstack_client"
-            assert mock_socket.plain_password == b"secretkey"
-
-            with patch.object(
-                cluster_manager, "get_http_server_address", return_value="1.0.0.1"
-            ):
-                cluster_manager.connect_zmq_tunnel(
-                    "some_command", connect_http=True, verbose=True
-                )
-            mock_socket.connect.assert_called_with("tcp://127.0.0.1:555")
-            assert mock_socket.plain_username == b"simstack_client"
-            assert mock_socket.plain_password == b"secretkey"
-            with patch.object(
-                cluster_manager, "get_http_server_address", side_effect=Exception
-            ):
-                with pytest.raises(Exception):
-                    cluster_manager.connect_zmq_tunnel(
-                        "some_fake_command", connect_http=True, verbose=True
-                    )
-
-            # repeat with extra_conf_mode false
-            cluster_manager._extra_config = "None"  # forces extra_conf_mode = False
-            cluster_manager._queueing_system = "pbs"
-            # Call the function with connect_http False.
-            with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel(
-                    "some_command", connect_http=False, verbose=True
-                )
-
-
-def test_connect_zmq_tunnel_ConnectError(cluster_manager, mock_zmq_context):
-    with patch("time.sleep", return_value=None):
-        with patch(
-            "SimStackServer.MessageTypes.Message.unpack",
-            return_value=(MTS.LISTWFS, {"dummy": "data"}),
-        ):
-            # Ensure that _context is our mocked zmq context.
-            cluster_manager._context = mock_zmq_context
-            # Get the mock socket from the context.
-            mock_socket = mock_zmq_context.socket.return_value
-            # When socket.recv() is called, return some dummy bytes.
-            mock_socket.recv.return_value = b"dummy_recv_data"
-
-            cluster_manager._queueing_system = "Internal"
-
-            dummy_stdout = ["qsub 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
-            dummy_stderr = []
-            cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-            with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel(
-                    "some_command", connect_http=False, verbose=True
-                )
-
-
-def test_connect_zmq_tunnel_retry_loop(cluster_manager, mock_zmq_context, capsys):
-    with patch(
-        "SimStackServer.MessageTypes.Message.unpack",
-        return_value=(MTS.LISTWFS, {"dummy": "data"}),
-    ):
-        # Ensure that _context is our mocked zmq context.
-        cluster_manager._context = mock_zmq_context
-        # Get the mock socket from the context.
-        mock_socket = mock_zmq_context.socket.return_value
-        # Force recv to always raise zmq.error.Again.
-        mock_socket.recv.side_effect = zmq.error.Again("timeout")
-
-        cluster_manager._queueing_system = "Internal"
-
-        dummy_stdout = ["qsub 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
-        dummy_stderr = []
-        cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-
-        # Patch time.sleep so that it doesn't actually delay.
-        with patch("time.sleep", return_value=None) as mock_sleep:
-            with pytest.raises(Exception):
-                cluster_manager.connect_zmq_tunnel(
-                    "dummy_command", connect_http=False, verbose=True
-                )
-
-        # Assert that time.sleep was called 11 times.
-        assert mock_sleep.call_count == 11
-
-        # Optionally, capture printed output and assert that the retry message was printed 10 times.
-        output = capsys.readouterr().out
-        retry_message = "Port was not setup in time. Trying to connect again. Trial"
-        # Check that the retry message appears 10 times.
-        assert output.count(retry_message) == 10
-
-
-def test_connect_zmq_tunnel_stderr(cluster_manager, mock_zmq_context):
-    with patch(
-        "SimStackServer.MessageTypes.Message.unpack",
-        return_value=(MTS.CONNECT, {"dummy": "data"}),
-    ):
-        # Ensure that _context is our mocked zmq context.
-        cluster_manager._context = mock_zmq_context
-        # Get the mock socket from the context.
-        mock_socket = mock_zmq_context.socket.return_value
-        # When socket.recv() is called, return some dummy bytes.
-        mock_socket.recv.return_value = b"dummy_recv_data"
-
-        cluster_manager._queueing_system = "Internal"
-
-        dummy_stdout = ["qsub 0 555 secretkey SERVER,6,ZMQ,4.3.4\n"]
-        dummy_stderr = ["FAIL"]
-        cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-
-        # Patch time.sleep so that it doesn't actually delay.
-        with patch("time.sleep", return_value=None):
-            with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel(
-                    "dummy_command", connect_http=False, verbose=True
-                )
-
-        dummy_stdout = []
-        dummy_stderr = []
-        cluster_manager.exec_command = lambda cmd: (dummy_stdout, dummy_stderr)
-
-        # Patch time.sleep so that it doesn't actually delay.
-        with patch("time.sleep", return_value=None):
-            with pytest.raises(ConnectionError):
-                cluster_manager.connect_zmq_tunnel(
-                    "dummy_command", connect_http=False, verbose=True
-                )
 
 
 def test_put_file_success(cluster_manager, tmpdir, tmpfile):
