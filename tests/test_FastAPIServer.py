@@ -3,11 +3,14 @@ import time
 import tempfile
 import os
 import shutil
+import yaml
 from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 from io import BytesIO
 
 from SimStackServer.FastAPIServer import FastAPIThread
+from SimStackServer.Config import Config
+from SimStackServer.WorkflowModel import Resources
 
 
 @pytest.fixture
@@ -609,7 +612,14 @@ def test_configure_endpoint(test_client, mock_simstack_server):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "configured"
-    assert "configuration received" in data["message"]
+    assert "configuration saved" in data["message"]
+
+    # Verify the configuration was saved
+    loaded_resources = Config.load_config()
+    assert loaded_resources is not None
+    assert loaded_resources.resource_name == "test_cluster"
+    assert loaded_resources.walltime == 3600
+    assert loaded_resources.cpus_per_node == 8
 
 
 # ==================== Error Handling Tests for New Endpoints ====================
@@ -1401,3 +1411,69 @@ def test_http_server_endpoint_sets_base_directory(test_client, mock_simstack_ser
 
     # Should return FastAPI port, not old HTTP server port
     assert data["url"].endswith("/http/browse/")
+
+
+# ==================== Config Tests ====================
+
+
+def test_config_save_and_load():
+    """Test saving and loading Resources configuration"""
+    # Create a Resources object using from_dict
+    resources = Resources()
+    resources_dict = {
+        "resource_name": "test_resource",
+        "walltime": 7200,
+        "cpus_per_node": 16,
+        "nodes": 4,
+        "memory": 16384,
+        "queue": "gpu",
+        "queueing_system": "slurm",
+    }
+    resources.from_dict(resources_dict)
+
+    # Save configuration
+    config_path = Config.save_config(resources)
+    assert os.path.exists(config_path)
+    assert config_path.endswith("resources.yml")
+
+    # Load configuration
+    loaded_resources = Config.load_config()
+    assert loaded_resources is not None
+    assert loaded_resources.resource_name == "test_resource"
+    assert loaded_resources.walltime == 7200
+    assert loaded_resources.cpus_per_node == 16
+    assert loaded_resources.nodes == 4
+    assert loaded_resources.memory == 16384
+    assert loaded_resources.queue == "gpu"
+    assert loaded_resources.queueing_system == "slurm"
+
+
+def test_config_load_nonexistent():
+    """Test loading configuration when file doesn't exist"""
+    # Remove the config file if it exists
+    config_path = Config._get_config_file("resources.yml")
+    if os.path.exists(config_path):
+        os.remove(config_path)
+
+    # Should return None
+    loaded_resources = Config.load_config()
+    assert loaded_resources is None
+
+
+def test_config_overwrite():
+    """Test that save_config overwrites existing configuration"""
+    # Create first configuration
+    resources1 = Resources()
+    resources1.from_dict({"resource_name": "first_config", "walltime": 1000})
+    Config.save_config(resources1)
+
+    # Create second configuration
+    resources2 = Resources()
+    resources2.from_dict({"resource_name": "second_config", "walltime": 2000})
+    Config.save_config(resources2)
+
+    # Load and verify it's the second one
+    loaded_resources = Config.load_config()
+    assert loaded_resources is not None
+    assert loaded_resources.resource_name == "second_config"
+    assert loaded_resources.walltime == 2000

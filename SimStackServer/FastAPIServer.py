@@ -26,6 +26,7 @@ from SimStackServer.REST.files_api import (
     FileInfo,
 )
 from SimStackServer.WorkflowModel import WorkflowExecModule, Resources
+from SimStackServer.Config import Config
 import SimStackServer.Data as DataDir
 
 if TYPE_CHECKING:
@@ -624,9 +625,12 @@ class FastAPIThread(threading.Thread):
                 # Print resources to stdout
                 print(resources)
 
+                # Save configuration
+                config_path = Config.save_config(resources)
+
                 return ConfigureResponse(
                     status="configured",
-                    message="Resources configuration received",
+                    message=f"Resources configuration saved to {config_path}",
                 )
             except Exception as e:
                 self._logger.exception("Error configuring resources")

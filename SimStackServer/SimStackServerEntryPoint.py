@@ -36,26 +36,31 @@ def setup_pid():
     )
 
 
+def _read_portconfig(appdirs):
+    myfile = join(appdirs.user_config_dir, "portconfig.txt")
+    with open(myfile, "rt") as infile:
+        line = infile.read()
+    splitline = line.split()
+    if not len(splitline) >= 4:
+        raise InputFileError(
+            "Input of portconfig was expected to be at least four fields, got <%s>"
+            % line
+        )
+    port = int(splitline[2])
+    secret = splitline[3].strip()
+    # Print without ZMQ version (removed dependency)
+    version_info = splitline[4] if len(splitline) > 4 else "N/A"
+    return port, secret, version_info
+
+
 def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
     myfile = join(appdirs.user_config_dir, "portconfig.txt")
     if other_process_setup and not os.path.exists(myfile):
         # In this case another process might just be in the process of writing this file.
         # We have to wait 5 seconds for it to appear
         time.sleep(5.0)
-    with open(myfile, "rt") as infile:
-        line = infile.read()
-        splitline = line.split()
-        if not len(splitline) >= 4:
-            raise InputFileError(
-                "Input of portconfig was expected to be at least four fields, got <%s>"
-                % line
-            )
-        port = int(splitline[2])
-        mypass = splitline[3].strip()
-        # Print without ZMQ version (removed dependency)
-        version_info = splitline[4] if len(splitline) > 4 else "N/A"
-        print("Port Pass %d %s %s" % (port, mypass, version_info))
-
+    port, mypass, version_info = _read_portconfig(appdirs)
+    print("Port Pass %d %s %s" % (port, mypass, version_info))
 
 def main():
     ### Startup works like this:
@@ -103,30 +108,18 @@ def main():
         sys.exit(0)
     try:
         # We should be locked and running here:
-        # Start a zero mq context
-        mysecret = random_pass()
-        if "-p" in sys.argv:
-            pindex = sys.argv.index("-p")
-            if len(sys.argv) > pindex + 1:
-                portstr = sys.argv[pindex + 1]
-                try:
-                    myport = int(portstr)
-                except ValueError:
-                    raise InputFileError(
-                        "Port passed with -p is not an integer: %s" % portstr
-                    )
-            else:
-                raise InputFileError("No port passed with -p")
-        else:
+        try:
+            myport, mysecret, version_info = _read_portconfig(appdirs)
+        except FileNotFoundError:
+            mysecret = random_pass()
             myport = get_open_port()
+            with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
+                from SimStackServer import __version__ as server_version
 
-        with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
-            from SimStackServer import __version__ as server_version
-
-            allversions = f"SERVER,{server_version},REST,1.0"
-            towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
-            outfile.write(towrite)
-            print(towrite[:-1])
+                allversions = f"SERVER,{server_version},REST,1.0"
+                towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
+                outfile.write(towrite)
+                print(towrite[:-1])
         sys.stdout.flush()
 
         mystd = join(appdirs.user_log_dir, "sss.stdout")

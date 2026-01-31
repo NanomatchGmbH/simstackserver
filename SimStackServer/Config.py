@@ -1,6 +1,7 @@
 from appdirs import AppDirs
 from os import path
 import psutil
+import yaml
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -14,10 +15,12 @@ from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
 class Config:
     _dirs = AppDirs(appname="SimStackServer", appauthor="Nanomatch", roaming=False)
     _logger_setup = False
-
+    _is_configured = False
+    _resources = None
     def __init__(self):
         self._setup_root_logger()
         self._logger = self._get_cls_logger()
+
         mkdir_p(self._dirs.user_config_dir)
 
     @staticmethod
@@ -105,3 +108,63 @@ class Config:
         """
         mkdir_p(cls._dirs.user_config_dir)
         return path.join(cls._dirs.user_config_dir, filename)
+
+    @classmethod
+    def save_config(cls, resources):
+        """
+        Save the main server Resources configuration to the config directory.
+        Overwrites any existing configuration.
+
+        :param resources: Resources object to save
+        :return (str): Path to the saved file
+        """
+        filepath = cls._get_config_file("resources.yml")
+
+        # Convert Resources to dict
+        resources_dict = {}
+        resources.to_dict(resources_dict)
+
+        # Save to YAML file
+        with open(filepath, 'w') as f:
+            yaml.safe_dump(resources_dict, f, default_flow_style=False)
+
+        cls._get_cls_logger().info(f"Saved server configuration to {filepath}")
+        return filepath
+
+    @classmethod
+    def load_config(cls):
+        """
+        Load the main server Resources configuration from the config directory.
+
+        :return: Resources object, or None if no config exists
+        """
+        from SimStackServer.WorkflowModel import Resources
+
+        filepath = cls._get_config_file("resources.yml")
+
+        if not path.exists(filepath):
+            cls._get_cls_logger().warning(f"No configuration file found at {filepath}")
+            return None
+
+        # Load from YAML file
+        with open(filepath, 'r') as f:
+            resources_dict = yaml.safe_load(f)
+
+        # Create Resources object and populate from dict
+        resources = Resources()
+        resources.from_dict(resources_dict)
+
+        cls._get_cls_logger().info(f"Loaded server configuration from {filepath}")
+        cls._resources = resources
+        return resources
+
+    @classmethod
+    def get_resources(cls):
+        """
+        Get the cached Resources object, loading from config if necessary.
+
+        :return: Resources object, or None if no config exists
+        """
+        if cls._resources is None:
+            cls.load_config()
+        return cls._resources
