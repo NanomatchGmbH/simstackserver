@@ -15,10 +15,9 @@ import paramiko
 from paramiko.hostkeys import HostKeys
 from paramiko.rsakey import RSAKey
 
-import sshtunnel
-
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
 from SimStackServer.LocalClusterManager import LocalClusterManager
+from SimStackServer.SSHTunnelForwarder import SSHTunnelForwarder
 
 
 #############################
@@ -71,15 +70,15 @@ def mock_sftpclient(mock_sshclient):
 
 @pytest.fixture
 def mock_sshtunnel_forwarder():
-    """Return a MagicMock for sshtunnel.SSHTunnelForwarder."""
-    forwarder = MagicMock(spec=sshtunnel.SSHTunnelForwarder)
+    """Return a MagicMock for SSHTunnelForwarder."""
+    forwarder = MagicMock(spec=SSHTunnelForwarder)
     forwarder.is_alive = False
     return forwarder
 
 
 @pytest.fixture
 @patch("paramiko.SSHClient", autospec=True)
-@patch("sshtunnel.SSHTunnelForwarder", autospec=True)
+@patch("SimStackServer.SSHTunnelForwarder.SSHTunnelForwarder", autospec=True)
 def cluster_manager(
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,
@@ -708,8 +707,3 @@ def test_set_connect_to_unknown_hosts(cluster_manager):
     prev = copy.deepcopy(cluster_manager._unknown_host_connect_workaround)
     cluster_manager.set_connect_to_unknown_hosts(not prev)
     assert cluster_manager._unknown_host_connect_workaround is not prev
-
-
-def test_sshtunnel_lib():
-    # Tests if get_keys works (breaks with paramiko > 3.5.1)
-    sshtunnel.SSHTunnelForwarder.get_keys()

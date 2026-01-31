@@ -105,7 +105,20 @@ def main():
         # We should be locked and running here:
         # Start a zero mq context
         mysecret = random_pass()
-        myport = get_open_port()
+        if "-p" in sys.argv:
+            pindex = sys.argv.index("-p")
+            if len(sys.argv) > pindex + 1:
+                portstr = sys.argv[pindex + 1]
+                try:
+                    myport = int(portstr)
+                except ValueError:
+                    raise InputFileError(
+                        "Port passed with -p is not an integer: %s" % portstr
+                    )
+            else:
+                raise InputFileError("No port passed with -p")
+        else:
+            myport = get_open_port()
 
         with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
             from SimStackServer import __version__ as server_version

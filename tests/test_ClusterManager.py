@@ -8,10 +8,10 @@ import httpx
 import paramiko
 from paramiko.hostkeys import HostKeys
 from paramiko.rsakey import RSAKey
-import sshtunnel
 
 from SimStackServer import ClusterManager
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
+from SimStackServer.SSHTunnelForwarder import SSHTunnelForwarder
 
 
 ###########################
@@ -66,14 +66,14 @@ def mock_sftpclient(mock_sshclient):
 @pytest.fixture
 def mock_sshtunnel_forwarder():
     """Return a MagicMock for SSHTunnelForwarder."""
-    mock_forwarder = MagicMock(spec=sshtunnel.SSHTunnelForwarder)
+    mock_forwarder = MagicMock(spec=SSHTunnelForwarder)
     mock_forwarder.is_alive = False
     return mock_forwarder
 
 
 @pytest.fixture
 @patch("paramiko.SSHClient", autospec=True)
-@patch("sshtunnel.SSHTunnelForwarder", autospec=True)
+@patch("SimStackServer.SSHTunnelForwarder.SSHTunnelForwarder", autospec=True)
 def cluster_manager(
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,

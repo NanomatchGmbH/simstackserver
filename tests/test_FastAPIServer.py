@@ -587,6 +587,31 @@ def test_clear_server_state(test_client, mock_simstack_server):
     mock_simstack_server._clear_server_state.assert_called_once()
 
 
+def test_configure_endpoint(test_client, mock_simstack_server):
+    """Test configure endpoint with Resources object"""
+    # Create a Resources dict (JSON representation)
+    resources_dict = {
+        "resource_name": "test_cluster",
+        "walltime": 3600,
+        "cpus_per_node": 8,
+        "nodes": 2,
+        "queue": "default",
+        "memory": 8192,
+        "custom_requests": "gpu=1",
+        "base_URI": "cluster.example.com",
+        "port": 22,
+        "username": "testuser",
+        "basepath": "simstack_workspace",
+        "queueing_system": "slurm",
+    }
+
+    response = test_client.post("/api/configure", json={"resources": resources_dict})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "configured"
+    assert "configuration received" in data["message"]
+
+
 # ==================== Error Handling Tests for New Endpoints ====================
 
 
@@ -663,6 +688,22 @@ def test_clear_server_state_error(test_client, mock_simstack_server):
     response = test_client.post("/api/server/clear-state")
     assert response.status_code == 500
     assert "Clear failed" in response.json()["detail"]
+
+
+def test_configure_endpoint_with_extra_fields(test_client, mock_simstack_server):
+    """Test configure endpoint handles extra fields gracefully"""
+    # Resources.from_dict is lenient and ignores unknown fields
+    resources_with_extra = {
+        "resource_name": "test_cluster",
+        "walltime": 3600,
+        "invalid_field": "invalid_value",  # This will be ignored
+    }
+
+    response = test_client.post("/api/configure", json={"resources": resources_with_extra})
+    # Should succeed and ignore unknown fields
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "configured"
 
 
 # ==================== Integration Tests for New Endpoints ====================

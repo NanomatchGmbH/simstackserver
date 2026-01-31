@@ -21,8 +21,7 @@ from os import path
 import posixpath
 from pathlib import Path
 
-import sshtunnel
-
+from SimStackServer.SSHTunnelForwarder import SSHTunnelForwarder
 from SimStackServer.Util.FileUtilities import (
     split_directory_in_subdirectories,
     filewalker,
@@ -74,7 +73,7 @@ class ClusterManager:
         self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
-        self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
+        self._http_server_tunnel: SSHTunnelForwarder
         self._http_server_tunnel = None
         self._http_user = None
         self._http_pass = None

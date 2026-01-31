@@ -25,7 +25,7 @@ from SimStackServer.REST.files_api import (
     FileOperationResponse,
     FileInfo,
 )
-from SimStackServer.WorkflowModel import WorkflowExecModule
+from SimStackServer.WorkflowModel import WorkflowExecModule, Resources
 import SimStackServer.Data as DataDir
 
 if TYPE_CHECKING:
@@ -78,6 +78,19 @@ class HTTPServerRequest(BaseModel):
 
 class ShutdownResponse(BaseModel):
     """Response for shutdown request"""
+
+    status: str
+    message: str
+
+
+class ConfigureRequest(BaseModel):
+    """Request model for configuration"""
+
+    resources: dict
+
+
+class ConfigureResponse(BaseModel):
+    """Response model for configuration"""
 
     status: str
     message: str
@@ -598,6 +611,25 @@ class FastAPIThread(threading.Thread):
                 return {"status": "cleared", "message": "Server state has been cleared"}
             except Exception as e:
                 self._logger.exception("Error clearing server state")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.post("/api/configure", response_model=ConfigureResponse)
+        async def configure(request: ConfigureRequest):
+            """Configure server resources"""
+            try:
+                # Create Resources object from dict
+                resources = Resources()
+                resources.from_dict(request.resources)
+
+                # Print resources to stdout
+                print(resources)
+
+                return ConfigureResponse(
+                    status="configured",
+                    message="Resources configuration received",
+                )
+            except Exception as e:
+                self._logger.exception("Error configuring resources")
                 raise HTTPException(status_code=500, detail=str(e))
 
         # File Operations API
