@@ -7,6 +7,7 @@ import datetime
 import html
 import urllib.parse
 import sys
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -120,7 +121,14 @@ class FastAPIThread(threading.Thread):
         "": "text/plain",
     }
 
-    def __init__(self, simstack_server: "SimStackServer", host="127.0.0.1", port=8000):
+    def __init__(
+        self,
+        simstack_server: "SimStackServer",
+        host="127.0.0.1",
+        port=8000,
+        use_https=True,
+        cert_dir: Optional[Path] = None,
+    ):
         super().__init__(name="FastAPI-Thread", daemon=True)
         self.simstack_server = simstack_server
         self.host = host
@@ -128,6 +136,13 @@ class FastAPIThread(threading.Thread):
         self.server = None
         self._logger = logging.getLogger("FastAPIThread")
         self._http_base_directory = None  # Will be set when starting HTTP server
+        self.use_https = use_https
+        self.ssl_keyfile: Optional[str] = None
+        self.ssl_certfile: Optional[str] = None
+
+        # Setup SSL certificates if HTTPS is enabled
+        if self.use_https:
+            self._setup_ssl_certificates(cert_dir)
 
         # Create FastAPI app
         @asynccontextmanager
@@ -145,6 +160,57 @@ class FastAPIThread(threading.Thread):
             lifespan=lifespan,
         )
         self._setup_routes()
+
+    def _setup_ssl_certificates(self, cert_dir: Optional[Path] = None) -> None:
+        """
+        Setup SSL certificates for HTTPS support using fastapilocalhttps.
+
+        Args:
+            cert_dir: Optional directory to store certificates. If None, uses ~/.simstack/certs
+        """
+        try:
+            from fastapilocalhttps import CertificateManager
+        except ImportError as e:
+            self._logger.error(
+                "Failed to import fastapilocalhttps. "
+                "Please ensure fastapilocalhttps and its dependencies (structlog, cryptography) are installed."
+            )
+            raise ImportError(
+                "fastapilocalhttps is required for HTTPS support. "
+                "Install it with: pixi add fastapilocalhttps structlog"
+            ) from e
+
+        # Determine certificate directory
+        if cert_dir is None:
+            home_dir = Path.home()
+            cert_dir = home_dir / ".simstack" / "certs"
+            cert_dir.mkdir(parents=True, exist_ok=True)
+
+        # Setup certificate manager
+        cert_manager = CertificateManager(
+            cert_dir=cert_dir,
+            hostname=self.host if self.host not in ["0.0.0.0", ""] else "localhost",
+            san_dns_names=["localhost"],
+            san_ip_addresses=["127.0.0.1", self.host] if self.host not in ["0.0.0.0", ""] else ["127.0.0.1"],
+            key_size=2048,
+            validity_days=365,
+        )
+
+        # Generate or get existing certificates
+        if not cert_manager.certificate_exists():
+            key_path, cert_path = cert_manager.generate_certificate()
+            self._logger.info(
+                f"Generated self-signed SSL certificates at {cert_dir}"
+            )
+        else:
+            key_path, cert_path = cert_manager.get_certificate_paths()
+            self._logger.info(
+                f"Using existing SSL certificates from {cert_dir}"
+            )
+
+        # Store certificate paths
+        self.ssl_keyfile = str(key_path)
+        self.ssl_certfile = str(cert_path)
 
     @staticmethod
     def _get_static_http_path():
@@ -577,11 +643,12 @@ class FastAPIThread(threading.Thread):
                     port = self.simstack_server._http_port
 
                 # Return info pointing to the new FastAPI endpoints
+                protocol = "https" if self.use_https else "http"
                 return HTTPServerInfo(
                     port=self.port,  # Use FastAPI port instead
                     user=user,  # Keep for backwards compatibility
                     password=mypass,  # Keep for backwards compatibility
-                    url=f"http://localhost:{self.port}/http/browse/",
+                    url=f"{protocol}://localhost:{self.port}/http/browse/",
                 )
             except Exception as e:
                 self._logger.exception("Error getting HTTP server info")
@@ -874,15 +941,31 @@ class FastAPIThread(threading.Thread):
 
     def run(self):
         """Run the uvicorn server"""
-        config = uvicorn.Config(
-            self.app,
-            host=self.host,
-            port=self.port,
-            log_level="info",
-            access_log=False,  # Use existing logging system
-        )
+        config_args = {
+            "app": self.app,
+            "host": self.host,
+            "port": self.port,
+            "log_level": "info",
+            "access_log": False,  # Use existing logging system
+        }
+
+        # Add SSL configuration if HTTPS is enabled
+        if self.use_https and self.ssl_keyfile and self.ssl_certfile:
+            config_args["ssl_keyfile"] = self.ssl_keyfile
+            config_args["ssl_certfile"] = self.ssl_certfile
+
+        config = uvicorn.Config(**config_args)
         self.server = uvicorn.Server(config)
-        self._logger.info(f"Starting FastAPI server on {self.host}:{self.port}")
+
+        protocol = "https" if self.use_https else "http"
+        self._logger.info(
+            f"Starting FastAPI server on {protocol}://{self.host}:{self.port}"
+        )
+        if self.use_https:
+            self._logger.info(
+                f"Using self-signed certificates - SSL cert: {self.ssl_certfile}"
+            )
+
         self.server.run()
 
     def shutdown(self):

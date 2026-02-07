@@ -62,7 +62,7 @@ def mock_simstack_server(mock_workflow_manager):
 @pytest.fixture
 def fastapi_thread(mock_simstack_server):
     """Create a FastAPIThread instance with mock server"""
-    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8001)
+    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8001, use_https=False)
     return thread
 
 
@@ -286,7 +286,7 @@ def test_fastapi_thread_run_method_starts_server(mock_simstack_server):
         mock_server_instance = Mock()
         mock_uvicorn_server.return_value = mock_server_instance
 
-        thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8002)
+        thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8002, use_https=False)
 
         # Start the thread in the background
         thread.start()
@@ -301,7 +301,7 @@ def test_fastapi_thread_run_method_starts_server(mock_simstack_server):
 
 def test_fastapi_thread_shutdown(mock_simstack_server):
     """Test FastAPIThread shutdown method"""
-    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8003)
+    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8003, use_https=False)
 
     # Create a mock server
     mock_server = Mock()
@@ -316,7 +316,7 @@ def test_fastapi_thread_shutdown(mock_simstack_server):
 
 def test_fastapi_thread_shutdown_without_server(mock_simstack_server):
     """Test FastAPIThread shutdown when server is None"""
-    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8004)
+    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8004, use_https=False)
 
     # Server is None by default
     assert thread.server is None
@@ -378,7 +378,7 @@ def test_logger_usage(mock_simstack_server):
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
-        thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8005)
+        thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8005, use_https=False)
 
         # Verify logger was obtained
         mock_get_logger.assert_called_once_with("FastAPIThread")
@@ -820,7 +820,7 @@ def mock_simstack_server_with_basepath(mock_workflow_manager, temp_basepath):
 def file_ops_test_client(mock_simstack_server_with_basepath):
     """Create a TestClient for file operations testing"""
     thread = FastAPIThread(
-        mock_simstack_server_with_basepath, host="127.0.0.1", port=8010
+        mock_simstack_server_with_basepath, host="127.0.0.1", port=8010, use_https=False
     )
     return TestClient(thread.app)
 
@@ -1170,7 +1170,7 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
 def http_browse_test_client(mock_simstack_server_with_basepath, temp_basepath):
     """Create a TestClient for HTTP browsing with base directory set"""
     thread = FastAPIThread(
-        mock_simstack_server_with_basepath, host="127.0.0.1", port=8011
+        mock_simstack_server_with_basepath, host="127.0.0.1", port=8011, use_https=False
     )
     # Set base directory for browsing
     thread._http_base_directory = temp_basepath
@@ -1302,7 +1302,7 @@ def test_browse_without_base_directory():
     """Test browsing when base directory is not set"""
     mock_server = Mock()
     mock_server._workflow_manager = Mock()
-    thread = FastAPIThread(mock_server, host="127.0.0.1", port=8012)
+    thread = FastAPIThread(mock_server, host="127.0.0.1", port=8012, use_https=False)
     # Don't set _http_base_directory
     client = TestClient(thread.app)
 
