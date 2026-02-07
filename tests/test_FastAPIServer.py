@@ -3,7 +3,6 @@ import time
 import tempfile
 import os
 import shutil
-import yaml
 from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 from io import BytesIO
@@ -62,7 +61,9 @@ def mock_simstack_server(mock_workflow_manager):
 @pytest.fixture
 def fastapi_thread(mock_simstack_server):
     """Create a FastAPIThread instance with mock server"""
-    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8001, use_https=False)
+    thread = FastAPIThread(
+        mock_simstack_server, host="127.0.0.1", port=8001, use_https=False
+    )
     return thread
 
 
@@ -286,7 +287,9 @@ def test_fastapi_thread_run_method_starts_server(mock_simstack_server):
         mock_server_instance = Mock()
         mock_uvicorn_server.return_value = mock_server_instance
 
-        thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8002, use_https=False)
+        thread = FastAPIThread(
+            mock_simstack_server, host="127.0.0.1", port=8002, use_https=False
+        )
 
         # Start the thread in the background
         thread.start()
@@ -301,7 +304,9 @@ def test_fastapi_thread_run_method_starts_server(mock_simstack_server):
 
 def test_fastapi_thread_shutdown(mock_simstack_server):
     """Test FastAPIThread shutdown method"""
-    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8003, use_https=False)
+    thread = FastAPIThread(
+        mock_simstack_server, host="127.0.0.1", port=8003, use_https=False
+    )
 
     # Create a mock server
     mock_server = Mock()
@@ -316,7 +321,9 @@ def test_fastapi_thread_shutdown(mock_simstack_server):
 
 def test_fastapi_thread_shutdown_without_server(mock_simstack_server):
     """Test FastAPIThread shutdown when server is None"""
-    thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8004, use_https=False)
+    thread = FastAPIThread(
+        mock_simstack_server, host="127.0.0.1", port=8004, use_https=False
+    )
 
     # Server is None by default
     assert thread.server is None
@@ -378,7 +385,9 @@ def test_logger_usage(mock_simstack_server):
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
-        thread = FastAPIThread(mock_simstack_server, host="127.0.0.1", port=8005, use_https=False)
+        thread = FastAPIThread(
+            mock_simstack_server, host="127.0.0.1", port=8005, use_https=False
+        )
 
         # Verify logger was obtained
         mock_get_logger.assert_called_once_with("FastAPIThread")
@@ -709,7 +718,9 @@ def test_configure_endpoint_with_extra_fields(test_client, mock_simstack_server)
         "invalid_field": "invalid_value",  # This will be ignored
     }
 
-    response = test_client.post("/api/configure", json={"resources": resources_with_extra})
+    response = test_client.post(
+        "/api/configure", json={"resources": resources_with_extra}
+    )
     # Should succeed and ignore unknown fields
     assert response.status_code == 200
     data = response.json()

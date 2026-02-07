@@ -62,6 +62,7 @@ def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
     port, mypass, version_info = _read_portconfig(appdirs)
     print("Port Pass %d %s %s" % (port, mypass, version_info))
 
+
 def main():
     ### Startup works like this:
     # We check if another server is doing setup at the moment.

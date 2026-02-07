@@ -111,7 +111,7 @@ def test_save_config(config):
     assert filepath.endswith("resources.yml")
 
     # Verify content - note that to_dict saves as strings
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         saved_data = yaml.safe_load(f)
 
     assert saved_data["resource_name"] == "test_cluster"
@@ -173,20 +173,24 @@ def test_save_config_overwrites_existing(config):
     """Test that save_config overwrites existing configuration"""
     # Create and save first configuration
     resources1 = Resources()
-    resources1.from_dict({
-        "resource_name": "first_config",
-        "walltime": 1000,
-        "cpus_per_node": 4,
-    })
+    resources1.from_dict(
+        {
+            "resource_name": "first_config",
+            "walltime": 1000,
+            "cpus_per_node": 4,
+        }
+    )
     Config.save_config(resources1)
 
     # Create and save second configuration
     resources2 = Resources()
-    resources2.from_dict({
-        "resource_name": "second_config",
-        "walltime": 2000,
-        "cpus_per_node": 8,
-    })
+    resources2.from_dict(
+        {
+            "resource_name": "second_config",
+            "walltime": 2000,
+            "cpus_per_node": 8,
+        }
+    )
     Config.save_config(resources2)
 
     # Load and verify it's the second configuration
@@ -254,6 +258,7 @@ def test_save_config_creates_directory_if_not_exists(config):
     """Test that save_config creates the config directory if it doesn't exist"""
     # Remove the config directory
     import shutil
+
     config_dir = Config._dirs.user_config_dir
     if os.path.exists(config_dir):
         shutil.rmtree(config_dir)
@@ -272,10 +277,12 @@ def test_load_config_with_minimal_fields(config):
     """Test loading configuration with only minimal fields"""
     # Create a minimal Resources configuration
     resources = Resources()
-    resources.from_dict({
-        "resource_name": "minimal_config",
-        "walltime": 100,
-    })
+    resources.from_dict(
+        {
+            "resource_name": "minimal_config",
+            "walltime": 100,
+        }
+    )
     Config.save_config(resources)
 
     # Load configuration
@@ -297,11 +304,13 @@ def test_get_resources_loads_config_on_first_call(config):
 
     # Create and save a configuration
     resources = Resources()
-    resources.from_dict({
-        "resource_name": "cached_config",
-        "walltime": 5000,
-        "cpus_per_node": 12,
-    })
+    resources.from_dict(
+        {
+            "resource_name": "cached_config",
+            "walltime": 5000,
+            "cpus_per_node": 12,
+        }
+    )
     Config.save_config(resources)
 
     # First call should load from file
@@ -319,10 +328,12 @@ def test_get_resources_returns_cached_value(config):
 
     # Create and save a configuration
     resources = Resources()
-    resources.from_dict({
-        "resource_name": "cache_test",
-        "walltime": 3000,
-    })
+    resources.from_dict(
+        {
+            "resource_name": "cache_test",
+            "walltime": 3000,
+        }
+    )
     Config.save_config(resources)
 
     # First call loads from file
@@ -331,10 +342,12 @@ def test_get_resources_returns_cached_value(config):
 
     # Modify the file to ensure second call doesn't reload
     different_resources = Resources()
-    different_resources.from_dict({
-        "resource_name": "different_config",
-        "walltime": 9999,
-    })
+    different_resources.from_dict(
+        {
+            "resource_name": "different_config",
+            "walltime": 9999,
+        }
+    )
     Config.save_config(different_resources)
 
     # Second call should return cached value (not reload from file)
@@ -366,11 +379,13 @@ def test_get_resources_after_save_config(config):
 
     # Create and save a configuration
     resources = Resources()
-    resources.from_dict({
-        "resource_name": "save_then_get",
-        "walltime": 7777,
-        "memory": 20480,
-    })
+    resources.from_dict(
+        {
+            "resource_name": "save_then_get",
+            "walltime": 7777,
+            "memory": 20480,
+        }
+    )
     Config.save_config(resources)
 
     # get_resources should load it

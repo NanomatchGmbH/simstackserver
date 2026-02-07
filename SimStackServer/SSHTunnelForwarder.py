@@ -7,7 +7,6 @@ implementing SSH port forwarding that works with httpx and other network clients
 
 import logging
 import select
-import socket
 import socketserver
 import threading
 from typing import Optional, Tuple, Union
@@ -322,7 +321,11 @@ class SSHTunnelForwarder:
         """
         Check if the tunnel is currently active.
         """
-        return self._is_started and self._transport is not None and self._transport.is_active()
+        return (
+            self._is_started
+            and self._transport is not None
+            and self._transport.is_active()
+        )
 
     def __enter__(self):
         """
@@ -345,7 +348,7 @@ class SSHTunnelForwarder:
         if self._is_started:
             try:
                 self.stop()
-            except:
+            except Exception:
                 pass
 
     def __repr__(self):

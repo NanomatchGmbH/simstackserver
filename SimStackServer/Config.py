@@ -17,6 +17,7 @@ class Config:
     _logger_setup = False
     _is_configured = False
     _resources = None
+
     def __init__(self):
         self._setup_root_logger()
         self._logger = self._get_cls_logger()
@@ -125,7 +126,7 @@ class Config:
         resources.to_dict(resources_dict)
 
         # Save to YAML file
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             yaml.safe_dump(resources_dict, f, default_flow_style=False)
 
         cls._get_cls_logger().info(f"Saved server configuration to {filepath}")
@@ -147,7 +148,7 @@ class Config:
             return None
 
         # Load from YAML file
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             resources_dict = yaml.safe_load(f)
 
         # Create Resources object and populate from dict

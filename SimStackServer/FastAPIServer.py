@@ -191,7 +191,9 @@ class FastAPIThread(threading.Thread):
             cert_dir=cert_dir,
             hostname=self.host if self.host not in ["0.0.0.0", ""] else "localhost",
             san_dns_names=["localhost"],
-            san_ip_addresses=["127.0.0.1", self.host] if self.host not in ["0.0.0.0", ""] else ["127.0.0.1"],
+            san_ip_addresses=["127.0.0.1", self.host]
+            if self.host not in ["0.0.0.0", ""]
+            else ["127.0.0.1"],
             key_size=2048,
             validity_days=365,
         )
@@ -199,14 +201,10 @@ class FastAPIThread(threading.Thread):
         # Generate or get existing certificates
         if not cert_manager.certificate_exists():
             key_path, cert_path = cert_manager.generate_certificate()
-            self._logger.info(
-                f"Generated self-signed SSL certificates at {cert_dir}"
-            )
+            self._logger.info(f"Generated self-signed SSL certificates at {cert_dir}")
         else:
             key_path, cert_path = cert_manager.get_certificate_paths()
-            self._logger.info(
-                f"Using existing SSL certificates from {cert_dir}"
-            )
+            self._logger.info(f"Using existing SSL certificates from {cert_dir}")
 
         # Store certificate paths
         self.ssl_keyfile = str(key_path)
