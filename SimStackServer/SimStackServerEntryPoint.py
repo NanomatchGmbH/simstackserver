@@ -120,7 +120,7 @@ def main():
                 allversions = f"SERVER,{server_version},REST,1.0"
                 towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
                 outfile.write(towrite)
-                print(towrite[:-1])
+        flush_port_and_password_to_stdout(appdirs)
         sys.stdout.flush()
 
         mystd = join(appdirs.user_log_dir, "sss.stdout")

@@ -84,8 +84,9 @@ class ClusterManager:
         self._extra_hostkey_file = None
         self._software_directory = software_directory
         self._rest_port = rest_port
+        self._client = None
 
-    def _init_client(self):
+    def init_client(self):
         base_url = self.get_client_url()
         https_client = HTTPSClient(base_url)
         verify = str(https_client.get_certificate_path())
@@ -614,7 +615,6 @@ class ClusterManager:
             password = myline[3]
             port = int(myline[2])
             self._rest_port = port
-            self._init_client()
             server_zmq_version_string = myline[4].strip()
             if server_zmq_version_string.startswith("SERVER"):
                 # Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION
