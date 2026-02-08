@@ -12,6 +12,8 @@ import random
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 import httpx
+from fastapilocalhttps import HTTPSClient
+from requests.utils import stream_decode_response_unicode
 
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
@@ -82,11 +84,12 @@ class ClusterManager:
         self._extra_hostkey_file = None
         self._software_directory = software_directory
         self._rest_port = rest_port
-        self._init_client()
 
     def _init_client(self):
         base_url = self.get_client_url()
-        self._client = httpx.Client(base_url=base_url)
+        https_client = HTTPSClient(base_url)
+        verify = str(https_client.get_certificate_path())
+        self._client = httpx.Client(base_url=base_url, verify=verify)
 
     def get_client_url(self):
         if self._rest_port:
@@ -599,11 +602,13 @@ class ClusterManager:
 
         password = None
         for line in stdout:
+            if "Port" not in line:
+                continue
             firstline = line[:-1]
             myline = firstline.split()
             if not len(myline) == 5:
                 raise ConnectionError(
-                    "Expected port and secret key and zmq version but myline was: <%s>"
+                    "Expected port and secret key and zmq version but server responded: <%s>"
                     % firstline
                 )
             password = myline[3]
