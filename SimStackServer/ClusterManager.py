@@ -85,11 +85,15 @@ class ClusterManager:
         self._init_client()
 
     def _init_client(self):
-        if self._rest_port:
-            base_url = f"http://{self._url}:{self._rest_port}"
-        else:
-            base_url = f"http://{self._url}"
+        base_url = self.get_client_url()
         self._client = httpx.Client(base_url=base_url)
+
+    def get_client_url(self):
+        if self._rest_port:
+            base_url = f"https://{self._url}:{self._rest_port}"
+        else:
+            base_url = f"https://{self._url}"
+        return base_url
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
