@@ -83,12 +83,3 @@ curl -X POST "http://localhost:8000/workflows/{workflow_id}/submit"
 curl -X DELETE "http://localhost:8000/workflows/{workflow_id}"
 ```
 
-## Integration with RESTClusterManager
-
-The REST API is designed to work with the `RESTClusterManager` class for REST-based cluster management without SSH dependencies.
-
-## Notes
-
-- All endpoint functions are currently empty stubs and need to be implemented with actual business logic
-- Authentication and authorization mechanisms need to be added for production use
-- Error handling should be enhanced with proper HTTP status codes and error messages

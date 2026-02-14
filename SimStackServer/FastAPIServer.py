@@ -370,6 +370,7 @@ class FastAPIThread(threading.Thread):
                     raise HTTPException(status_code=403, detail="Access denied")
 
                 if not os.path.exists(file_path):
+                    self._logger.warning(f"Static file not found: {file_path}")
                     raise HTTPException(status_code=404, detail="File not found")
 
                 if not os.path.isfile(file_path):
@@ -378,6 +379,7 @@ class FastAPIThread(threading.Thread):
                 # Determine MIME type
                 mime_type = self._guess_mime_type(filename)
 
+                self._logger.info(f"Serving static file: {file_path} ({os.path.getsize(file_path)} bytes)")
                 return FileResponse(file_path, media_type=mime_type)
             except HTTPException:
                 raise
@@ -425,6 +427,7 @@ class FastAPIThread(threading.Thread):
                     raise HTTPException(status_code=403, detail="Access denied")
 
                 if not os.path.exists(full_path):
+                    self._logger.warning(f"Browse path not found: {full_path}")
                     raise HTTPException(status_code=404, detail="Path not found")
 
                 # If it's a directory, show listing
@@ -437,6 +440,7 @@ class FastAPIThread(threading.Thread):
                 # If it's a file, serve it
                 elif os.path.isfile(full_path):
                     mime_type = self._guess_mime_type(full_path)
+                    self._logger.info(f"Serving browse file: {full_path} ({os.path.getsize(full_path)} bytes)")
                     return FileResponse(full_path, media_type=mime_type)
 
                 else:
@@ -728,6 +732,7 @@ class FastAPIThread(threading.Thread):
                 dirpath = self._resolve_path(request.path, request.basepath_override)
 
                 if not os.path.exists(dirpath):
+                    self._logger.warning(f"Directory not found: {dirpath}")
                     raise HTTPException(
                         status_code=404, detail=f"Directory not found: {request.path}"
                     )
@@ -790,6 +795,7 @@ class FastAPIThread(threading.Thread):
                 )
 
                 if not os.path.exists(filepath):
+                    self._logger.warning(f"File not found for deletion: {filepath}")
                     raise HTTPException(
                         status_code=404, detail=f"File not found: {request.filename}"
                     )
@@ -800,7 +806,8 @@ class FastAPIThread(threading.Thread):
                         detail=f"Path is a directory, use /api/files/rmtree instead: {request.filename}",
                     )
 
-                os.remove(filepath)
+                #TODO REMOVE THIS
+                #os.remove(filepath)
                 self._logger.info(f"Deleted file: {filepath}")
 
                 return DeleteResponse(
@@ -818,7 +825,58 @@ class FastAPIThread(threading.Thread):
         async def remove_directory_tree(request: DirectoryPathRequest):
             """Delete a directory and all its contents recursively"""
             try:
+                # --- Safety gate 1: basepath must be explicitly configured ---
+                if request.basepath_override in [None, ""]:
+                    resources = Config.get_resources()
+                    effective_basepath = resources.basepath if resources else None
+                else:
+                    effective_basepath = request.basepath_override
+
+                if not effective_basepath:
+                    self._logger.warning(
+                        f"rmtree refused for {request.dirname!r}: basepath is not configured"
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail="rmtree refused: basepath is not configured",
+                    )
+
                 dirpath = self._resolve_path(request.dirname, request.basepath_override)
+
+                # Resolve symlinks / '..' before any comparison
+                home_dir = Path.home().resolve()
+                dirpath_abs = Path(dirpath).resolve()
+
+                abs_basepath = Path(effective_basepath)
+                if not abs_basepath.is_absolute():
+                    abs_basepath = home_dir / abs_basepath
+                abs_basepath = abs_basepath.resolve()
+
+                # --- Safety gate 2: target must be inside basepath ---
+                try:
+                    dirpath_abs.relative_to(abs_basepath)
+                except ValueError:
+                    self._logger.warning(
+                        f"rmtree refused: {dirpath_abs} is not within basepath {abs_basepath}"
+                    )
+                    raise HTTPException(
+                        status_code=403,
+                        detail="rmtree refused: path is not within basepath",
+                    )
+
+                # --- Safety gate 3: must be >= 2 levels below home ---
+                try:
+                    rel_parts = dirpath_abs.relative_to(home_dir).parts
+                    if len(rel_parts) < 2:
+                        self._logger.warning(
+                            f"rmtree refused: {dirpath_abs} is too close to home directory"
+                        )
+                        raise HTTPException(
+                            status_code=403,
+                            detail="rmtree refused: path must be at least 2 levels below home directory",
+                        )
+                except ValueError:
+                    pass  # Not under home at all — no proximity concern
 
                 if not os.path.exists(dirpath):
                     # Silently succeed if directory doesn't exist (like ClusterManager.rmtree)
@@ -836,7 +894,8 @@ class FastAPIThread(threading.Thread):
 
                 import shutil
 
-                shutil.rmtree(dirpath)
+                #TODO remove this
+                #shutil.rmtree(dirpath)
                 self._logger.info(f"Deleted directory tree: {dirpath}")
 
                 return DeleteResponse(
@@ -863,6 +922,20 @@ class FastAPIThread(threading.Thread):
 
                 filepath = self._resolve_path(destination, basepath_override)
 
+                # If to_file resolves to an existing directory, or the path ends
+                # with '/', place the file inside that directory using the
+                # original upload filename.
+                if os.path.isdir(filepath) or (destination and destination.endswith("/")):
+                    original_name = os.path.basename(file.filename or "")
+                    if not original_name:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="to_file is a directory but the upload carries no filename",
+                        )
+                    filepath = os.path.join(filepath, original_name)
+                    destination = os.path.join(destination.rstrip("/"), original_name)
+                    self._logger.info(f"to_file is a directory; writing to {filepath}")
+
                 # Create directory if it doesn't exist
                 dir_path = os.path.dirname(filepath)
                 if dir_path:
@@ -873,11 +946,13 @@ class FastAPIThread(threading.Thread):
                     content = await file.read()
                     f.write(content)
 
-                self._logger.info(f"Uploaded file: {filepath}")
+                self._logger.info(f"Uploaded file: {filepath} ({len(content)} bytes)")
 
                 return FileOperationResponse(
                     success=True, message="File uploaded successfully", path=destination
                 )
+            except HTTPException:
+                raise
             except Exception as e:
                 self._logger.exception(f"Error uploading file to: {to_file}")
                 raise HTTPException(status_code=500, detail=str(e))
@@ -891,6 +966,7 @@ class FastAPIThread(threading.Thread):
                 filepath = self._resolve_path(from_file, basepath_override)
 
                 if not os.path.exists(filepath):
+                    self._logger.warning(f"File not found for download: {filepath}")
                     raise HTTPException(
                         status_code=404, detail=f"File not found: {from_file}"
                     )
@@ -900,6 +976,7 @@ class FastAPIThread(threading.Thread):
                         status_code=400, detail=f"Path is a directory: {from_file}"
                     )
 
+                self._logger.info(f"Serving file download: {filepath} ({os.path.getsize(filepath)} bytes)")
                 return FileResponse(
                     filepath,
                     filename=os.path.basename(filepath),
@@ -911,7 +988,7 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error downloading file: {from_file}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-    def _resolve_path(self, path: str, basepath_override: Optional[str] = None) -> str:
+    def  _resolve_path(self, path: str, basepath_override: Optional[str] = None) -> str:
         """
         Resolve a path relative to the calculation basepath
 
@@ -922,18 +999,18 @@ class FastAPIThread(threading.Thread):
         Returns:
             Absolute path
         """
-        if basepath_override is None:
-            # Get basepath from config if available
-            if self.simstack_server._config:
-                basepath = self.simstack_server._config.get_calculation_basepath()
-            else:
-                basepath = os.getcwd()
+        if basepath_override in [None, ""]:
+            basepath = Config.get_resources().basepath
         else:
             basepath = basepath_override
 
         # Remove leading slash if present
         if path.startswith("/"):
             path = path[1:]
+        # If basepath is relative, resolve in HOME:
+        if not os.path.isabs(basepath):
+            home_dir = str(Path.home())
+            basepath = os.path.join(home_dir, basepath)
 
         return os.path.join(basepath, path)
 

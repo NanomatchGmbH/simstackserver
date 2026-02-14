@@ -75,11 +75,6 @@ class ClusterManager:
         self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
-        self._http_server_tunnel: SSHTunnelForwarder
-        self._http_server_tunnel = None
-        self._http_user = None
-        self._http_pass = None
-        self._http_base_address = None
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
         self._software_directory = software_directory
@@ -205,14 +200,6 @@ class ClusterManager:
             self._sftp_client.close()
 
         self._ssh_client.close()
-
-        if self._http_server_tunnel is not None:
-            # This handling here is purely for windows. Somehow, the transport is not closed, if not set.
-            for _srv in self._http_server_tunnel._server_list:
-                _srv.timeout = 0.01
-
-            self._http_server_tunnel._transport.close()
-            self._http_server_tunnel.stop()
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
