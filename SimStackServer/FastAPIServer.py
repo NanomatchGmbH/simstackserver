@@ -616,46 +616,6 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error submitting single job")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/http-server", response_model=HTTPServerInfo)
-        async def get_http_server(request: HTTPServerRequest):
-            """Get or start HTTP server for serving files"""
-            try:
-                # Set the base directory for HTTP browsing
-                base_dir = self.simstack_server._remote_relative_to_absolute_filename(
-                    request.basefolder
-                )
-                self._http_base_directory = base_dir
-
-                self._logger.info(f"HTTP server base directory set to: {base_dir}")
-
-                # Check if old HTTP server is already running (for backwards compatibility)
-                if (
-                    not self.simstack_server._http_server
-                    or not self.simstack_server._http_server.is_alive()
-                ):
-                    user, mypass, port = self.simstack_server._start_http_server(
-                        directory=request.basefolder
-                    )
-                    self.simstack_server._http_user = user
-                    self.simstack_server._http_pass = mypass
-                    self.simstack_server._http_port = port
-                else:
-                    user = self.simstack_server._http_user
-                    mypass = self.simstack_server._http_pass
-                    port = self.simstack_server._http_port
-
-                # Return info pointing to the new FastAPI endpoints
-                protocol = "https" if self.use_https else "http"
-                return HTTPServerInfo(
-                    port=self.port,  # Use FastAPI port instead
-                    user=user,  # Keep for backwards compatibility
-                    password=mypass,  # Keep for backwards compatibility
-                    url=f"{protocol}://localhost:{self.port}/http/browse/",
-                )
-            except Exception as e:
-                self._logger.exception("Error getting HTTP server info")
-                raise HTTPException(status_code=500, detail=str(e))
-
         @self.app.post("/api/server/shutdown", response_model=ShutdownResponse)
         async def shutdown_server():
             """Shutdown the SimStackServer"""
