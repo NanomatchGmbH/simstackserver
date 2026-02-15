@@ -40,7 +40,7 @@ class LocalClusterManager(ClusterManager):
         rest_port=None,
     ):
         """
-        LocalClusterManager operates on local files directly without SSH/SFTP.
+        LocalClusterManager operates on local files directly.
 
         :param default_queue:
         :param url (str): URL to connect to (int-nanomatchcluster.int.kit.edu, ipv4, ipv6)
@@ -86,7 +86,7 @@ class LocalClusterManager(ClusterManager):
 
     def connect(self):
         """
-        Connect the ssh_client and setup the sftp tunnel.
+        Connect the ssh_client.
         :return: Nothing
         """
         self._should_be_connected = True

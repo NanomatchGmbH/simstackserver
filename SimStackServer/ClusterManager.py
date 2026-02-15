@@ -17,7 +17,6 @@ from requests.utils import stream_decode_response_unicode
 
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
-    from paramiko import SFTPAttributes
 
 from os import path
 import posixpath
@@ -72,7 +71,6 @@ class ClusterManager:
         self._ssh_client = paramiko.SSHClient()
         self._ssh_client.load_system_host_keys()
         self._should_be_connected = False
-        self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
         self._default_mode = 770
         self._unknown_host_connect_workaround = False
@@ -151,7 +149,7 @@ class ClusterManager:
 
     def connect(self):
         """
-        Connect the ssh_client and setup the sftp tunnel.
+        Connect the ssh_client.
         :return: Nothing
         """
         key_filename = None
@@ -169,9 +167,6 @@ class ClusterManager:
         )
         self._ssh_client.get_transport().set_keepalive(30)
         self._should_be_connected = True
-        self._sftp_client = self._ssh_client.open_sftp()
-        self._sftp_client.get_channel().settimeout(1.0)
-        self.mkdir_p(self._calculation_basepath, basepath_override="")
 
     @contextmanager
     def connection_context(self):
@@ -196,9 +191,6 @@ class ClusterManager:
         disconnect the ssh client
         :return: Nothing
         """
-        if self._sftp_client is not None:
-            self._sftp_client.close()
-
         self._ssh_client.close()
 
     def resolve_file_in_basepath(self, filename, basepath_override):
@@ -258,15 +250,6 @@ class ClusterManager:
             )
             response.raise_for_status()
             return response.json()["exists"]
-        else:
-            try:
-                self._sftp_client.stat(path)
-            except IOError as e:
-                if e.errno == errno.ENOENT:
-                    return False
-                raise
-            else:
-                return True
 
     def get_directory(
         self,
@@ -295,16 +278,18 @@ class ClusterManager:
         if not os.path.exists(to_directory):
             os.mkdir(to_directory)
 
-        for filename in self._sftp_client.listdir(from_directory_on_server_resolved):
+        entries = self.list_dir(from_directory_on_server_resolved, basepath_override="")
+        for entry in entries:
+            filename = entry["name"]
             tocheck = f"{from_directory_on_server_resolved}/{filename}"
-            if stat.S_ISDIR(self._sftp_client.stat(tocheck).st_mode):
+            if entry["type"] == "d":
                 # uses '/' path delimiter for remote server
                 self._get_directory_recurse_helper(
                     tocheck + "/", os.path.join(to_directory, filename)
                 )
             else:
                 if not os.path.isfile(os.path.join(to_directory, filename)):
-                    self._sftp_client.get(tocheck, os.path.join(to_directory, filename))
+                    self.get_file(tocheck, os.path.join(to_directory, filename), basepath_override="")
 
     def put_file(
         self, from_file, to_file, optional_callback=None, basepath_override=None
@@ -334,43 +319,15 @@ class ClusterManager:
                     "/api/files/upload", files=files, data=data
                 )
                 response.raise_for_status()
-        else:
-            if basepath_override is None:
-                basepath_override = self._calculation_basepath
-            abstofile = basepath_override + "/" + to_file
-            # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
-            if self.exists_as_directory(abstofile):
-                abstofile += "/" + posixpath.basename(from_file)
-            self._sftp_client.put(from_file, abstofile, optional_callback)
-
-    def remote_open(self, filename, mode, basepath_override=None):
-        abspath = self.resolve_file_in_basepath(filename, basepath_override)
-        return self._sftp_client.open(abspath, mode)
 
     def list_dir(self, path, basepath_override=None):
         """List directory contents using REST API"""
-        if self._client:
-            response = self._client.post(
-                "/api/files/list",
-                json={"path": path, "basepath_override": basepath_override},
-            )
-            response.raise_for_status()
-            return response.json()["files"]
-        else:
-            files = []
-            if basepath_override is None:
-                basepath_override = self._calculation_basepath
-
-            abspath = basepath_override + "/" + path
-
-            for file_attr in self._sftp_client.listdir_iter(abspath):
-                file_attr: SFTPAttributes
-                file_char = "d" if stat.S_ISDIR(file_attr.st_mode) else "f"
-                fname = file_attr.filename
-                longname = file_attr.longname
-                print(fname, longname, file_char)
-                files.append({"name": fname, "path": abspath, "type": file_char})
-            return files
+        response = self._client.post(
+            "/api/files/list",
+            json={"path": path, "basepath_override": basepath_override},
+        )
+        response.raise_for_status()
+        return response.json()["files"]
 
     def get_default_queue(self):
         """
@@ -414,22 +371,14 @@ class ClusterManager:
         :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
-        if self._client:
-            # Use REST API for file download
-            params = {"from_file": from_file, "basepath_override": basepath_override}
-            with self._client.stream(
-                "GET", "/api/files/download", params=params
-            ) as response:
-                response.raise_for_status()
-                with open(to_file, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192):
-                        f.write(chunk)
-        else:
-            if basepath_override is None:
-                basepath_override = self._calculation_basepath
-
-            getpath = basepath_override + "/" + from_file
-            self._sftp_client.get(getpath, to_file, optional_callback)
+        params = {"from_file": from_file, "basepath_override": basepath_override}
+        with self._client.stream(
+            "GET", "/api/files/download", params=params
+        ) as response:
+            response.raise_for_status()
+            with open(to_file, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    f.write(chunk)
 
     def exec_command(self, command):
         """
@@ -444,28 +393,7 @@ class ClusterManager:
         return stdout, stderr
 
     def get_server_command_from_software_directory(self, software_directory: str):
-        VDIR = self.get_newest_version_directory(software_directory)
-        if VDIR == "V2":
-            raise NotImplementedError(
-                "V2 connection capability removed from SimStack client. Please upgrade to V6."
-            )
-        elif VDIR == "V3":
-            raise NotImplementedError(
-                "V3 connection capability removed from SimStack client. Please upgrade to V6."
-            )
-        elif VDIR == "V4":
-            raise NotImplementedError(
-                "V4 connection capability removed from SimStack client. Please upgrade to V6."
-            )
-        elif VDIR == "V6":
-            pass
-        else:
-            print(
-                "Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V6."
-                % VDIR
-            )
-            VDIR = "V6"
-
+        VDIR = "V6"
         myenv = "simstack_server_v6"
 
         if self._queueing_system == "AiiDA":
@@ -497,18 +425,9 @@ class ClusterManager:
         if found_micromamba:
             execproc = f"{micromamba_bin} run -r {software_directory} --name=simstack_server_v6"
             serverproc = "SimStackServer"
-        elif VDIR != "V4":
+        else:
             execproc = f"source {found_conda_shell}; conda activate {myenv}; "
             serverproc = "SimStackServer"
-        else:
-            execproc = f"source {found_conda_shell}; conda activate {myenv}; python"
-            serverproc = f"{software_directory}/{VDIR}/SimStackServer/SimStackServer.py"
-
-        if VDIR != "V6" and not self.exists(serverproc):
-            raise FileNotFoundError(
-                "%s serverproc was not found. Please check, whether the software directory in Configuration->Servers is correct and the file exists"
-                % serverproc
-            )
 
         return "%s %s" % (execproc, serverproc)
 
@@ -788,7 +707,11 @@ class ClusterManager:
         return transport.is_active()
 
     def exists(self, path):
-        """Check if a path exists (file or directory) using REST API"""
+        """Check if a path exists (file or directory).
+
+        Uses the REST API when the server is already running; falls back to
+        running ``stat`` over SSH before the REST server is up.
+        """
         if self._client:
             response = self._client.post(
                 "/api/files/exists",
@@ -797,41 +720,8 @@ class ClusterManager:
             response.raise_for_status()
             return response.json()["exists"]
         else:
-            try:
-                return self.exists_as_directory(path)
-            except SSHExpectedDirectoryError:
-                return True
-
-    def get_newest_version_directory(self, path):
-        largest_version = -1
-        try:
-            for entry in self._sftp_client.listdir_attr(path):
-                mode = entry.st_mode
-                if stat.S_ISDIR(mode):
-                    fn = entry.filename
-                    if fn[0] == "V":
-                        try:
-                            myint = int(fn[1:])
-                            if myint > largest_version:
-                                largest_version = myint
-                        except ValueError:
-                            pass
-                if entry.filename == "envs":
-                    largest_version = 6
-        except FileNotFoundError as e:
-            newfilenotfounderror = FileNotFoundError(
-                e.errno, "No such file %s on remote %s" % (path, self._url), path
-            )
-            raise newfilenotfounderror from e
-
-        return "V%d" % largest_version
-
-    def is_directory(self, path, basepath_override=None):
-        resolved = self.resolve_file_in_basepath(path, basepath_override)
-        sftpa: SFTPAttributes = self._sftp_client.stat(resolved)
-        if stat.S_ISDIR(sftpa.st_mode):
-            return True
-        return False
+            stdout, _ = self.exec_command(f'stat -- "{path}"')
+            return stdout.channel.recv_exit_status() == 0
 
     def get_http_server_address(self):
         """
@@ -861,29 +751,18 @@ class ClusterManager:
         :param path (str): The path to check
         :return bool: Exists, does not exist
         """
-        if self._client:
-            response = self._client.post(
-                "/api/files/exists", json={"filename": path, "basepath_override": ""}
-            )
-            response.raise_for_status()
-            result = response.json()
-            if not result["exists"]:
-                return False
-            if result["is_directory"]:
-                return True
-            raise SSHExpectedDirectoryError(
-                "Path <%s> to expected directory exists, but was not directory" % path
-            )
-        else:
-            try:
-                sftpa: SFTPAttributes = self._sftp_client.stat(str(path))
-            except FileNotFoundError:
-                return False
-            if stat.S_ISDIR(sftpa.st_mode):
-                return True
-            raise SSHExpectedDirectoryError(
-                "Path <%s> to expected directory exists, but was not directory" % path
-            )
+        response = self._client.post(
+            "/api/files/exists", json={"filename": path, "basepath_override": ""}
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not result["exists"]:
+            return False
+        if result["is_directory"]:
+            return True
+        raise SSHExpectedDirectoryError(
+            "Path <%s> to expected directory exists, but was not directory" % path
+        )
 
     def mkdir_p(self, directory, basepath_override=None, mode_override=None):
         """
@@ -897,41 +776,16 @@ class ClusterManager:
         if isinstance(directory, pathlib.Path):
             directory = str(directory)
 
-        if self._client:
-            # Use REST API for directory creation
-            response = self._client.post(
-                "/api/files/mkdir",
-                json={
-                    "directory": directory,
-                    "basepath_override": basepath_override,
-                    "mode_override": mode_override or self._default_mode,
-                },
-            )
-            response.raise_for_status()
-            return directory
-        else:
-            if mode_override is None:
-                mode_override = self._default_mode
-            if basepath_override is None:
-                basepath_override = self._calculation_basepath
-
-            if not self._calculation_basepath == "":
-                if directory.startswith("/"):
-                    directory = directory[1:]
-
-            subdirs = split_directory_in_subdirectories(directory)
-            complete_subdirs = []
-            for mydir in subdirs:
-                complete_subdirs.append(posixpath.join(basepath_override, mydir))
-
-            for dir in complete_subdirs:
-                if self.exists_as_directory(dir):
-                    continue
-                else:
-                    # self._sftp_client.mkdir(dir,mode = mode_override)
-                    self._sftp_client.mkdir(dir)
-
-            return directory
+        response = self._client.post(
+            "/api/files/mkdir",
+            json={
+                "directory": directory,
+                "basepath_override": basepath_override,
+                "mode_override": mode_override or self._default_mode,
+            },
+        )
+        response.raise_for_status()
+        return directory
 
     def get_calculation_basepath(self):
         return self._calculation_basepath
@@ -944,6 +798,4 @@ class ClusterManager:
         We make sure that the connections are closed on destruction.
         :return:
         """
-        if self._sftp_client is not None:
-            self._sftp_client.close()
         self._ssh_client.close()

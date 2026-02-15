@@ -32,35 +32,12 @@ def ssh_client_with_host_keys():
 
 @pytest.fixture
 def mock_sshclient():
-    """Return a MagicMock for SSHClient with a mocked transport and SFTP."""
+    """Return a MagicMock for SSHClient with a mocked transport."""
     mock_ssh = MagicMock(spec=paramiko.SSHClient)
     transport = MagicMock()
     transport.is_active.return_value = True
     mock_ssh.get_transport.return_value = transport
-
-    mock_sftp = MagicMock(spec=paramiko.SFTPClient)
-    mock_ssh.open_sftp.return_value = mock_sftp
     return mock_ssh
-
-
-@pytest.fixture
-def mock_sftpclient(mock_sshclient):
-    """Return the SFTP mock from mock_sshclient with basic stat and listdir_attr behavior."""
-    sftp_mock = mock_sshclient.open_sftp()
-    # Default: stat() returns directory attributes.
-    stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    stat_mock.st_mode = 0o040755
-    sftp_mock.stat.return_value = stat_mock
-
-    # Default listdir_attr returns one file.
-    def _listdir_attr(path):
-        file_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        file_attr.filename = "testfile"
-        file_attr.st_mode = 0o100644
-        return [file_attr]
-
-    sftp_mock.listdir_attr.side_effect = _listdir_attr
-    return sftp_mock
 
 
 @pytest.fixture
@@ -78,7 +55,6 @@ def cluster_manager(
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,
     mock_sshclient,
-    mock_sftpclient,
     mock_sshtunnel_forwarder,
 ):
     """
@@ -137,7 +113,7 @@ def test_get_ssh_url(cluster_manager):
     assert cluster_manager.get_ssh_url() == "fake-user@fake-url:22"
 
 
-def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient, respx_mock):
+def test_connect_success(cluster_manager, mock_sshclient, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -156,7 +132,6 @@ def test_connect_success(cluster_manager, mock_sshclient, mock_sftpclient, respx
         "fake-url", 22, username="fake-user", key_filename=None, compress=True
     )
     assert cluster_manager.is_connected() is True
-    mock_sftpclient.get_channel.assert_called_once()
 
 
 def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient):
@@ -206,29 +181,16 @@ def test_connect_ssh_and_zmq_if_disconnected_not_connected(cluster_manager):
     mock_connect.assert_called_once()
 
 
-def test_disconnect_all_set(cluster_manager):
-    mock_sftp = MagicMock()
+def test_disconnect(cluster_manager):
     mock_sshclient = MagicMock()
-
-    cluster_manager._sftp_client = mock_sftp
     cluster_manager._ssh_client = mock_sshclient
 
     cluster_manager.disconnect()
 
-    mock_sftp.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
 
 
-def test_disconnect_minimal(cluster_manager):
-    mock_sshclient = MagicMock()
-    cluster_manager._ssh_client = mock_sshclient
-    cluster_manager._sftp_client = None
-
-    cluster_manager.disconnect()
-    mock_sshclient.close.assert_called_once()
-
-
-def test_delete_file(cluster_manager, mock_sftpclient, respx_mock):
+def test_delete_file(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -245,13 +207,11 @@ def test_delete_file(cluster_manager, mock_sftpclient, respx_mock):
         return_value=httpx.Response(200, json={"deleted": True, "path": "myfile"})
     )
 
-    cluster_manager._sftp_client = mock_sftpclient
     cluster_manager.connect()
     cluster_manager.delete_file("myfile")
-    # Note: If using REST API, the SFTP client won't be called
 
 
-def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path, respx_mock):
+def test_put_file_success(cluster_manager, tmp_path, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -272,15 +232,14 @@ def test_put_file_success(cluster_manager, mock_sftpclient, tmp_path, respx_mock
     local_file.write_text("hello world")
     cluster_manager.connect()
     cluster_manager.put_file(str(local_file), "remote.txt")
-    # Note: With REST API, SFTP client won't be called
 
 
-def test_put_file_not_found(cluster_manager, mock_sftpclient):
+def test_put_file_not_found(cluster_manager):
     with pytest.raises(FileNotFoundError):
         cluster_manager.put_file("non_existent_file.txt", "remote.txt")
 
 
-def test_get_file_success(cluster_manager, mock_sftpclient, tmp_path, respx_mock):
+def test_get_file_success(cluster_manager, tmp_path, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -304,7 +263,7 @@ def test_get_file_success(cluster_manager, mock_sftpclient, tmp_path, respx_mock
     assert local_dest.read_bytes() == b"test file content"
 
 
-def test_exists_as_directory_true(cluster_manager, mock_sftpclient, respx_mock):
+def test_exists_as_directory_true(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -326,7 +285,7 @@ def test_exists_as_directory_true(cluster_manager, mock_sftpclient, respx_mock):
     assert result is True
 
 
-def test_exists_as_directory_not_dir(cluster_manager, mock_sftpclient, respx_mock):
+def test_exists_as_directory_not_dir(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -348,7 +307,7 @@ def test_exists_as_directory_not_dir(cluster_manager, mock_sftpclient, respx_moc
         cluster_manager.exists_as_directory("/test/dir")
 
 
-def test_exists_as_directory_not_found(cluster_manager, mock_sftpclient, respx_mock):
+def test_exists_as_directory_not_found(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -370,7 +329,7 @@ def test_exists_as_directory_not_found(cluster_manager, mock_sftpclient, respx_m
     assert result is False
 
 
-def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient, respx_mock):
+def test_mkdir_p_creates_subdirectories(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API calls
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -390,10 +349,9 @@ def test_mkdir_p_creates_subdirectories(cluster_manager, mock_sftpclient, respx_
     cluster_manager.connect()
     result = cluster_manager.mkdir_p(pathlib.Path("foo/bar/baz"))
     assert result == "foo/bar/baz"
-    # Note: With REST API, SFTP mkdir won't be called
 
 
-def test_rmtree(cluster_manager, mock_sftpclient, respx_mock):
+def test_rmtree(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -412,13 +370,7 @@ def test_rmtree(cluster_manager, mock_sftpclient, respx_mock):
 
     cluster_manager.connect()
     cluster_manager.rmtree("testdir")
-    # With REST API, no SFTP operations should occur
 
-
-def test_remote_open(cluster_manager, mock_sftpclient):
-    cluster_manager._sftp_client = mock_sftpclient
-    cluster_manager.remote_open("myfile", "r")
-    mock_sftpclient.open.assert_called_once()
 
 
 def test_default_queue(cluster_manager):
@@ -566,105 +518,36 @@ def test_get_http_server_address_connect_error(cluster_manager, respx_mock):
         cluster_manager.get_http_server_address()
 
 
-def test_get_newest_version_directory(
-    cluster_manager, mock_sshclient, mock_sftpclient, respx_mock
-):
-    # Mock the mkdir_p REST API call made during connect()
-    respx_mock.post("http://fake-url/api/files/mkdir").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "created": True,
-                "path": "/fake/basepath",
-                "absolute_path": "/fake/basepath",
-            },
-        )
-    )
-
-    cluster_manager.connect()
-
-    def mock_listdir_attr(path):
-        names = ["V2", "V3", "V6", "VV", "envs", "randomfile"]
-        entries = []
-        for name in names:
-            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
-            entry_mock.filename = name
-            if name in ["V2", "V3", "V6", "VV", "envs"]:
-                entry_mock.st_mode = 0o040755
-            else:
-                entry_mock.st_mode = 0o100644
-            entries.append(entry_mock)
-        return entries
-
-    mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
-    result = cluster_manager.get_newest_version_directory("/fake/path")
-    assert result == "V6", f"Expected 'V6' but got '{result}'"
-    mock_sftpclient.listdir_attr.assert_called_once_with("/fake/path")
-    mock_sftpclient.listdir_attr.side_effect = FileNotFoundError(
-        "No such file or directory"
-    )
-    with pytest.raises(FileNotFoundError):
-        cluster_manager.get_newest_version_directory("/fake/nonexistent")
-
-
 def test_get_server_command_for_software_directory(
-    cluster_manager, mock_sftpclient, respx_mock
+    cluster_manager, respx_mock
 ):
-    # Mock the mkdir_p REST API call made during connect()
+    """Always assumes V6: micromamba path takes priority when found."""
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "created": True,
-                "path": "/fake/basepath",
-                "absolute_path": "/fake/basepath",
-            },
+            json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"},
         )
     )
-    # Mock exists endpoint - micromamba binary exists
     respx_mock.post("http://fake-url/api/files/exists").mock(
         return_value=httpx.Response(200, json={"exists": True})
     )
 
     cluster_manager.connect()
     cluster_manager._queueing_system = "AiiDA"
-    for nin in ["V2", "V3", "V4"]:
 
-        def mock_listdir_attr(path):
-            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
-            entry_mock.filename = nin
-            entry_mock.st_mode = 0o040755
-            return [entry_mock]
-
-        mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
-        with pytest.raises(NotImplementedError):
-            cluster_manager.get_server_command_from_software_directory(nin)
-    for imp_name in ["V6", "V8"]:
-
-        def mock_listdir_attr(path):
-            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
-            entry_mock.filename = imp_name
-            entry_mock.st_mode = 0o040755
-            return [entry_mock]
-
-        mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
-        res = cluster_manager.get_server_command_from_software_directory(imp_name)
-        expected = f"{imp_name}/envs/simstack_server_v6/bin/micromamba run -r {imp_name} --name=simstack_server_v6 SimStackServer"
-        assert res == expected
+    res = cluster_manager.get_server_command_from_software_directory("mysoft")
+    expected = "mysoft/envs/simstack_server_v6/bin/micromamba run -r mysoft --name=simstack_server_v6 SimStackServer"
+    assert res == expected
 
 
 def test_get_server_command_for_software_directory_no_micromamba(
-    cluster_manager, mock_sftpclient, respx_mock
+    cluster_manager, respx_mock
 ):
-    # Mock the mkdir_p REST API call made during connect()
+    """When no micromamba and no conda shell found, raises FileNotFoundError."""
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "created": True,
-                "path": "/fake/basepath",
-                "absolute_path": "/fake/basepath",
-            },
+            json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"},
         )
     )
 
@@ -672,17 +555,8 @@ def test_get_server_command_for_software_directory_no_micromamba(
     with patch(
         "SimStackServer.ClusterManager.ClusterManager.exists", return_value=False
     ):
-        vname = "V6"
-
-        def mock_listdir_attr(path):
-            entry_mock = MagicMock(spec=paramiko.SFTPAttributes)
-            entry_mock.filename = vname
-            entry_mock.st_mode = 0o040755
-            return [entry_mock]
-
-        mock_sftpclient.listdir_attr.side_effect = mock_listdir_attr
         with pytest.raises(FileNotFoundError):
-            cluster_manager.get_server_command_from_software_directory(vname)
+            cluster_manager.get_server_command_from_software_directory("mysoft")
 
 
 def test_get_server_command(cluster_manager):
@@ -747,7 +621,7 @@ def test_put_directory(cluster_manager, respx_mock):
     assert result == "/foo/bar/unittest_files"
 
 
-def test_random_singlejob_exec_directory(cluster_manager, mock_sftpclient, respx_mock):
+def test_random_singlejob_exec_directory(cluster_manager, respx_mock):
     # Mock all mkdir_p REST API calls
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -771,7 +645,7 @@ def test_random_singlejob_exec_directory(cluster_manager, mock_sftpclient, respx
     assert "testdir" in parts[1]
 
 
-def test_exists(cluster_manager, mock_sftpclient, respx_mock):
+def test_exists(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -792,7 +666,7 @@ def test_exists(cluster_manager, mock_sftpclient, respx_mock):
     assert cluster_manager.exists("/some/file") is True
 
 
-def test_list_dir(cluster_manager, mock_sftpclient, respx_mock):
+def test_list_dir(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -834,7 +708,7 @@ def test_list_dir(cluster_manager, mock_sftpclient, respx_mock):
     assert result == expected
 
 
-def test_exists_remote(cluster_manager, mock_sftpclient, respx_mock):
+def test_exists_remote(cluster_manager, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -865,7 +739,7 @@ def test_exists_remote(cluster_manager, mock_sftpclient, respx_mock):
     assert cluster_manager.exists_remote("/foo/bar") is False
 
 
-def test_get_directory(cluster_manager, mock_sftpclient, tmpdir, respx_mock):
+def test_get_directory(cluster_manager, tmpdir, respx_mock):
     # Mock the mkdir_p REST API call made during connect()
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
@@ -882,36 +756,24 @@ def test_get_directory(cluster_manager, mock_sftpclient, tmpdir, respx_mock):
     cluster_manager.exists_remote = MagicMock(side_effect=lambda p: False)
     with pytest.raises(FileNotFoundError):
         cluster_manager.get_directory("server/dir", tmpdir + "/todir")
-    cluster_manager.exists_remote = MagicMock(side_effect=lambda p: True)
-    cluster_manager.connect()
+
+    cluster_manager.exists_remote = MagicMock(return_value=True)
     remote_root = "remote"
     local_root = tmpdir + "/local_dest"
 
-    def mock_listdir(path):
+    def mock_list_dir(path, basepath_override=""):
         if path == "remote":
-            return ["subdir", "file1"]
+            return [{"name": "subdir", "type": "d"}, {"name": "file1", "type": "f"}]
         elif path in ("remote/subdir", "remote/subdir/"):
-            return ["file2"]
+            return [{"name": "file2", "type": "f"}]
         return []
 
-    def mock_stat(path):
-        class MockAttrs:
-            pass
-
-        attrs = MockAttrs()
-        if path in ("remote", "remote/subdir", "remote/subdir/"):
-            attrs.st_mode = 0o040755
-        else:
-            attrs.st_mode = 0o100644
-        return attrs
-
-    def mock_get(remote_path, local_path):
+    def mock_get_file(tocheck, local_path, basepath_override=""):
         with open(local_path, "w") as f:
             f.write("dummy content")
 
-    mock_sftpclient.listdir.side_effect = mock_listdir
-    mock_sftpclient.stat.side_effect = mock_stat
-    mock_sftpclient.get.side_effect = mock_get
+    cluster_manager.list_dir = MagicMock(side_effect=mock_list_dir)
+    cluster_manager.get_file = MagicMock(side_effect=mock_get_file)
     cluster_manager.get_directory(remote_root, str(local_root))
     file1_path = local_root + "/file1"
     file2_path = local_root + "/subdir/file2"
@@ -1021,58 +883,3 @@ def test_set_connect_to_unknown_hosts(cluster_manager):
     assert cluster_manager._unknown_host_connect_workaround is True
 
 
-def test_is_directory_true(cluster_manager, mock_sftpclient, respx_mock):
-    """
-    If st_mode indicates a directory (0o040755), is_directory should return True.
-    """
-    # Mock the mkdir_p REST API call made during connect()
-    respx_mock.post("http://fake-url/api/files/mkdir").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "created": True,
-                "path": "/fake/basepath",
-                "absolute_path": "/fake/basepath",
-            },
-        )
-    )
-
-    cluster_manager.connect()
-
-    dir_stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    dir_stat_mock.st_mode = 0o040755  # Directory bit set
-    mock_sftpclient.stat.return_value = dir_stat_mock
-
-    result = cluster_manager.is_directory("some/path")
-    assert result is True
-    # Check the .stat call
-    mock_sftpclient.stat.assert_called()
-
-
-def test_is_directory_false(cluster_manager, mock_sftpclient, respx_mock):
-    """
-    If st_mode indicates a file (0o100644) or anything that's not a directory,
-    is_directory should return False.
-    """
-    # Mock the mkdir_p REST API call made during connect()
-    respx_mock.post("http://fake-url/api/files/mkdir").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "created": True,
-                "path": "/fake/basepath",
-                "absolute_path": "/fake/basepath",
-            },
-        )
-    )
-
-    cluster_manager.connect()
-
-    file_stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    file_stat_mock.st_mode = 0o100644  # Regular file
-    mock_sftpclient.stat.return_value = file_stat_mock
-
-    result = cluster_manager.is_directory("some/path")
-    assert result is False
-    # Check the .stat call
-    mock_sftpclient.stat.assert_called()

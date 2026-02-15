@@ -38,34 +38,12 @@ def ssh_client_with_host_keys():
 
 @pytest.fixture
 def mock_sshclient():
-    """Return a MagicMock for paramiko.SSHClient with a working transport and open_sftp."""
+    """Return a MagicMock for paramiko.SSHClient with a working transport."""
     mock_client = MagicMock(spec=paramiko.SSHClient)
     transport = MagicMock()
     transport.is_active.return_value = True
     mock_client.get_transport.return_value = transport
-    mock_sftp = MagicMock(spec=paramiko.SFTPClient)
-    mock_client.open_sftp.return_value = mock_sftp
     return mock_client
-
-
-@pytest.fixture
-def mock_sftpclient(mock_sshclient):
-    """Return the SFTP client mock with basic stat and listdir_attr behavior."""
-    sftp = mock_sshclient.open_sftp()
-    # Default: stat returns directory mode
-    stat_mock = MagicMock(spec=paramiko.SFTPAttributes)
-    stat_mock.st_mode = 0o040755
-    sftp.stat.return_value = stat_mock
-
-    def fake_listdir_attr(path):
-        # By default, return a list with one file entry.
-        file_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        file_attr.filename = "testfile"
-        file_attr.st_mode = 0o100644
-        return [file_attr]
-
-    sftp.listdir_attr.side_effect = fake_listdir_attr
-    return sftp
 
 
 @pytest.fixture
@@ -83,7 +61,6 @@ def cluster_manager(
     mock_sshtunnel_forwarder_class,
     mock_sshclient_class,
     mock_sshclient,
-    mock_sftpclient,
     mock_sshtunnel_forwarder,
 ):
     """
@@ -476,81 +453,6 @@ def test_is_directory(cluster_manager, tmpdir):
     cluster_manager._calculation_basepath = tmpdir
     assert cluster_manager.is_directory(tmpdir) is False
 
-
-def test_get_newest_version_directory_envs_last(cluster_manager, mock_sftpclient):
-    """
-    Test get_newest_version_directory when entries are in order:
-    "V2", "V8", then "envs", then a non-matching entry.
-    In this order, even though V8 would set largest_version to 8,
-    the later "envs" forces largest_version to 6.
-    Final result should be "V6".
-    """
-
-    def fake_listdir_V6(path):
-        # By default, return a list with one file entry.
-        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        dir_attr.filename = "V6"
-        dir_attr.st_mode = 0o040755
-        return [dir_attr]
-
-    def fake_listdir_V2(path):
-        # By default, return a list with one file entry.
-        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        dir_attr.filename = "V2"
-        dir_attr.st_mode = 0o040755
-        return [dir_attr]
-
-    def fake_listdir_VV(path):
-        # By default, return a list with one file entry.
-        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        dir_attr.filename = "VV"
-        dir_attr.st_mode = 0o040755
-        return [dir_attr]
-
-    def fake_listdir_envs(path):
-        # By default, return a list with one file entry.
-        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        dir_attr.filename = "envs"
-        dir_attr.st_mode = 0o040755
-        return [dir_attr]
-
-    def fake_listdir_no_dir(path):
-        # By default, return a list with one file entry.
-        dir_attr = MagicMock(spec=paramiko.SFTPAttributes)
-        dir_attr.filename = "V2"
-        dir_attr.st_mode = 0o100644
-        return [dir_attr]
-
-    mock_sftpclient.listdir_attr.side_effect = fake_listdir_V6
-    cluster_manager._sftp_client = mock_sftpclient
-    result = cluster_manager.get_newest_version_directory("/fake/path")
-    assert result == "V6"
-
-    mock_sftpclient.listdir_attr.side_effect = fake_listdir_V2
-    cluster_manager._sftp_client = mock_sftpclient
-    result = cluster_manager.get_newest_version_directory("/fake/path")
-    assert result == "V2"
-
-    mock_sftpclient.listdir_attr.side_effect = fake_listdir_envs
-    cluster_manager._sftp_client = mock_sftpclient
-    result = cluster_manager.get_newest_version_directory("/fake/path")
-    assert result == "V6"
-
-    mock_sftpclient.listdir_attr.side_effect = fake_listdir_no_dir
-    cluster_manager._sftp_client = mock_sftpclient
-    result = cluster_manager.get_newest_version_directory("/fake/path")
-    assert result == "V-1"
-
-    mock_sftpclient.listdir_attr.side_effect = fake_listdir_VV
-    cluster_manager._sftp_client = mock_sftpclient
-    result = cluster_manager.get_newest_version_directory("/fake/path")
-    assert result == "V-1"
-
-    mock_sftpclient.listdir_attr.side_effect = FileNotFoundError(2, "Not found")
-    with pytest.raises(FileNotFoundError) as excinfo:
-        cluster_manager.get_newest_version_directory("/nonexistent")
-    # Check that the error message includes the expected text.
-    assert "No such file" in str(excinfo.value)
 
 
 def test_is_connected(cluster_manager):
