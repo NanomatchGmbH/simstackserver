@@ -210,31 +210,19 @@ def test_disconnect_all_set(cluster_manager):
     mock_sftp = MagicMock()
     mock_sshclient = MagicMock()
 
-    mock_http_tunnel = MagicMock()
-    mock_http_tunnel._server_list = [MagicMock(), MagicMock()]
-    mock_transport = MagicMock()
-    mock_http_tunnel._transport = mock_transport
-    mock_http_tunnel.is_alive = True
-
     cluster_manager._sftp_client = mock_sftp
     cluster_manager._ssh_client = mock_sshclient
-    cluster_manager._http_server_tunnel = mock_http_tunnel
 
     cluster_manager.disconnect()
 
     mock_sftp.close.assert_called_once()
     mock_sshclient.close.assert_called_once()
-    for srv in mock_http_tunnel._server_list:
-        assert srv.timeout == 0.01
-    mock_transport.close.assert_called_once()
-    mock_http_tunnel.stop.assert_called_once()
 
 
 def test_disconnect_minimal(cluster_manager):
     mock_sshclient = MagicMock()
     cluster_manager._ssh_client = mock_sshclient
     cluster_manager._sftp_client = None
-    cluster_manager._http_server_tunnel = None
 
     cluster_manager.disconnect()
     mock_sshclient.close.assert_called_once()

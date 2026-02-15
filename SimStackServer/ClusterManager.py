@@ -217,26 +217,7 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            resolved_filename = self.resolve_file_in_basepath(
-                filename, basepath_override
-            )
-            self._sftp_client.remove(resolved_filename)
-
-    def __rmtree_helper(self, abspath):
-        postremove_files = []
-        for file_attr in self._sftp_client.listdir_attr(abspath):
-            fname = file_attr.filename
-
-            newabspath = abspath + "/" + fname
-            if stat.S_ISDIR(file_attr.st_mode):
-                self.__rmtree_helper(newabspath)
-            else:
-                postremove_files.append(newabspath)
-        for myfile in postremove_files:
-            # print("Im deleting: %s" %myfile)
-            self._sftp_client.remove(myfile)
-        self._sftp_client.rmdir(abspath)
-        # print("Im deleting %s"%abspath)
+            raise NotImplementedError("File deletion is not implemented for SSH connections. Please use REST API or implement it in SSH.")
 
     def rmtree(self, dirname, basepath_override=None):
         """Delete a directory tree using REST API"""
@@ -248,10 +229,7 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            abspath = self.resolve_file_in_basepath(dirname, basepath_override)
-            if not self.exists_as_directory(abspath):
-                return
-            self.__rmtree_helper(abspath)
+            raise NotImplementedError("Recursive directory deletion is not implemented for SSH connections. Please use REST API or implement it in SSH.")
 
     def put_directory(
         self,
@@ -969,5 +947,3 @@ class ClusterManager:
         if self._sftp_client is not None:
             self._sftp_client.close()
         self._ssh_client.close()
-        if self._http_server_tunnel is not None and self._http_server_tunnel.is_alive:
-            self._http_server_tunnel.stop()

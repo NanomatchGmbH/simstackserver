@@ -182,20 +182,6 @@ def test_connect_if_disconnected_not_connected(cluster_manager):
     mock_connect.assert_called_once()
 
 
-def test_disconnect_all_set(cluster_manager):
-    # Create mocks for all connections (without ZMQ).
-    mock_http = MagicMock()
-    mock_http._server_list = [MagicMock(), MagicMock()]
-    for srv in mock_http._server_list:
-        srv.timeout = None
-    mock_http._transport = MagicMock()
-    cluster_manager._http_server_tunnel = mock_http
-    cluster_manager.disconnect()
-    for srv in mock_http._server_list:
-        assert srv.timeout == 0.01
-    mock_http._transport.close.assert_called_once()
-    mock_http.stop.assert_called_once()
-
 
 def test_resolve_file_in_basepath(cluster_manager):
     # When basepath_override is None, it should use _calculation_basepath.
@@ -484,14 +470,6 @@ def test__is_socket_closed_unexpected_exception():
     result = LocalClusterManager._is_socket_closed(dummy_sock)
     assert result is False
 
-
-def test___del___(cluster_manager):
-    mock_http_server_tunnel = MagicMock()
-    mock_http_server_tunnel.is_alive = True
-    cluster_manager._http_server_tunnel = mock_http_server_tunnel
-    cluster_manager.connect()
-    cluster_manager.__del__()
-    mock_http_server_tunnel.stop.assert_called_once()
 
 
 def test_is_directory(cluster_manager, tmpdir):

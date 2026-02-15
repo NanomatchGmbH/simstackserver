@@ -135,7 +135,6 @@ class FastAPIThread(threading.Thread):
         self.port = port
         self.server = None
         self._logger = logging.getLogger("FastAPIThread")
-        self._http_base_directory = None  # Will be set when starting HTTP server
         self.use_https = use_https
         self.ssl_keyfile: Optional[str] = None
         self.ssl_certfile: Optional[str] = None
@@ -390,26 +389,16 @@ class FastAPIThread(threading.Thread):
         @self.app.get("/http/browse")
         async def browse_root():
             """Browse root directory - redirect to default path"""
-            if self._http_base_directory is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="HTTP server base directory not set. Call /api/http-server first.",
-                )
+            base_dir = self._get_http_base_directory()
             return HTMLResponse(
-                content=self._generate_directory_listing_html(
-                    self._http_base_directory, "/http/browse/"
-                )
+                content=self._generate_directory_listing_html(base_dir, "/http/browse/")
             )
 
         @self.app.get("/http/browse/{path:path}")
         async def browse_directory(path: str):
             """Browse directory structure and serve files"""
             try:
-                if self._http_base_directory is None:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="HTTP server base directory not set. Call /api/http-server first.",
-                    )
+                base_dir = self._get_http_base_directory()
 
                 # Decode URL path
                 try:
@@ -418,11 +407,11 @@ class FastAPIThread(threading.Thread):
                     decoded_path = urllib.parse.unquote(path)
 
                 # Build full path
-                full_path = os.path.join(self._http_base_directory, decoded_path)
+                full_path = os.path.join(base_dir, decoded_path)
 
                 # Security check: ensure path is within base directory
                 if not os.path.abspath(full_path).startswith(
-                    os.path.abspath(self._http_base_directory)
+                    os.path.abspath(base_dir)
                 ):
                     raise HTTPException(status_code=403, detail="Access denied")
 
@@ -766,8 +755,7 @@ class FastAPIThread(threading.Thread):
                         detail=f"Path is a directory, use /api/files/rmtree instead: {request.filename}",
                     )
 
-                #TODO REMOVE THIS
-                #os.remove(filepath)
+                os.remove(filepath)
                 self._logger.info(f"Deleted file: {filepath}")
 
                 return DeleteResponse(
@@ -854,8 +842,7 @@ class FastAPIThread(threading.Thread):
 
                 import shutil
 
-                #TODO remove this
-                #shutil.rmtree(dirpath)
+                shutil.rmtree(dirpath)
                 self._logger.info(f"Deleted directory tree: {dirpath}")
 
                 return DeleteResponse(
@@ -947,6 +934,19 @@ class FastAPIThread(threading.Thread):
             except Exception as e:
                 self._logger.exception(f"Error downloading file: {from_file}")
                 raise HTTPException(status_code=500, detail=str(e))
+
+    def _get_http_base_directory(self) -> str:
+        """
+        Return the base directory used for HTTP browsing.
+
+        Uses the explicitly set _http_base_directory when available, otherwise
+        falls back to the configured basepath (same resolution logic as
+        _resolve_path: relative paths are anchored to the user home directory).
+        """
+        basepath = Config.get_resources().basepath
+        if basepath and not os.path.isabs(basepath):
+            basepath = os.path.join(str(Path.home()), basepath)
+        return basepath
 
     def  _resolve_path(self, path: str, basepath_override: Optional[str] = None) -> str:
         """

@@ -111,13 +111,7 @@ class LocalClusterManager(ClusterManager):
         disconnect the ssh client
         :return: Nothing
         """
-        if self._http_server_tunnel is not None:
-            # This handling here is purely for windows. Somehow, the transport is not closed, if not set.
-            for _srv in self._http_server_tunnel._server_list:
-                _srv.timeout = 0.01
-
-            self._http_server_tunnel._transport.close()
-            self._http_server_tunnel.stop()
+        pass
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
@@ -371,14 +365,3 @@ class LocalClusterManager(ClusterManager):
 
         return absdir
 
-    def __del__(self):
-        """
-        We make sure that the connections are closed on destruction.
-        :return:
-        """
-        if (
-            hasattr(self, "_http_server_tunnel")
-            and self._http_server_tunnel is not None
-            and self._http_server_tunnel.is_alive
-        ):
-            self._http_server_tunnel.stop()
