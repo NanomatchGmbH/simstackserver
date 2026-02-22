@@ -377,9 +377,9 @@ def test_exists(cluster_manager, tmpdir, tmpfile):
 
 
 def test_get_url_for_workflow(cluster_manager):
-    cluster_manager._http_base_address = "http://dummy:404@localhost:9999"
+    # The new implementation uses get_client_url() + /http/browse
     url = cluster_manager.get_url_for_workflow("workflow1")
-    assert url == "http://dummy:404@localhost:9999/workflow1"
+    assert url == "https://fake-url/http/browse/workflow1"
 
 
 def test__is_socket_closed_returns_false_when_data():

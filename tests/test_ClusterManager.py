@@ -73,7 +73,11 @@ def cluster_manager(
         queueing_system="Internal",
         default_queue="fake-queue",
         software_directory="/fake/software_dir",
+        rest_port=80,
     )
+    # Create a real httpx client for REST API tests (respx will intercept it)
+    # Use verify=False to avoid SSL certificate issues in tests
+    cm._client = httpx.Client(base_url="http://fake-url", verify=False)
     return cm
 
 

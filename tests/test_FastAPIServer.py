@@ -426,23 +426,26 @@ def test_submit_workflow(test_client, mock_simstack_server):
     from queue import Queue
 
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = (
-        lambda x: f"/home/user/{x}"
-    )
 
-    response = test_client.post(
-        "/api/workflows/submit", json={"filename": "path/to/workflow.xml"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "submitted"
-    assert data["filename"] == "path/to/workflow.xml"
-    assert "submitted for execution" in data["message"]
+    # Mock Config to return a basepath
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = "/home/user"
+        mock_config.get_resources.return_value = mock_resources
 
-    # Verify workflow was added to queue
-    assert not mock_simstack_server._submitted_workflow_queue.empty()
-    submitted_filename = mock_simstack_server._submitted_workflow_queue.get()
-    assert submitted_filename == "/home/user/path/to/workflow.xml"
+        response = test_client.post(
+            "/api/workflows/submit", json={"filename": "path/to/workflow.xml"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "submitted"
+        assert data["filename"] == "path/to/workflow.xml"
+        assert "submitted for execution" in data["message"]
+
+        # Verify workflow was added to queue
+        assert not mock_simstack_server._submitted_workflow_queue.empty()
+        submitted_filename = mock_simstack_server._submitted_workflow_queue.get()
+        assert submitted_filename == "/home/user/path/to/workflow.xml"
 
 
 def test_submit_workflow_absolute_path(test_client, mock_simstack_server):
@@ -450,19 +453,25 @@ def test_submit_workflow_absolute_path(test_client, mock_simstack_server):
     from queue import Queue
 
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = (
-        lambda x: x if x.startswith("/") else f"/home/user/{x}"
-    )
 
-    response = test_client.post(
-        "/api/workflows/submit", json={"filename": "/absolute/path/to/workflow.xml"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "submitted"
+    # Mock Config to return a basepath
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = "/home/user"
+        mock_config.get_resources.return_value = mock_resources
 
-    submitted_filename = mock_simstack_server._submitted_workflow_queue.get()
-    assert submitted_filename == "/absolute/path/to/workflow.xml"
+        response = test_client.post(
+            "/api/workflows/submit", json={"filename": "/absolute/path/to/workflow.xml"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "submitted"
+
+        submitted_filename = mock_simstack_server._submitted_workflow_queue.get()
+        # With _resolve_path, leading slash is stripped and then joined with basepath
+        # So /absolute/path/to/workflow.xml becomes absolute/path/to/workflow.xml
+        # which resolves to /home/user/absolute/path/to/workflow.xml
+        assert submitted_filename == "/home/user/absolute/path/to/workflow.xml"
 
 
 def test_submit_singlejob(test_client, mock_simstack_server):
@@ -490,83 +499,6 @@ def test_submit_singlejob(test_client, mock_simstack_server):
     assert not mock_simstack_server._submitted_singlejob_queue.empty()
     assert "test-job-123" in mock_simstack_server._external_job_uid_to_jobid
     assert mock_simstack_server._external_job_uid_to_jobid["test-job-123"] == -1
-
-
-def test_get_http_server_new_server(test_client, mock_simstack_server, fastapi_thread):
-    """Test getting HTTP server info when no server exists"""
-    mock_simstack_server._http_server = None
-    mock_simstack_server._start_http_server = Mock(
-        return_value=("testuser", "testpass", 8080)
-    )
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
-
-    response = test_client.post(
-        "/api/http-server", json={"basefolder": "path/to/folder"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    # Now returns FastAPI port instead of old HTTP server port
-    assert data["port"] == fastapi_thread.port
-    assert data["user"] == "testuser"
-    assert data["password"] == "testpass"
-    # URL now points to FastAPI browse endpoint
-    assert "/http/browse/" in data["url"]
-
-    # Verify start_http_server was called for backwards compatibility
-    mock_simstack_server._start_http_server.assert_called_once_with(
-        directory="path/to/folder"
-    )
-
-
-def test_get_http_server_existing_server(
-    test_client, mock_simstack_server, fastapi_thread
-):
-    """Test getting HTTP server info when server already exists"""
-    mock_http_server = Mock()
-    mock_http_server.is_alive.return_value = True
-    mock_simstack_server._http_server = mock_http_server
-    mock_simstack_server._http_user = "existing_user"
-    mock_simstack_server._http_pass = "existing_pass"
-    mock_simstack_server._http_port = 9090
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
-
-    response = test_client.post(
-        "/api/http-server", json={"basefolder": "path/to/folder"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    # Now returns FastAPI port instead of old HTTP server port
-    assert data["port"] == fastapi_thread.port
-    assert data["user"] == "existing_user"
-    assert data["password"] == "existing_pass"
-    # URL now points to FastAPI browse endpoint
-    assert "/http/browse/" in data["url"]
-
-
-def test_get_http_server_dead_server(test_client, mock_simstack_server, fastapi_thread):
-    """Test getting HTTP server info when server exists but is dead"""
-    mock_http_server = Mock()
-    mock_http_server.is_alive.return_value = False
-    mock_simstack_server._http_server = mock_http_server
-    mock_simstack_server._start_http_server = Mock(
-        return_value=("newuser", "newpass", 8081)
-    )
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
-
-    response = test_client.post(
-        "/api/http-server", json={"basefolder": "path/to/folder"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    # Now returns FastAPI port instead of old HTTP server port
-    assert data["port"] == fastapi_thread.port
-    assert data["user"] == "newuser"
-    assert data["password"] == "newpass"
-    # URL now points to FastAPI browse endpoint
-    assert "/http/browse/" in data["url"]
-
-    # Verify start_http_server was called to restart
-    mock_simstack_server._start_http_server.assert_called_once()
 
 
 def test_shutdown_server(test_client, mock_simstack_server):
@@ -636,15 +568,15 @@ def test_configure_endpoint(test_client, mock_simstack_server):
 
 def test_submit_workflow_error(test_client, mock_simstack_server):
     """Test error handling when workflow submission fails"""
-    mock_simstack_server._remote_relative_to_absolute_filename = Mock(
-        side_effect=Exception("Path resolution failed")
-    )
+    # Mock Config to raise an exception during path resolution
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_config.get_resources.side_effect = Exception("Path resolution failed")
 
-    response = test_client.post(
-        "/api/workflows/submit", json={"filename": "bad/path/workflow.xml"}
-    )
-    assert response.status_code == 500
-    assert "Path resolution failed" in response.json()["detail"]
+        response = test_client.post(
+            "/api/workflows/submit", json={"filename": "bad/path/workflow.xml"}
+        )
+        assert response.status_code == 500
+        assert "Path resolution failed" in response.json()["detail"]
 
 
 def test_submit_singlejob_error(test_client, mock_simstack_server):
@@ -669,20 +601,6 @@ def test_submit_singlejob_error(test_client, mock_simstack_server):
     response = test_client.post("/api/singlejobs/submit", json={"wfem": wfem_dict})
     assert response.status_code == 500
     assert "Queue full" in response.json()["detail"]
-
-
-def test_get_http_server_error(test_client, mock_simstack_server):
-    """Test error handling when HTTP server startup fails"""
-    mock_simstack_server._http_server = None
-    mock_simstack_server._start_http_server = Mock(
-        side_effect=Exception("Port already in use")
-    )
-
-    response = test_client.post(
-        "/api/http-server", json={"basefolder": "path/to/folder"}
-    )
-    assert response.status_code == 500
-    assert "Port already in use" in response.json()["detail"]
 
 
 def test_shutdown_server_error(test_client, mock_simstack_server):
@@ -735,17 +653,20 @@ def test_submit_multiple_workflows(test_client, mock_simstack_server):
     from queue import Queue
 
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = (
-        lambda x: f"/home/user/{x}"
-    )
 
-    workflows = ["wf1.xml", "wf2.xml", "wf3.xml"]
-    for wf in workflows:
-        response = test_client.post("/api/workflows/submit", json={"filename": wf})
-        assert response.status_code == 200
+    # Mock Config for path resolution
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = "/home/user"
+        mock_config.get_resources.return_value = mock_resources
 
-    # Verify all workflows were queued
-    assert mock_simstack_server._submitted_workflow_queue.qsize() == 3
+        workflows = ["wf1.xml", "wf2.xml", "wf3.xml"]
+        for wf in workflows:
+            response = test_client.post("/api/workflows/submit", json={"filename": wf})
+            assert response.status_code == 200
+
+        # Verify all workflows were queued
+        assert mock_simstack_server._submitted_workflow_queue.qsize() == 3
 
 
 def test_submit_multiple_singlejobs(test_client, mock_simstack_server):
@@ -778,15 +699,18 @@ def test_workflow_lifecycle_via_api(
     from queue import Queue
 
     mock_simstack_server._submitted_workflow_queue = Queue()
-    mock_simstack_server._remote_relative_to_absolute_filename = (
-        lambda x: f"/home/user/{x}"
-    )
 
-    # Submit
-    response = test_client.post(
-        "/api/workflows/submit", json={"filename": "lifecycle_test.xml"}
-    )
-    assert response.status_code == 200
+    # Mock Config for path resolution
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = "/home/user"
+        mock_config.get_resources.return_value = mock_resources
+
+        # Submit
+        response = test_client.post(
+            "/api/workflows/submit", json={"filename": "lifecycle_test.xml"}
+        )
+        assert response.status_code == 200
 
     # List
     response = test_client.get("/api/workflows")
@@ -828,12 +752,18 @@ def mock_simstack_server_with_basepath(mock_workflow_manager, temp_basepath):
 
 
 @pytest.fixture
-def file_ops_test_client(mock_simstack_server_with_basepath):
+def file_ops_test_client(mock_simstack_server_with_basepath, temp_basepath):
     """Create a TestClient for file operations testing"""
-    thread = FastAPIThread(
-        mock_simstack_server_with_basepath, host="127.0.0.1", port=8010, use_https=False
-    )
-    return TestClient(thread.app)
+    # Patch Config.get_resources() to return a Resources object with our temp basepath
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = temp_basepath
+        mock_config.get_resources.return_value = mock_resources
+
+        thread = FastAPIThread(
+            mock_simstack_server_with_basepath, host="127.0.0.1", port=8010, use_https=False
+        )
+        yield TestClient(thread.app)
 
 
 def test_file_exists_endpoint_file_exists(file_ops_test_client, temp_basepath):
@@ -1287,12 +1217,16 @@ def test_file_operations_with_nested_paths(file_ops_test_client, temp_basepath):
 @pytest.fixture
 def http_browse_test_client(mock_simstack_server_with_basepath, temp_basepath):
     """Create a TestClient for HTTP browsing with base directory set"""
-    thread = FastAPIThread(
-        mock_simstack_server_with_basepath, host="127.0.0.1", port=8011, use_https=False
-    )
-    # Set base directory for browsing
-    thread._http_base_directory = temp_basepath
-    return TestClient(thread.app), temp_basepath
+    # Patch Config.get_resources() to return a Resources object with our temp basepath
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = temp_basepath
+        mock_config.get_resources.return_value = mock_resources
+
+        thread = FastAPIThread(
+            mock_simstack_server_with_basepath, host="127.0.0.1", port=8011, use_https=False
+        )
+        yield TestClient(thread.app), temp_basepath
 
 
 def test_serve_static_css(test_client):
@@ -1416,19 +1350,6 @@ def test_browse_directory_traversal_blocked(http_browse_test_client):
     assert response.status_code in [403, 404]
 
 
-def test_browse_without_base_directory():
-    """Test browsing when base directory is not set"""
-    mock_server = Mock()
-    mock_server._workflow_manager = Mock()
-    thread = FastAPIThread(mock_server, host="127.0.0.1", port=8012, use_https=False)
-    # Don't set _http_base_directory
-    client = TestClient(thread.app)
-
-    response = client.get("/http/browse/some_path")
-    assert response.status_code == 400
-    assert "base directory not set" in response.text.lower()
-
-
 def test_browse_nested_directories(http_browse_test_client):
     """Test browsing nested directory structures"""
     client, temp_basepath = http_browse_test_client
@@ -1515,20 +1436,6 @@ def test_guess_mime_type_helper():
     # Test standard types
     assert "html" in FastAPIThread._guess_mime_type("test.html")
     assert "image" in FastAPIThread._guess_mime_type("test.png")
-
-
-def test_http_server_endpoint_sets_base_directory(test_client, mock_simstack_server):
-    """Test that /api/http-server sets the base directory for browsing"""
-    mock_simstack_server._http_server = None
-    mock_simstack_server._start_http_server = Mock(return_value=("user", "pass", 8080))
-    mock_simstack_server._remote_relative_to_absolute_filename = lambda x: f"/abs/{x}"
-
-    response = test_client.post("/api/http-server", json={"basefolder": "test/folder"})
-    assert response.status_code == 200
-    data = response.json()
-
-    # Should return FastAPI port, not old HTTP server port
-    assert data["url"].endswith("/http/browse/")
 
 
 # ==================== Config Tests ====================
