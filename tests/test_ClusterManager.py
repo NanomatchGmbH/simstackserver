@@ -376,7 +376,6 @@ def test_rmtree(cluster_manager, respx_mock):
     cluster_manager.rmtree("testdir")
 
 
-
 def test_default_queue(cluster_manager):
     assert cluster_manager.get_default_queue() == "fake-queue"
 
@@ -522,14 +521,16 @@ def test_get_http_server_address_connect_error(cluster_manager, respx_mock):
         cluster_manager.get_http_server_address()
 
 
-def test_get_server_command_for_software_directory(
-    cluster_manager, respx_mock
-):
+def test_get_server_command_for_software_directory(cluster_manager, respx_mock):
     """Always assumes V6: micromamba path takes priority when found."""
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
             200,
-            json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"},
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
         )
     )
     respx_mock.post("http://fake-url/api/files/exists").mock(
@@ -551,7 +552,11 @@ def test_get_server_command_for_software_directory_no_micromamba(
     respx_mock.post("http://fake-url/api/files/mkdir").mock(
         return_value=httpx.Response(
             200,
-            json={"created": True, "path": "/fake/basepath", "absolute_path": "/fake/basepath"},
+            json={
+                "created": True,
+                "path": "/fake/basepath",
+                "absolute_path": "/fake/basepath",
+            },
         )
     )
 
@@ -885,5 +890,3 @@ def test_set_connect_to_unknown_hosts(cluster_manager):
     assert cluster_manager._unknown_host_connect_workaround is False
     cluster_manager.set_connect_to_unknown_hosts(True)
     assert cluster_manager._unknown_host_connect_workaround is True
-
-

@@ -159,7 +159,6 @@ def test_connect_if_disconnected_not_connected(cluster_manager):
     mock_connect.assert_called_once()
 
 
-
 def test_resolve_file_in_basepath(cluster_manager):
     # When basepath_override is None, it should use _calculation_basepath.
     cluster_manager._calculation_basepath = "/fake/basepath"
@@ -437,11 +436,9 @@ def test__is_socket_closed_unexpected_exception():
     assert result is False
 
 
-
 def test_is_directory(cluster_manager, tmpdir):
     cluster_manager._calculation_basepath = tmpdir
     assert cluster_manager.is_directory(tmpdir) is False
-
 
 
 def test_is_connected(cluster_manager):

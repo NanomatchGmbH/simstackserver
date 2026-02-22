@@ -378,7 +378,9 @@ class FastAPIThread(threading.Thread):
                 # Determine MIME type
                 mime_type = self._guess_mime_type(filename)
 
-                self._logger.info(f"Serving static file: {file_path} ({os.path.getsize(file_path)} bytes)")
+                self._logger.info(
+                    f"Serving static file: {file_path} ({os.path.getsize(file_path)} bytes)"
+                )
                 return FileResponse(file_path, media_type=mime_type)
             except HTTPException:
                 raise
@@ -410,9 +412,7 @@ class FastAPIThread(threading.Thread):
                 full_path = os.path.join(base_dir, decoded_path)
 
                 # Security check: ensure path is within base directory
-                if not os.path.abspath(full_path).startswith(
-                    os.path.abspath(base_dir)
-                ):
+                if not os.path.abspath(full_path).startswith(os.path.abspath(base_dir)):
                     raise HTTPException(status_code=403, detail="Access denied")
 
                 if not os.path.exists(full_path):
@@ -429,7 +429,9 @@ class FastAPIThread(threading.Thread):
                 # If it's a file, serve it
                 elif os.path.isfile(full_path):
                     mime_type = self._guess_mime_type(full_path)
-                    self._logger.info(f"Serving browse file: {full_path} ({os.path.getsize(full_path)} bytes)")
+                    self._logger.info(
+                        f"Serving browse file: {full_path} ({os.path.getsize(full_path)} bytes)"
+                    )
                     return FileResponse(full_path, media_type=mime_type)
 
                 else:
@@ -867,7 +869,9 @@ class FastAPIThread(threading.Thread):
                 # If to_file resolves to an existing directory, or the path ends
                 # with '/', place the file inside that directory using the
                 # original upload filename.
-                if os.path.isdir(filepath) or (destination and destination.endswith("/")):
+                if os.path.isdir(filepath) or (
+                    destination and destination.endswith("/")
+                ):
                     original_name = os.path.basename(file.filename or "")
                     if not original_name:
                         raise HTTPException(
@@ -918,7 +922,9 @@ class FastAPIThread(threading.Thread):
                         status_code=400, detail=f"Path is a directory: {from_file}"
                     )
 
-                self._logger.info(f"Serving file download: {filepath} ({os.path.getsize(filepath)} bytes)")
+                self._logger.info(
+                    f"Serving file download: {filepath} ({os.path.getsize(filepath)} bytes)"
+                )
                 return FileResponse(
                     filepath,
                     filename=os.path.basename(filepath),
@@ -950,10 +956,14 @@ class FastAPIThread(threading.Thread):
                 with open(filepath, "wb") as f:
                     f.write(file_content)
 
-                self._logger.info(f"Wrote content to file: {filepath} ({len(file_content)} bytes)")
+                self._logger.info(
+                    f"Wrote content to file: {filepath} ({len(file_content)} bytes)"
+                )
 
                 return FileOperationResponse(
-                    success=True, message="File content written successfully", path=to_file
+                    success=True,
+                    message="File content written successfully",
+                    path=to_file,
                 )
             except HTTPException:
                 raise
@@ -974,7 +984,7 @@ class FastAPIThread(threading.Thread):
             basepath = os.path.join(str(Path.home()), basepath)
         return basepath
 
-    def  _resolve_path(self, path: str, basepath_override: Optional[str] = None) -> str:
+    def _resolve_path(self, path: str, basepath_override: Optional[str] = None) -> str:
         """
         Resolve a path relative to the calculation basepath
 

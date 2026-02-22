@@ -761,7 +761,10 @@ def file_ops_test_client(mock_simstack_server_with_basepath, temp_basepath):
         mock_config.get_resources.return_value = mock_resources
 
         thread = FastAPIThread(
-            mock_simstack_server_with_basepath, host="127.0.0.1", port=8010, use_https=False
+            mock_simstack_server_with_basepath,
+            host="127.0.0.1",
+            port=8010,
+            use_https=False,
         )
         yield TestClient(thread.app)
 
@@ -1055,11 +1058,11 @@ def test_put_file_content_success(file_ops_test_client, temp_basepath):
         mock_resources.basepath = temp_basepath
         mock_config.get_resources.return_value = mock_resources
 
-        files = {"content": ("content", BytesIO(file_content), "application/octet-stream")}
+        files = {
+            "content": ("content", BytesIO(file_content), "application/octet-stream")
+        }
         response = file_ops_test_client.post(
-            "/api/files/put",
-            files=files,
-            data={"to_file": "direct_write.txt"}
+            "/api/files/put", files=files, data={"to_file": "direct_write.txt"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -1082,11 +1085,11 @@ def test_put_file_content_nested_path(file_ops_test_client, temp_basepath):
         mock_resources.basepath = temp_basepath
         mock_config.get_resources.return_value = mock_resources
 
-        files = {"content": ("content", BytesIO(file_content), "application/octet-stream")}
+        files = {
+            "content": ("content", BytesIO(file_content), "application/octet-stream")
+        }
         response = file_ops_test_client.post(
-            "/api/files/put",
-            files=files,
-            data={"to_file": "nested/path/file.txt"}
+            "/api/files/put", files=files, data={"to_file": "nested/path/file.txt"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -1113,11 +1116,11 @@ def test_put_file_content_overwrite(file_ops_test_client, temp_basepath):
 
         # Overwrite with new content
         new_content = b"new content"
-        files = {"content": ("content", BytesIO(new_content), "application/octet-stream")}
+        files = {
+            "content": ("content", BytesIO(new_content), "application/octet-stream")
+        }
         response = file_ops_test_client.post(
-            "/api/files/put",
-            files=files,
-            data={"to_file": "overwrite_test.txt"}
+            "/api/files/put", files=files, data={"to_file": "overwrite_test.txt"}
         )
         assert response.status_code == 200
 
@@ -1132,14 +1135,13 @@ def test_put_file_content_with_basepath_override(file_ops_test_client):
     try:
         file_content = b"Content with override"
 
-        files = {"content": ("content", BytesIO(file_content), "application/octet-stream")}
+        files = {
+            "content": ("content", BytesIO(file_content), "application/octet-stream")
+        }
         response = file_ops_test_client.post(
             "/api/files/put",
             files=files,
-            data={
-                "to_file": "override.txt",
-                "basepath_override": override_path
-            }
+            data={"to_file": "override.txt", "basepath_override": override_path},
         )
         assert response.status_code == 200
 
@@ -1224,7 +1226,10 @@ def http_browse_test_client(mock_simstack_server_with_basepath, temp_basepath):
         mock_config.get_resources.return_value = mock_resources
 
         thread = FastAPIThread(
-            mock_simstack_server_with_basepath, host="127.0.0.1", port=8011, use_https=False
+            mock_simstack_server_with_basepath,
+            host="127.0.0.1",
+            port=8011,
+            use_https=False,
         )
         yield TestClient(thread.app), temp_basepath
 

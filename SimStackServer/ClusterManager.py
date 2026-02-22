@@ -1,8 +1,6 @@
-import errno
 import logging
 import os
 import pathlib
-import stat
 import string
 import time
 from contextlib import contextmanager
@@ -13,7 +11,6 @@ import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 import httpx
 from fastapilocalhttps import HTTPSClient
-from requests.utils import stream_decode_response_unicode
 
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
@@ -22,9 +19,7 @@ from os import path
 import posixpath
 from pathlib import Path
 
-from SimStackServer.SSHTunnelForwarder import SSHTunnelForwarder
 from SimStackServer.Util.FileUtilities import (
-    split_directory_in_subdirectories,
     filewalker,
 )
 
@@ -209,7 +204,9 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError("File deletion is not implemented for SSH connections. Please use REST API or implement it in SSH.")
+            raise NotImplementedError(
+                "File deletion is not implemented for SSH connections. Please use REST API or implement it in SSH."
+            )
 
     def rmtree(self, dirname, basepath_override=None):
         """Delete a directory tree using REST API"""
@@ -221,7 +218,9 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError("Recursive directory deletion is not implemented for SSH connections. Please use REST API or implement it in SSH.")
+            raise NotImplementedError(
+                "Recursive directory deletion is not implemented for SSH connections. Please use REST API or implement it in SSH."
+            )
 
     def put_directory(
         self,
@@ -289,7 +288,11 @@ class ClusterManager:
                 )
             else:
                 if not os.path.isfile(os.path.join(to_directory, filename)):
-                    self.get_file(tocheck, os.path.join(to_directory, filename), basepath_override="")
+                    self.get_file(
+                        tocheck,
+                        os.path.join(to_directory, filename),
+                        basepath_override="",
+                    )
 
     def put_file(
         self, from_file, to_file, optional_callback=None, basepath_override=None
@@ -320,9 +323,7 @@ class ClusterManager:
                 )
                 response.raise_for_status()
 
-    def put_file_content(
-        self, content, to_file, basepath_override=None
-    ):
+    def put_file_content(self, content, to_file, basepath_override=None):
         """
         Write content directly to a remote file without creating a local temporary file.
 
@@ -334,7 +335,7 @@ class ClusterManager:
         if self._client:
             # Convert string to bytes if necessary
             if isinstance(content, str):
-                content = content.encode('utf-8')
+                content = content.encode("utf-8")
 
             # Send content as a file upload
             files = {"content": ("content", content, "application/octet-stream")}

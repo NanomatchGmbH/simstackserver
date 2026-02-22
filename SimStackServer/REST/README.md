@@ -82,4 +82,3 @@ curl -X POST "http://localhost:8000/workflows/{workflow_id}/submit"
 ```bash
 curl -X DELETE "http://localhost:8000/workflows/{workflow_id}"
 ```
-

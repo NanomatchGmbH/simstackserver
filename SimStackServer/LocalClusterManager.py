@@ -360,4 +360,3 @@ class LocalClusterManager(ClusterManager):
         os.makedirs(absdir, exist_ok=True)
 
         return absdir
-
