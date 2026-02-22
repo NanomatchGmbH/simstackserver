@@ -561,12 +561,7 @@ class FastAPIThread(threading.Thread):
         async def submit_workflow(request: SubmitWorkflowRequest):
             """Submit a workflow for execution"""
             try:
-                # Convert relative path to absolute path
-                workflow_filename = (
-                    self.simstack_server._remote_relative_to_absolute_filename(
-                        request.filename
-                    )
-                )
+                workflow_filename = self._resolve_path(request.filename)
 
                 self._logger.info(f"Workflow submission requested: {workflow_filename}")
 
@@ -933,6 +928,37 @@ class FastAPIThread(threading.Thread):
                 raise
             except Exception as e:
                 self._logger.exception(f"Error downloading file: {from_file}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.post("/api/files/put")
+        async def put_file_content(
+            content: UploadFile = File(...),
+            to_file: str = Form(...),
+            basepath_override: Optional[str] = Form(None),
+        ):
+            """Write content directly to a file on the server"""
+            try:
+                filepath = self._resolve_path(to_file, basepath_override)
+
+                # Create directory if it doesn't exist
+                dir_path = os.path.dirname(filepath)
+                if dir_path:
+                    os.makedirs(dir_path, exist_ok=True)
+
+                # Read and write content to file
+                file_content = await content.read()
+                with open(filepath, "wb") as f:
+                    f.write(file_content)
+
+                self._logger.info(f"Wrote content to file: {filepath} ({len(file_content)} bytes)")
+
+                return FileOperationResponse(
+                    success=True, message="File content written successfully", path=to_file
+                )
+            except HTTPException:
+                raise
+            except Exception as e:
+                self._logger.exception(f"Error writing content to file: {to_file}")
                 raise HTTPException(status_code=500, detail=str(e))
 
     def _get_http_base_directory(self) -> str:

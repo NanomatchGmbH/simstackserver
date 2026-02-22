@@ -72,7 +72,7 @@ class ClusterManager:
         self._ssh_client.load_system_host_keys()
         self._should_be_connected = False
         self._queueing_system = queueing_system
-        self._default_mode = 770
+        self._default_mode = 0o770
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
         self._software_directory = software_directory
@@ -319,6 +319,33 @@ class ClusterManager:
                     "/api/files/upload", files=files, data=data
                 )
                 response.raise_for_status()
+
+    def put_file_content(
+        self, content, to_file, basepath_override=None
+    ):
+        """
+        Write content directly to a remote file without creating a local temporary file.
+
+        :param content (bytes or str): Content to write to the file
+        :param to_file (str): Remote file path (will be overwritten)
+        :param basepath_override (str): Overrides the basepath in case of uploads somewhere else.
+        :return: Nothing
+        """
+        if self._client:
+            # Convert string to bytes if necessary
+            if isinstance(content, str):
+                content = content.encode('utf-8')
+
+            # Send content as a file upload
+            files = {"content": ("content", content, "application/octet-stream")}
+            data = {"to_file": to_file}
+            if basepath_override is not None:
+                data["basepath_override"] = basepath_override
+
+            response = self._client.post("/api/files/put", files=files, data=data)
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("put_file_content requires REST API connection")
 
     def list_dir(self, path, basepath_override=None):
         """List directory contents using REST API"""

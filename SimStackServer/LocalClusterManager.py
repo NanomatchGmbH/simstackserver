@@ -193,10 +193,6 @@ class LocalClusterManager(ClusterManager):
 
         shutil.copyfile(from_file, abstofile)
 
-    def remote_open(self, filename, mode, basepath_override=None):
-        abspath = self.resolve_file_in_basepath(filename, basepath_override)
-        return open(abspath, mode)
-
     def list_dir(self, path, basepath_override=None):
         files = []
         abspath = self.resolve_file_in_basepath(

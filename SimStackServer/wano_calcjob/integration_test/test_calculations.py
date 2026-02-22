@@ -122,7 +122,6 @@ def test_submit():
 
     myjon = AiiDAJob(uuid)
     outputs = myjon.get_outputs()
-    breakpoint()
 
     myjon.listdir()
     for myoutput in outputs:

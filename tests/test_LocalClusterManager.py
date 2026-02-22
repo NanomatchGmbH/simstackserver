@@ -274,17 +274,6 @@ def test_get_directory(tmpdir, cluster_manager):
     assert (dest_dir / "subdir" / "file2.txt").exists()
 
 
-def test_remote_open(tmp_path, cluster_manager):
-    # Create a dummy file.
-    file_path = tmp_path / "remote.txt"
-    file_path.write_text("remote content")
-    # Override resolve_file_in_basepath to return the actual file path.
-    cluster_manager.resolve_file_in_basepath = lambda f, b: str(file_path)
-    with cluster_manager.remote_open("remote.txt", "r") as f:
-        content = f.read()
-    assert content == "remote content"
-
-
 def test_list_dir(tmpdir, cluster_manager):
     cluster_manager._calculation_basepath = tmpdir
     # Create a dummy directory with a file and a subdirectory.

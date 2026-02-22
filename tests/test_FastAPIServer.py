@@ -1115,6 +1115,113 @@ def test_download_file_is_directory(file_ops_test_client, temp_basepath):
     assert "directory" in response.json()["detail"]
 
 
+def test_put_file_content_success(file_ops_test_client, temp_basepath):
+    """Test writing content directly to a file"""
+    file_content = b"Direct content without temp file"
+
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        # Mock Config.get_resources() to return a Resources object with our temp basepath
+        mock_resources = Mock()
+        mock_resources.basepath = temp_basepath
+        mock_config.get_resources.return_value = mock_resources
+
+        files = {"content": ("content", BytesIO(file_content), "application/octet-stream")}
+        response = file_ops_test_client.post(
+            "/api/files/put",
+            files=files,
+            data={"to_file": "direct_write.txt"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["path"] == "direct_write.txt"
+
+        # Verify file was created with correct content
+        created_file = os.path.join(temp_basepath, "direct_write.txt")
+        assert os.path.exists(created_file)
+        with open(created_file, "rb") as f:
+            assert f.read() == file_content
+
+
+def test_put_file_content_nested_path(file_ops_test_client, temp_basepath):
+    """Test writing content to a nested path that doesn't exist yet"""
+    file_content = b"Content in nested directory"
+
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = temp_basepath
+        mock_config.get_resources.return_value = mock_resources
+
+        files = {"content": ("content", BytesIO(file_content), "application/octet-stream")}
+        response = file_ops_test_client.post(
+            "/api/files/put",
+            files=files,
+            data={"to_file": "nested/path/file.txt"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+
+        # Verify file was created
+        created_file = os.path.join(temp_basepath, "nested", "path", "file.txt")
+        assert os.path.exists(created_file)
+        with open(created_file, "rb") as f:
+            assert f.read() == file_content
+
+
+def test_put_file_content_overwrite(file_ops_test_client, temp_basepath):
+    """Test that put_file_content overwrites existing files"""
+    with patch("SimStackServer.FastAPIServer.Config") as mock_config:
+        mock_resources = Mock()
+        mock_resources.basepath = temp_basepath
+        mock_config.get_resources.return_value = mock_resources
+
+        # Create initial file
+        test_file = os.path.join(temp_basepath, "overwrite_test.txt")
+        with open(test_file, "w") as f:
+            f.write("original content")
+
+        # Overwrite with new content
+        new_content = b"new content"
+        files = {"content": ("content", BytesIO(new_content), "application/octet-stream")}
+        response = file_ops_test_client.post(
+            "/api/files/put",
+            files=files,
+            data={"to_file": "overwrite_test.txt"}
+        )
+        assert response.status_code == 200
+
+        # Verify content was overwritten
+        with open(test_file, "rb") as f:
+            assert f.read() == new_content
+
+
+def test_put_file_content_with_basepath_override(file_ops_test_client):
+    """Test put_file_content with basepath override"""
+    override_path = tempfile.mkdtemp()
+    try:
+        file_content = b"Content with override"
+
+        files = {"content": ("content", BytesIO(file_content), "application/octet-stream")}
+        response = file_ops_test_client.post(
+            "/api/files/put",
+            files=files,
+            data={
+                "to_file": "override.txt",
+                "basepath_override": override_path
+            }
+        )
+        assert response.status_code == 200
+
+        # Verify file was created in override path
+        created_file = os.path.join(override_path, "override.txt")
+        assert os.path.exists(created_file)
+        with open(created_file, "rb") as f:
+            assert f.read() == file_content
+    finally:
+        shutil.rmtree(override_path, ignore_errors=True)
+
+
 def test_basepath_override(file_ops_test_client, temp_basepath):
     """Test using basepath_override parameter"""
     # Create a different temp directory
