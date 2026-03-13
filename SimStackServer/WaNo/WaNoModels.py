@@ -40,7 +40,6 @@ from SimStackServer.WaNo.AbstractWaNoModel import (
 )
 import SimStackServer.WaNo.WaNoFactory
 from lxml import etree
-import xmltodict
 import copy
 
 import yaml
@@ -1222,8 +1221,8 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def __init__(self, *args, **kwargs):
         super(WaNoModelRoot, self).__init__(*args, **kwargs)
-        self._explicit_xml = kwargs.get("explicit_xml", "unset")
         self._logger = logging.getLogger("WaNoModelRoot")
+        self.full_xml = None
         self._datachanged_callbacks = {}
         self._outputfile_callbacks = []
         self._notifying = False
@@ -1335,54 +1334,39 @@ class WaNoModelRoot(WaNoModelDictLike):
             return xml
 
     def _parse_defaults(self):
-        if self._explicit_xml != "unset":
-            xmlpath = Path(self._explicit_xml)
-        else:
-            wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
-            xmlpath = get_wano_xml_path(
-                self._wano_dir_root, wano_name_override=wle.name
-            )
-        xml = self._parse_xml(xmlpath)
-        self._parse_from_xml(xml)
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
 
-    def parse_from_xml(self, xml):
-        print("Fake Call")
+        wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
+        xmlpath = get_wano_xml_path(self._wano_dir_root, wano_name_override=wle.name)
+        try:
+            spec = xml_file_to_spec(xmlpath)
+        except ValueError as exc:
+            raise WaNoParseError(str(exc)) from exc
+        self._apply_root_spec(spec)
+        # Preserve the parsed XML tree so prepare_files_submission can write it
+        # to the workflow submission directory.
+        self.full_xml = self._parse_xml(xmlpath)
+        self._read_export_dictionaries()
 
-    def _parse_from_xml(self, xml):
-        self.full_xml = xml
-        subxml = self.full_xml.find("WaNoRoot")
+    def _read_export_dictionaries(self):
+        """Check for existing output files and set up report export paths."""
         export_dictionaries = {}
-        for child in self.full_xml.findall("./WaNoOutputFiles/WaNoOutputFile"):
-            self.output_files.append(child.text)
-            if child.text == "output_config.ini":
+        for output_file in self.output_files:
+            if output_file == "output_config.ini":
                 absfile = join(self._wano_dir_root, "output_config.ini")
                 if os.path.isfile(absfile):
                     export_dictionaries["ini"] = absfile
-
-            elif child.text == "output_dict.yml":
+            elif output_file == "output_dict.yml":
                 absfile = join(self._wano_dir_root, "output_dict.yml")
                 if os.path.isfile(absfile):
                     export_dictionaries["dict"] = absfile
-
         if len(export_dictionaries) > 0:
             rr = ReportRenderer(export_dictionaries)
             my_exports = rr.consolidate_export_dictionaries()
             self._my_export_paths = [*flatten_dict(my_exports).keys()]
 
-        for child in self.full_xml.findall("./WaNoInputFiles/WaNoInputFile"):
-            self.input_files.append((child.attrib["logical_filename"], child.text))
-
-        el = self.full_xml.find("./WaNoMeta")
-        if el is not None:
-            self.metas = xmltodict.parse(etree.tostring(el))
-
-        self.exec_command = self.full_xml.find("WaNoExecCommand").text
-        for child in self.full_xml.find("WaNoExecCommand"):
-            raise WaNoParseError(
-                "Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse."
-            )
-
-        super().parse_from_xml(xml=subxml)
+    def parse_from_xml(self, xml):
+        print("Fake Call")
 
     def _tidy_lists(self):
         while len(self._unregister_list) > 0:
@@ -2162,7 +2146,6 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         The spec format matches the output of ``xml_compat.root_xml_to_spec()``.
         """
-        self.full_xml = None
         self.exec_command = spec.get("exec_command", "")
         self.output_files = list(spec.get("output_files", []))
         # root spec input_files are dicts {"logical_filename": ..., "path": ...}

@@ -3,7 +3,7 @@
 
 
 from SimStackServer.WaNo.WaNoTreeWalker import ViewCollector, WaNoTreeWalker
-from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry, get_wano_xml_path
+from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry
 
 
 def wano_without_view_constructor_helper(wmr, start_path=None):
@@ -117,11 +117,10 @@ def wano_constructor_helper(wmr, start_path=None, parent_view=None):
 
 def wano_constructor(wano: WaNoListEntry, model_only=False):
     wano_dir_root = wano.folder
-    xml = get_wano_xml_path(wano.folder, wano_name_override=wano.name)
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 
     wmr = WaNoModelRoot(
-        wano_dir_root=wano_dir_root, explicit_xml=xml, model_only=model_only
+        wano_dir_root=wano_dir_root, model_only=model_only
     )
     if model_only:
         wmr = wano_without_view_constructor_helper(wmr)

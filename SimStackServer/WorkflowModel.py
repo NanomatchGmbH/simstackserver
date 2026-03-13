@@ -2858,15 +2858,14 @@ class Workflow(XMLYMLInstantiationBase):
         wfem.set_runtime_directory(jobdirectory)
         mkdir_p(jobdirectory)
 
-        explicit_wfxml = join(
-            self.storage, "workflow_data", wfem.path, "inputs", wfem.wano_xml
-        )
         wano_dir_root = Path(join(self.storage, "workflow_data", wfem.path, "inputs"))
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
 
-        wmr = WaNoModelRoot(
-            wano_dir_root=wano_dir_root, model_only=True, explicit_xml=explicit_wfxml
+        wmr = WaNoModelRoot.from_spec(
+            xml_file_to_spec(wano_dir_root / wfem.wano_xml),
+            wano_dir_root=wano_dir_root,
         )
         try:
             wmr.read(wano_dir_root)
@@ -3145,18 +3144,15 @@ class Workflow(XMLYMLInstantiationBase):
                 found_output_dict = True
                 sws = SecureWaNos.get_instance()
 
-                explicit_wfxml = join(
-                    self.storage, "workflow_data", wfem.path, "inputs", wfem.wano_xml
-                )
                 wano_dir_root = Path(
                     join(self.storage, "workflow_data", wfem.path, "inputs")
                 )
                 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+                from SimStackServer.WaNo.xml_compat import xml_file_to_spec
 
-                wmr = WaNoModelRoot(
+                wmr = WaNoModelRoot.from_spec(
+                    xml_file_to_spec(wano_dir_root / wfem.wano_xml),
                     wano_dir_root=wano_dir_root,
-                    model_only=True,
-                    explicit_xml=explicit_wfxml,
                 )
 
                 secure_wano = sws.get_wano_by_name(wmr.name)
