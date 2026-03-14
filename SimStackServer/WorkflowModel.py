@@ -611,6 +611,13 @@ class Resources(XMLYMLInstantiationBase):
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m"),
         ("client_secret", str, "", "Secret for REST API authentication", "m"),
         (
+            "use_ssh_tunnel",
+            bool,
+            True,
+            "Tunnel REST traffic through SSH connection",
+            "m",
+        ),
+        (
             "sge_pe",
             str,
             "",
@@ -638,6 +645,7 @@ class Resources(XMLYMLInstantiationBase):
             "username",
             "ssh_private_key",
             "client_secret",
+            "use_ssh_tunnel",
             "sw_dir_on_resource",
             "basepath",
             "queueing_system",
@@ -717,6 +725,10 @@ class Resources(XMLYMLInstantiationBase):
         return self._field_values["client_secret"]
 
     @property
+    def use_ssh_tunnel(self):
+        return self._field_values["use_ssh_tunnel"]
+
+    @property
     def extra_config(self):
         return self._field_values["extra_config"]
 
@@ -724,11 +736,29 @@ class Resources(XMLYMLInstantiationBase):
     def reuse_results(self):
         return self._field_values["reuse_results"]
 
-    def from_xml(self, in_xml):
-        super().from_xml(in_xml)
-        # client_secret is absent in XML written before this field was introduced
+    def _apply_defaults_for_missing_fields(self, parsed_keys):
+        """Apply conditional defaults for fields that may be absent in older data.
+
+        :param parsed_keys (set): Field names that were actually present in the source data.
+        """
         if not self._field_values.get("client_secret"):
             self._field_values["client_secret"] = ""
+        # use_ssh_tunnel may be absent in older data; default depends on client_secret:
+        # - no client_secret → old-style setup, use SSH tunnel (True)
+        # - client_secret set → new-style setup, direct connection (False)
+        if "use_ssh_tunnel" not in parsed_keys:
+            self._field_values["use_ssh_tunnel"] = not bool(
+                self._field_values["client_secret"]
+            )
+
+    def from_xml(self, in_xml):
+        parsed_keys = {child.tag for child in in_xml} | set(in_xml.attrib.keys())
+        super().from_xml(in_xml)
+        self._apply_defaults_for_missing_fields(parsed_keys)
+
+    def from_dict(self, in_dict):
+        super().from_dict(in_dict)
+        self._apply_defaults_for_missing_fields(set(in_dict.keys()))
 
     def overwrite_unset_fields_from_default_resources(
         self, default_resources: "Resources"

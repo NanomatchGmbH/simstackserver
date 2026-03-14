@@ -80,6 +80,7 @@ class ClusterManager:
         self._client_secret = client_secret
         self._client = None
         self._ssh_tunnel = None
+        print("Using ssh tunnel {%s}" % use_ssh_tunnel)
         self._use_ssh_tunnel = use_ssh_tunnel
 
     def init_client(self):

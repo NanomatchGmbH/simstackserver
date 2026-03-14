@@ -137,6 +137,7 @@ def test_submit_single_job_message(workflow_exec_module_fixture):
             "extra_config": "None Required (default)",
             "ssh_private_key": "UseSystemDefault",
             "client_secret": "",
+            "use_ssh_tunnel": "True",
             "sge_pe": "",
             "reuse_results": "False",
         },
