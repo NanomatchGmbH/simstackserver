@@ -533,40 +533,48 @@ def test_clear_server_state(test_client, mock_simstack_server):
 
 def test_configure_endpoint(test_client, mock_simstack_server):
     """Test configure endpoint with Resources object"""
-    # The configure endpoint requires an existing ServerConfig
-    Config._server_config = ServerConfig(
-        rest_port=8001, client_secret="test", server_version="v1"
-    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_dirs = Config._dirs
+        mock_dirs = Mock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = tmpdir
+        Config._dirs = mock_dirs
+        Config._server_config = ServerConfig(
+            rest_port=8001, client_secret="test", server_version="v1"
+        )
+        try:
+            resources_dict = {
+                "resource_name": "test_cluster",
+                "walltime": 3600,
+                "cpus_per_node": 8,
+                "nodes": 2,
+                "queue": "default",
+                "memory": 8192,
+                "custom_requests": "gpu=1",
+                "base_URI": "cluster.example.com",
+                "port": 22,
+                "username": "testuser",
+                "basepath": "simstack_workspace",
+                "queueing_system": "slurm",
+            }
 
-    # Create a Resources dict (JSON representation)
-    resources_dict = {
-        "resource_name": "test_cluster",
-        "walltime": 3600,
-        "cpus_per_node": 8,
-        "nodes": 2,
-        "queue": "default",
-        "memory": 8192,
-        "custom_requests": "gpu=1",
-        "base_URI": "cluster.example.com",
-        "port": 22,
-        "username": "testuser",
-        "basepath": "simstack_workspace",
-        "queueing_system": "slurm",
-    }
+            response = test_client.post(
+                "/api/configure", json={"resources": resources_dict}
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "configured"
+            assert "configuration saved" in data["message"]
 
-    response = test_client.post("/api/configure", json={"resources": resources_dict})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "configured"
-    assert "configuration saved" in data["message"]
-
-    # Verify the configuration was saved
-    loaded = Config.load_server_config()
-    assert loaded is not None
-    assert loaded.resources is not None
-    assert loaded.resources.resource_name == "test_cluster"
-    assert loaded.resources.walltime == 3600
-    assert loaded.resources.cpus_per_node == 8
+            loaded = Config.load_server_config()
+            assert loaded is not None
+            assert loaded.resources is not None
+            assert loaded.resources.resource_name == "test_cluster"
+            assert loaded.resources.walltime == 3600
+            assert loaded.resources.cpus_per_node == 8
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None
 
 
 # ==================== Error Handling Tests for New Endpoints ====================
@@ -635,20 +643,33 @@ def test_clear_server_state_error(test_client, mock_simstack_server):
 
 def test_configure_endpoint_with_extra_fields(test_client, mock_simstack_server):
     """Test configure endpoint handles extra fields gracefully"""
-    # Resources.from_dict is lenient and ignores unknown fields
-    resources_with_extra = {
-        "resource_name": "test_cluster",
-        "walltime": 3600,
-        "invalid_field": "invalid_value",  # This will be ignored
-    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_dirs = Config._dirs
+        mock_dirs = Mock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = tmpdir
+        Config._dirs = mock_dirs
+        Config._server_config = ServerConfig(
+            rest_port=8001, client_secret="test", server_version="v1"
+        )
+        try:
+            # Resources.from_dict is lenient and ignores unknown fields
+            resources_with_extra = {
+                "resource_name": "test_cluster",
+                "walltime": 3600,
+                "invalid_field": "invalid_value",  # This will be ignored
+            }
 
-    response = test_client.post(
-        "/api/configure", json={"resources": resources_with_extra}
-    )
-    # Should succeed and ignore unknown fields
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "configured"
+            response = test_client.post(
+                "/api/configure", json={"resources": resources_with_extra}
+            )
+            # Should succeed and ignore unknown fields
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "configured"
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None
 
 
 # ==================== Integration Tests for New Endpoints ====================
@@ -1454,62 +1475,104 @@ def test_guess_mime_type_helper():
 
 def test_config_save_and_load():
     """Test saving and loading ServerConfig with resources"""
-    resources = Resources()
-    resources_dict = {
-        "resource_name": "test_resource",
-        "walltime": 7200,
-        "cpus_per_node": 16,
-        "nodes": 4,
-        "memory": 16384,
-        "queue": "gpu",
-        "queueing_system": "slurm",
-    }
-    resources.from_dict(resources_dict)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_dirs = Config._dirs
+        mock_dirs = Mock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = tmpdir
+        Config._dirs = mock_dirs
+        Config._server_config = None
+        try:
+            resources = Resources()
+            resources_dict = {
+                "resource_name": "test_resource",
+                "walltime": 7200,
+                "cpus_per_node": 16,
+                "nodes": 4,
+                "memory": 16384,
+                "queue": "gpu",
+                "queueing_system": "slurm",
+            }
+            resources.from_dict(resources_dict)
 
-    sc = ServerConfig(
-        rest_port=8080, client_secret="s", server_version="v1", resources=resources
-    )
-    config_path = Config.save_server_config(sc)
-    assert os.path.exists(config_path)
-    assert config_path.endswith("server_config.yml")
+            sc = ServerConfig(
+                rest_port=8080,
+                client_secret="s",
+                server_version="v1",
+                resources=resources,
+            )
+            config_path = Config.save_server_config(sc)
+            assert os.path.exists(config_path)
+            assert config_path.endswith("server_config.yml")
 
-    loaded = Config.load_server_config()
-    assert loaded is not None
-    assert loaded.resources is not None
-    assert loaded.resources.resource_name == "test_resource"
-    assert loaded.resources.walltime == 7200
-    assert loaded.resources.cpus_per_node == 16
-    assert loaded.resources.nodes == 4
-    assert loaded.resources.memory == 16384
-    assert loaded.resources.queue == "gpu"
-    assert loaded.resources.queueing_system == "slurm"
+            loaded = Config.load_server_config()
+            assert loaded is not None
+            assert loaded.resources is not None
+            assert loaded.resources.resource_name == "test_resource"
+            assert loaded.resources.walltime == 7200
+            assert loaded.resources.cpus_per_node == 16
+            assert loaded.resources.nodes == 4
+            assert loaded.resources.memory == 16384
+            assert loaded.resources.queue == "gpu"
+            assert loaded.resources.queueing_system == "slurm"
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None
 
 
 def test_config_load_nonexistent():
     """Test loading configuration when file doesn't exist"""
-    config_path = Config._get_config_file("server_config.yml")
-    if os.path.exists(config_path):
-        os.remove(config_path)
-
-    loaded = Config.load_server_config()
-    assert loaded is None
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_dirs = Config._dirs
+        mock_dirs = Mock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = tmpdir
+        Config._dirs = mock_dirs
+        Config._server_config = None
+        try:
+            loaded = Config.load_server_config()
+            assert loaded is None
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None
 
 
 def test_config_overwrite():
     """Test that save_server_config overwrites existing configuration"""
-    resources1 = Resources()
-    resources1.from_dict({"resource_name": "first_config", "walltime": 1000})
-    Config.save_server_config(
-        ServerConfig(rest_port=1, client_secret="", server_version="v1", resources=resources1)
-    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_dirs = Config._dirs
+        mock_dirs = Mock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = tmpdir
+        Config._dirs = mock_dirs
+        Config._server_config = None
+        try:
+            resources1 = Resources()
+            resources1.from_dict({"resource_name": "first_config", "walltime": 1000})
+            Config.save_server_config(
+                ServerConfig(
+                    rest_port=1,
+                    client_secret="",
+                    server_version="v1",
+                    resources=resources1,
+                )
+            )
 
-    resources2 = Resources()
-    resources2.from_dict({"resource_name": "second_config", "walltime": 2000})
-    Config.save_server_config(
-        ServerConfig(rest_port=2, client_secret="", server_version="v1", resources=resources2)
-    )
+            resources2 = Resources()
+            resources2.from_dict({"resource_name": "second_config", "walltime": 2000})
+            Config.save_server_config(
+                ServerConfig(
+                    rest_port=2,
+                    client_secret="",
+                    server_version="v1",
+                    resources=resources2,
+                )
+            )
 
-    loaded = Config.load_server_config()
-    assert loaded is not None
-    assert loaded.resources.resource_name == "second_config"
-    assert loaded.resources.walltime == 2000
+            loaded = Config.load_server_config()
+            assert loaded is not None
+            assert loaded.resources.resource_name == "second_config"
+            assert loaded.resources.walltime == 2000
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None
