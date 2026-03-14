@@ -184,11 +184,48 @@ class SSHTunnelForwarder:
         self._server_threads: list = []
         self._is_started = False
         self._local_bind_port: Optional[int] = None
+        self._owns_ssh_client = True
 
         logger.debug(
             f"SSHTunnelForwarder initialized: {self.ssh_host}:{self.ssh_port} -> "
             f"{remote_bind_address}"
         )
+
+    @classmethod
+    def from_transport(
+        cls,
+        transport: paramiko.Transport,
+        remote_bind_address: Tuple[str, int],
+        local_bind_address: Tuple[str, int] = ("127.0.0.1", 0),
+    ) -> "SSHTunnelForwarder":
+        """Create a tunnel forwarder from an existing paramiko Transport.
+
+        The caller retains ownership of the underlying SSH connection;
+        stop() will only tear down the local forwarding server.
+        """
+        instance = cls.__new__(cls)
+        instance.ssh_host = "existing-transport"
+        instance.ssh_port = 0
+        instance.ssh_username = ""
+        instance.ssh_password = None
+        instance.ssh_pkey = None
+        instance.ssh_private_key_password = None
+        instance.remote_bind_address = remote_bind_address
+        instance.local_bind_address = local_bind_address
+        instance.allow_unknown_hosts = False
+        instance.compress = True
+        instance._ssh_client = None
+        instance._transport = transport
+        instance._server_list = []
+        instance._server_threads = []
+        instance._is_started = False
+        instance._local_bind_port = None
+        instance._owns_ssh_client = False
+
+        logger.debug(
+            f"SSHTunnelForwarder from existing transport -> {remote_bind_address}"
+        )
+        return instance
 
     def start(self):
         """
@@ -200,51 +237,56 @@ class SSHTunnelForwarder:
 
         logger.debug("Starting SSH tunnel")
 
-        # Create SSH client
-        self._ssh_client = paramiko.SSHClient()
-        self._ssh_client.load_system_host_keys()
+        # Only create a new SSH connection if we don't already have a transport
+        # (from_transport provides one without creating a new connection)
+        if self._transport is None:
+            # Create SSH client
+            self._ssh_client = paramiko.SSHClient()
+            self._ssh_client.load_system_host_keys()
 
-        if self.allow_unknown_hosts:
-            self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            if self.allow_unknown_hosts:
+                self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        # Load private key if provided
-        pkey = None
-        if self.ssh_pkey:
-            if isinstance(self.ssh_pkey, paramiko.PKey):
-                pkey = self.ssh_pkey
-            elif isinstance(self.ssh_pkey, str):
-                # Try to load the key file
-                try:
-                    pkey = paramiko.RSAKey.from_private_key_file(
-                        self.ssh_pkey, password=self.ssh_private_key_password
-                    )
-                except paramiko.SSHException:
+            # Load private key if provided
+            pkey = None
+            if self.ssh_pkey:
+                if isinstance(self.ssh_pkey, paramiko.PKey):
+                    pkey = self.ssh_pkey
+                elif isinstance(self.ssh_pkey, str):
+                    # Try to load the key file
                     try:
-                        pkey = paramiko.Ed25519Key.from_private_key_file(
+                        pkey = paramiko.RSAKey.from_private_key_file(
                             self.ssh_pkey, password=self.ssh_private_key_password
                         )
                     except paramiko.SSHException:
                         try:
-                            pkey = paramiko.ECDSAKey.from_private_key_file(
+                            pkey = paramiko.Ed25519Key.from_private_key_file(
                                 self.ssh_pkey, password=self.ssh_private_key_password
                             )
                         except paramiko.SSHException:
-                            pkey = paramiko.DSSKey.from_private_key_file(
-                                self.ssh_pkey, password=self.ssh_private_key_password
-                            )
+                            try:
+                                pkey = paramiko.ECDSAKey.from_private_key_file(
+                                    self.ssh_pkey,
+                                    password=self.ssh_private_key_password,
+                                )
+                            except paramiko.SSHException:
+                                pkey = paramiko.DSSKey.from_private_key_file(
+                                    self.ssh_pkey,
+                                    password=self.ssh_private_key_password,
+                                )
 
-        # Connect to SSH server
-        self._ssh_client.connect(
-            hostname=self.ssh_host,
-            port=self.ssh_port,
-            username=self.ssh_username,
-            password=self.ssh_password,
-            pkey=pkey,
-            compress=self.compress,
-        )
+            # Connect to SSH server
+            self._ssh_client.connect(
+                hostname=self.ssh_host,
+                port=self.ssh_port,
+                username=self.ssh_username,
+                password=self.ssh_password,
+                pkey=pkey,
+                compress=self.compress,
+            )
 
-        self._transport = self._ssh_client.get_transport()
-        self._transport.set_keepalive(30)
+            self._transport = self._ssh_client.get_transport()
+            self._transport.set_keepalive(30)
 
         # Create forwarding server
         server = _ForwardServer(
@@ -287,12 +329,13 @@ class SSHTunnelForwarder:
             server.shutdown()
             server.server_close()
 
-        # Close SSH connection
-        if self._transport:
-            self._transport.close()
+        # Only close SSH connection if we own it
+        if self._owns_ssh_client:
+            if self._transport:
+                self._transport.close()
 
-        if self._ssh_client:
-            self._ssh_client.close()
+            if self._ssh_client:
+                self._ssh_client.close()
 
         self._server_list.clear()
         self._server_threads.clear()

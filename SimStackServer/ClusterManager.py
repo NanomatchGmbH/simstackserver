@@ -24,6 +24,7 @@ from SimStackServer.Util.FileUtilities import (
 )
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
+from SimStackServer.SSHTunnelForwarder import SSHTunnelForwarder
 
 
 class ClusterManager:
@@ -40,6 +41,7 @@ class ClusterManager:
         client_secret=None,
         software_directory=None,
         rest_port=None,
+        use_ssh_tunnel=False,
     ):
         """
 
@@ -52,6 +54,7 @@ class ClusterManager:
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
         :param client_secret (str): Secret for REST API HTTP Basic Auth
         :param rest_port (int): Port the rest session runs on
+        :param use_ssh_tunnel (bool): If True, tunnel REST traffic through the SSH connection
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
@@ -76,16 +79,35 @@ class ClusterManager:
         self._rest_port = rest_port
         self._client_secret = client_secret
         self._client = None
+        self._ssh_tunnel = None
+        self._use_ssh_tunnel = use_ssh_tunnel
 
     def init_client(self):
-        base_url = self.get_client_url()
-        https_client = HTTPSClient(base_url)
-        verify = str(https_client.get_certificate_path())
-        self._client = httpx.Client(
-            base_url=base_url,
-            verify=verify,
-            auth=("simstack", self._client_secret),
-        )
+        if self._use_ssh_tunnel:
+            transport = self._ssh_client.get_transport()
+            self._ssh_tunnel = SSHTunnelForwarder.from_transport(
+                transport,
+                remote_bind_address=("127.0.0.1", self._rest_port),
+            )
+            self._ssh_tunnel.start()
+            local_port = self._ssh_tunnel.local_bind_port
+            base_url = f"https://127.0.0.1:{local_port}"
+            # SSH tunnel already provides encryption and authentication,
+            # so we skip SSL certificate verification.
+            self._client = httpx.Client(
+                base_url=base_url,
+                verify=False,
+                auth=("simstack", self._client_secret),
+            )
+        else:
+            base_url = self.get_client_url()
+            https_client = HTTPSClient(base_url)
+            verify = str(https_client.get_certificate_path())
+            self._client = httpx.Client(
+                base_url=base_url,
+                verify=verify,
+                auth=("simstack", self._client_secret),
+            )
 
     def get_client_url(self):
         if self._rest_port:
@@ -193,6 +215,9 @@ class ClusterManager:
         disconnect the ssh client
         :return: Nothing
         """
+        if self._ssh_tunnel is not None:
+            self._ssh_tunnel.stop()
+            self._ssh_tunnel = None
         self._ssh_client.close()
 
     def resolve_file_in_basepath(self, filename, basepath_override):
