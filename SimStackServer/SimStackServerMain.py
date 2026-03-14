@@ -428,7 +428,7 @@ class SimStackServer(object):
         self._clear_server_state()
         self._setup_root_logger()
         self._config = Config()
-        self._config.load_config()
+        self._config.load_server_config()
         self._logger = logging.getLogger("SimStackServer")
         if not self._register(my_executable):
             self._logger.debug("Already running, should exit here.")

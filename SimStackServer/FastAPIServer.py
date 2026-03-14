@@ -667,16 +667,22 @@ class FastAPIThread(threading.Thread):
                 resources = Resources()
                 resources.from_dict(request.resources)
 
-                # Print resources to stdout
-                print(resources)
-
-                # Save configuration
-                config_path = Config.save_config(resources)
+                # Update the ServerConfig with the new resources
+                server_config = Config.get_server_config()
+                if server_config is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="ServerConfig not initialized. Server must be started first.",
+                    )
+                server_config.resources = resources
+                config_path = Config.save_server_config(server_config)
 
                 return ConfigureResponse(
                     status="configured",
                     message=f"Resources configuration saved to {config_path}",
                 )
+            except HTTPException:
+                raise
             except Exception as e:
                 self._logger.exception("Error configuring resources")
                 raise HTTPException(status_code=500, detail=str(e))

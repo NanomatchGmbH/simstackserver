@@ -1,4 +1,3 @@
-import os
 import pathlib
 import tempfile
 from contextlib import nullcontext
@@ -8,15 +7,13 @@ import pytest
 from unittest.mock import patch, MagicMock
 import logging
 
-# Add SimStackServer to path
-
 from SimStackServer.SimStackServerEntryPoint import (
     get_my_runtime,
     setup_pid,
     flush_port_and_password_to_stdout,
-    InputFileError,
     main,
 )
+from SimStackServer.Config import Config, ServerConfig
 
 
 @pytest.fixture
@@ -28,10 +25,7 @@ def tmpdir() -> tempfile.TemporaryDirectory:
 @pytest.fixture
 def tmpfile(tmp_path):
     tmpfile = tmp_path / "tmp_file.dat"
-
-    # Just touching the file ensures it exists; or you can open/write to it.
     tmpfile.touch()
-
     yield tmpfile
 
 
@@ -40,14 +34,12 @@ class TestSimStackServerEntryPoint:
         pass
 
     def test_get_my_runtime(self):
-        # Test the runtime command generation
         with patch("sys.executable", "python3"):
             with patch("sys.argv", ["script.py", "arg1", "arg2"]):
                 result = get_my_runtime()
                 assert result == "python3 script.py"
 
     def test_setup_pid_new(self):
-        # Test successful PID file setup
         mock_lock = MagicMock()
         with patch(
             "SimStackServer.Util.NoEnterPIDLockFile.NoEnterPIDLockFile",
@@ -56,103 +48,120 @@ class TestSimStackServerEntryPoint:
             lock = setup_pid()
             assert lock == mock_lock
 
-    def test_flush_port_and_password_to_stdout(self, tmpdir, capsys):
-        # Create a temporary file for testing
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            temp_file.write(b"port=12345\npassword=test_password\n")
-            temp_file_path = temp_file.name
+    def test_flush_port_and_password_to_stdout_no_config(self):
+        """Test that flush raises FileNotFoundError when no config exists"""
+        with tempfile.TemporaryDirectory() as config_tmpdir:
+            mock_dirs = MagicMock()
+            mock_dirs.user_config_dir = config_tmpdir
+            mock_dirs.user_log_dir = f"{config_tmpdir}/log"
+            original_dirs = Config._dirs
+            Config._dirs = mock_dirs
+            Config._server_config = None
+            try:
+                with pytest.raises(FileNotFoundError):
+                    flush_port_and_password_to_stdout()
+            finally:
+                Config._dirs = original_dirs
+                Config._server_config = None
+
+    def test_flush_port_and_password_to_stdout_with_config(self, capsys):
+        """Test that flush prints port/pass when config exists"""
+        with tempfile.TemporaryDirectory() as config_tmpdir:
+            mock_dirs = MagicMock()
+            mock_dirs.user_config_dir = config_tmpdir
+            mock_dirs.user_log_dir = f"{config_tmpdir}/log"
+            original_dirs = Config._dirs
+            Config._dirs = mock_dirs
+            Config._server_config = None
+            try:
+                sc = ServerConfig(
+                    rest_port=12345,
+                    client_secret="mypass",
+                    server_version="SERVER,1.0,REST,1.0",
+                )
+                Config.save_server_config(sc)
+                Config._server_config = None  # clear cache
+
+                flush_port_and_password_to_stdout()
+                captured = capsys.readouterr()
+                assert "Port Pass 12345 mypass" in captured.out
+            finally:
+                Config._dirs = original_dirs
+                Config._server_config = None
+
+    def test_main_already_running(self, tmpdir, caplog):
+        """Test that main exits cleanly when server is already running"""
+        tmppath = pathlib.Path(tmpdir)
+        mock_dirs = MagicMock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = str(tmppath / "logs")
+        original_dirs = Config._dirs
+        Config._dirs = mock_dirs
+        Config._server_config = None
 
         try:
-            # Test without zmq patch (zmq removed)
-            with patch("sys.stdout") as mock_stdout:
-                appdir = MagicMock()
-                appdir.user_config_dir = tmpdir
+            # Create server config so flush works
+            (tmppath / "logs").mkdir(exist_ok=True)
+            sc = ServerConfig(
+                rest_port=12345,
+                client_secret="mypass",
+                server_version="SERVER,1.0,REST,1.0",
+            )
+            Config.save_server_config(sc)
 
-                # file does not exist, go into time.sleep()
-                with pytest.raises(FileNotFoundError):
-                    flush_port_and_password_to_stdout(appdir, other_process_setup=True)
-
-                    tmpfile = pathlib.Path(tmpdir) / "portconfig.txt"
-                    tmpfile.touch()
-                    with pytest.raises(InputFileError):
-                        flush_port_and_password_to_stdout(appdir)
-
-                    with open(tmpfile, "w") as of:
-                        of.write("Name name2 12345 mypass some")
-
-                    # Check that stdout received the expected data
-                    flush_port_and_password_to_stdout(appdir)
-
-                    write_calls = [
-                        call[0][0] for call in mock_stdout.write.call_args_list
-                    ]
-                    assert write_calls[0].startswith("Port Pass 12345 mypass")
-
-        finally:
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-
-    def test_main_secure_mode(self, tmpdir, caplog, capsys):
-        tmppath = pathlib.Path(tmpdir)
-        mock_lock = MagicMock()
-        mock_lock.acquire.return_value = None
-        with patch(
-            "SimStackServer.Util.NoEnterPIDLockFile.NoEnterPIDLockFile",
-            return_value=mock_lock,
-        ):
-            appdir = MagicMock()
-            appdir.user_config_dir = tmpdir
-            tmpfile = tmppath / "portconfig.txt"
-            appdir.user_log_dir = tmppath / "logs"
+            mock_lock = MagicMock()
+            mock_lock.acquire.return_value = None
 
             with patch("sys.stdout"), patch(
                 "daemon.DaemonContext", return_value=nullcontext()
             ), patch(
                 "SimStackServer.SimStackServerMain.SimStackServer.get_appdirs",
-                return_value=appdir,
-            ) as mock_get_appdirs:
-                mock_pid = MagicMock()
-                mock_pid.acquire.side_effect = lockfile.AlreadyLocked
-                with patch(
-                    "SimStackServer.SimStackServerEntryPoint.setup_pid",
-                    return_value=mock_pid,
-                ), patch("sys.exit") as mock_exit:
-                    with pytest.raises(FileNotFoundError):
-                        main()
-                        output = capsys.readouterr()
-                        assert "App Lock was found" in output
-                        assert "Please check logs" in output
-                        mock_exit.assert_called_once_with(0)
-
-                os.mkdir(appdir.user_log_dir)
-                # Write content to portconfig.txt so it's not empty
-                with open(tmpfile, "w") as of:
-                    of.write("Name name2 12345 mypass REST,1.0")
-
-                # Mock register_pidfile to simulate server already running
+                return_value=MagicMock(
+                    user_config_dir=tmpdir, user_log_dir=str(tmppath / "logs")
+                ),
+            ):
+                # Simulate server already running via register_pidfile
                 mock_server_pid = MagicMock()
                 mock_server_pid.acquire.side_effect = lockfile.AlreadyLocked
                 with patch(
                     "SimStackServer.SimStackServerMain.SimStackServer.register_pidfile",
                     return_value=mock_server_pid,
-                ):
-                    with caplog.at_level(logging.DEBUG, logger="Startup"):
-                        with pytest.raises(SystemExit):
-                            main()
-                    mock_get_appdirs.assert_called()
-                    mock_lock.acquire.assert_called()
-
-                with open(tmpfile, "w") as of:
-                    of.write("Name name2 12345 mypass some")
-
-                mock_pid = MagicMock()
-                mock_pid.acquire.side_effect = lockfile.AlreadyLocked
-
-                with patch(
-                    "SimStackServer.SimStackServerEntryPoint.SimStackServer.register_pidfile",
-                    return_value=mock_pid,
                 ), patch("sys.exit", side_effect=SystemExit) as mock_exit:
                     with pytest.raises(SystemExit):
                         main()
-                    # Assert that sys.exit was called with 0 - moved outside pytest.raises
                     mock_exit.assert_called_once_with(0)
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None
+
+    def test_main_locked_no_config(self, tmpdir):
+        """Test that main exits with error when locked but no config exists"""
+        tmppath = pathlib.Path(tmpdir)
+        mock_dirs = MagicMock()
+        mock_dirs.user_config_dir = tmpdir
+        mock_dirs.user_log_dir = str(tmppath / "logs")
+        original_dirs = Config._dirs
+        Config._dirs = mock_dirs
+        Config._server_config = None
+
+        try:
+            mock_pid = MagicMock()
+            mock_pid.acquire.side_effect = lockfile.AlreadyLocked
+
+            with patch("sys.stdout"), patch(
+                "SimStackServer.SimStackServerMain.SimStackServer.get_appdirs",
+                return_value=MagicMock(
+                    user_config_dir=tmpdir, user_log_dir=str(tmppath / "logs")
+                ),
+            ), patch(
+                "SimStackServer.SimStackServerEntryPoint.setup_pid",
+                return_value=mock_pid,
+            ), patch(
+                "sys.exit", side_effect=SystemExit
+            ) as mock_exit:
+                with pytest.raises(SystemExit):
+                    main()
+                mock_exit.assert_called_once_with(1)
+        finally:
+            Config._dirs = original_dirs
+            Config._server_config = None

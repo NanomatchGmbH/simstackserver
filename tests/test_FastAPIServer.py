@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from io import BytesIO
 
 from SimStackServer.FastAPIServer import FastAPIThread
-from SimStackServer.Config import Config
+from SimStackServer.Config import Config, ServerConfig
 from SimStackServer.WorkflowModel import Resources
 
 
@@ -533,6 +533,11 @@ def test_clear_server_state(test_client, mock_simstack_server):
 
 def test_configure_endpoint(test_client, mock_simstack_server):
     """Test configure endpoint with Resources object"""
+    # The configure endpoint requires an existing ServerConfig
+    Config._server_config = ServerConfig(
+        rest_port=8001, client_secret="test", server_version="v1"
+    )
+
     # Create a Resources dict (JSON representation)
     resources_dict = {
         "resource_name": "test_cluster",
@@ -556,11 +561,12 @@ def test_configure_endpoint(test_client, mock_simstack_server):
     assert "configuration saved" in data["message"]
 
     # Verify the configuration was saved
-    loaded_resources = Config.load_config()
-    assert loaded_resources is not None
-    assert loaded_resources.resource_name == "test_cluster"
-    assert loaded_resources.walltime == 3600
-    assert loaded_resources.cpus_per_node == 8
+    loaded = Config.load_server_config()
+    assert loaded is not None
+    assert loaded.resources is not None
+    assert loaded.resources.resource_name == "test_cluster"
+    assert loaded.resources.walltime == 3600
+    assert loaded.resources.cpus_per_node == 8
 
 
 # ==================== Error Handling Tests for New Endpoints ====================
@@ -1447,8 +1453,7 @@ def test_guess_mime_type_helper():
 
 
 def test_config_save_and_load():
-    """Test saving and loading Resources configuration"""
-    # Create a Resources object using from_dict
+    """Test saving and loading ServerConfig with resources"""
     resources = Resources()
     resources_dict = {
         "resource_name": "test_resource",
@@ -1461,49 +1466,50 @@ def test_config_save_and_load():
     }
     resources.from_dict(resources_dict)
 
-    # Save configuration
-    config_path = Config.save_config(resources)
+    sc = ServerConfig(
+        rest_port=8080, client_secret="s", server_version="v1", resources=resources
+    )
+    config_path = Config.save_server_config(sc)
     assert os.path.exists(config_path)
-    assert config_path.endswith("resources.yml")
+    assert config_path.endswith("server_config.yml")
 
-    # Load configuration
-    loaded_resources = Config.load_config()
-    assert loaded_resources is not None
-    assert loaded_resources.resource_name == "test_resource"
-    assert loaded_resources.walltime == 7200
-    assert loaded_resources.cpus_per_node == 16
-    assert loaded_resources.nodes == 4
-    assert loaded_resources.memory == 16384
-    assert loaded_resources.queue == "gpu"
-    assert loaded_resources.queueing_system == "slurm"
+    loaded = Config.load_server_config()
+    assert loaded is not None
+    assert loaded.resources is not None
+    assert loaded.resources.resource_name == "test_resource"
+    assert loaded.resources.walltime == 7200
+    assert loaded.resources.cpus_per_node == 16
+    assert loaded.resources.nodes == 4
+    assert loaded.resources.memory == 16384
+    assert loaded.resources.queue == "gpu"
+    assert loaded.resources.queueing_system == "slurm"
 
 
 def test_config_load_nonexistent():
     """Test loading configuration when file doesn't exist"""
-    # Remove the config file if it exists
-    config_path = Config._get_config_file("resources.yml")
+    config_path = Config._get_config_file("server_config.yml")
     if os.path.exists(config_path):
         os.remove(config_path)
 
-    # Should return None
-    loaded_resources = Config.load_config()
-    assert loaded_resources is None
+    loaded = Config.load_server_config()
+    assert loaded is None
 
 
 def test_config_overwrite():
-    """Test that save_config overwrites existing configuration"""
-    # Create first configuration
+    """Test that save_server_config overwrites existing configuration"""
     resources1 = Resources()
     resources1.from_dict({"resource_name": "first_config", "walltime": 1000})
-    Config.save_config(resources1)
+    Config.save_server_config(
+        ServerConfig(rest_port=1, client_secret="", server_version="v1", resources=resources1)
+    )
 
-    # Create second configuration
     resources2 = Resources()
     resources2.from_dict({"resource_name": "second_config", "walltime": 2000})
-    Config.save_config(resources2)
+    Config.save_server_config(
+        ServerConfig(rest_port=2, client_secret="", server_version="v1", resources=resources2)
+    )
 
-    # Load and verify it's the second one
-    loaded_resources = Config.load_config()
-    assert loaded_resources is not None
-    assert loaded_resources.resource_name == "second_config"
-    assert loaded_resources.walltime == 2000
+    loaded = Config.load_server_config()
+    assert loaded is not None
+    assert loaded.resources.resource_name == "second_config"
+    assert loaded.resources.walltime == 2000

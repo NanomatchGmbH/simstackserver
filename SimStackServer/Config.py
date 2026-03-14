@@ -1,3 +1,6 @@
+from dataclasses import dataclass, field
+from typing import Optional
+
 from appdirs import AppDirs
 from os import path
 import psutil
@@ -12,11 +15,47 @@ from SimStackServer.Util.FileUtilities import mkdir_p
 from SimStackServer.Util.NoEnterPIDLockFile import NoEnterPIDLockFile
 
 
+@dataclass
+class ServerConfig:
+    """Server-level configuration: how the server itself runs."""
+
+    rest_port: int
+    client_secret: str
+    server_version: str
+    resources: Optional["Resources"] = field(default=None, repr=False)  # noqa: F821
+
+    def to_dict(self) -> dict:
+        d = {
+            "rest_port": self.rest_port,
+            "client_secret": self.client_secret,
+            "server_version": self.server_version,
+        }
+        if self.resources is not None:
+            resources_dict = {}
+            self.resources.to_dict(resources_dict)
+            d["resources"] = resources_dict
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ServerConfig":
+        from SimStackServer.WorkflowModel import Resources
+
+        resources = None
+        if "resources" in d and d["resources"] is not None:
+            resources = Resources()
+            resources.from_dict(d["resources"])
+        return cls(
+            rest_port=int(d["rest_port"]),
+            client_secret=str(d.get("client_secret", "")),
+            server_version=str(d.get("server_version", "")),
+            resources=resources,
+        )
+
+
 class Config:
     _dirs = AppDirs(appname="SimStackServer", appauthor="Nanomatch", roaming=False)
     _logger_setup = False
-    _is_configured = False
-    _resources = None
+    _server_config: Optional[ServerConfig] = None
 
     def __init__(self):
         self._setup_root_logger()
@@ -111,61 +150,62 @@ class Config:
         return path.join(cls._dirs.user_config_dir, filename)
 
     @classmethod
-    def save_config(cls, resources):
+    def save_server_config(cls, server_config: ServerConfig) -> str:
         """
-        Save the main server Resources configuration to the config directory.
-        Overwrites any existing configuration.
+        Save the ServerConfig to the config directory.
 
-        :param resources: Resources object to save
+        :param server_config: ServerConfig to save
         :return (str): Path to the saved file
         """
-        filepath = cls._get_config_file("resources.yml")
+        filepath = cls._get_config_file("server_config.yml")
 
-        # Convert Resources to dict
-        resources_dict = {}
-        resources.to_dict(resources_dict)
-
-        # Save to YAML file
         with open(filepath, "w") as f:
-            yaml.safe_dump(resources_dict, f, default_flow_style=False)
+            yaml.safe_dump(server_config.to_dict(), f, default_flow_style=False)
 
+        cls._server_config = server_config
         cls._get_cls_logger().info(f"Saved server configuration to {filepath}")
         return filepath
 
     @classmethod
-    def load_config(cls):
+    def load_server_config(cls) -> Optional[ServerConfig]:
         """
-        Load the main server Resources configuration from the config directory.
+        Load ServerConfig from the config directory.
 
-        :return: Resources object, or None if no config exists
+        :return: ServerConfig, or None if no config exists
         """
-        from SimStackServer.WorkflowModel import Resources
-
-        filepath = cls._get_config_file("resources.yml")
+        filepath = cls._get_config_file("server_config.yml")
 
         if not path.exists(filepath):
             cls._get_cls_logger().warning(f"No configuration file found at {filepath}")
             return None
 
-        # Load from YAML file
         with open(filepath, "r") as f:
-            resources_dict = yaml.safe_load(f)
+            config_dict = yaml.safe_load(f)
 
-        # Create Resources object and populate from dict
-        resources = Resources()
-        resources.from_dict(resources_dict)
-
+        server_config = ServerConfig.from_dict(config_dict)
+        cls._server_config = server_config
         cls._get_cls_logger().info(f"Loaded server configuration from {filepath}")
-        cls._resources = resources
-        return resources
+        return server_config
+
+    @classmethod
+    def get_server_config(cls) -> Optional[ServerConfig]:
+        """
+        Get the cached ServerConfig, loading from disk if necessary.
+
+        :return: ServerConfig, or None if no config exists
+        """
+        if cls._server_config is None:
+            cls.load_server_config()
+        return cls._server_config
 
     @classmethod
     def get_resources(cls):
         """
-        Get the cached Resources object, loading from config if necessary.
+        Get the cached Resources object from the ServerConfig.
 
-        :return: Resources object, or None if no config exists
+        :return: Resources object, or None if not configured
         """
-        if cls._resources is None:
-            cls.load_config()
-        return cls._resources
+        server_config = cls.get_server_config()
+        if server_config is None:
+            return None
+        return server_config.resources

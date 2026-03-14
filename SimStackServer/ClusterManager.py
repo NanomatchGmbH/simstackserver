@@ -721,6 +721,20 @@ class ClusterManager:
                 "Legacy ZeroMQ messaging not available with REST session"
             )
 
+    def configure(self, resources):
+        """Configure server resources using REST API"""
+        if self._client:
+            resources_dict = {}
+            resources.to_dict(resources_dict)
+            response = self._client.post(
+                "/api/configure", json={"resources": resources_dict}
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Legacy ZeroMQ messaging not available with REST session"
+            )
+
     def delete_wf(self, workflow_submitname):
         """Delete a workflow using REST API"""
         self._logger.debug(

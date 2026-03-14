@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import signal
 import sys
-import os
 import time
 import lockfile
 import logging
@@ -14,7 +13,7 @@ from SimStackServer.SecureWaNos import SecureModeGlobal, SecureWaNos
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 
 from SimStackServer.SimStackServerMain import SimStackServer, AlreadyRunningException
-from SimStackServer.Config import Config
+from SimStackServer.Config import Config, ServerConfig
 import daemon
 
 
@@ -36,31 +35,19 @@ def setup_pid():
     )
 
 
-def _read_portconfig(appdirs):
-    myfile = join(appdirs.user_config_dir, "portconfig.txt")
-    with open(myfile, "rt") as infile:
-        line = infile.read()
-    splitline = line.split()
-    if not len(splitline) >= 4:
-        raise InputFileError(
-            "Input of portconfig was expected to be at least four fields, got <%s>"
-            % line
-        )
-    port = int(splitline[2])
-    secret = splitline[3].strip()
-    # Print without ZMQ version (removed dependency)
-    version_info = splitline[4] if len(splitline) > 4 else "N/A"
-    return port, secret, version_info
-
-
-def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
-    myfile = join(appdirs.user_config_dir, "portconfig.txt")
-    if other_process_setup and not os.path.exists(myfile):
+def flush_port_and_password_to_stdout(other_process_setup=False):
+    server_config = Config.load_server_config()
+    if server_config is None and other_process_setup:
         # In this case another process might just be in the process of writing this file.
         # We have to wait 5 seconds for it to appear
         time.sleep(5.0)
-    port, mypass, version_info = _read_portconfig(appdirs)
-    print("Port Pass %d %s %s" % (port, mypass, version_info))
+        server_config = Config.load_server_config()
+    if server_config is None:
+        raise FileNotFoundError("No server_config.yml found")
+    print(
+        "Port Pass %d %s %s"
+        % (server_config.rest_port, server_config.client_secret, server_config.server_version)
+    )
 
 
 def main():
@@ -81,15 +68,13 @@ def main():
         setup_pidfile.acquire(timeout=0.0)
     except lockfile.AlreadyLocked:
         try:
-            flush_port_and_password_to_stdout(appdirs, True)
-        except FileNotFoundError as e:
-            if "portconfig.txt" in str(e):
-                print(
-                    "App Lock was found, but no portconfig. Most probably SimStackServer start process was interupted."
-                )
-                print(f"Please check logs and remove {setup_pidfile}")
-                sys.exit(1)
-            raise
+            flush_port_and_password_to_stdout(other_process_setup=True)
+        except FileNotFoundError:
+            print(
+                "App Lock was found, but no server config. Most probably SimStackServer start process was interrupted."
+            )
+            print(f"Please check logs and remove {setup_pidfile}")
+            sys.exit(1)
     logfilehandler = Config._setup_root_logger()
     my_runtime = get_my_runtime()
     try:
@@ -101,26 +86,29 @@ def main():
         except lockfile.AlreadyLocked as e:
             raise AlreadyRunningException("Second stage locking did not work.") from e
     except AlreadyRunningException:
-        # print("Exiting, because lock exists.")
-        # print("PID was",SimStackServer.register_pidfile().read_pid())
         # In case we are already running we silently discard and exit.
-        flush_port_and_password_to_stdout(appdirs, False)
+        flush_port_and_password_to_stdout()
         setup_pidfile.release()
         sys.exit(0)
     try:
         # We should be locked and running here:
-        try:
-            myport, mysecret, version_info = _read_portconfig(appdirs)
-        except FileNotFoundError:
+        server_config = Config.load_server_config()
+        if server_config is not None:
+            myport = server_config.rest_port
+            mysecret = server_config.client_secret
+        else:
+            from SimStackServer import __version__ as server_version
+
             mysecret = random_pass()
             myport = get_open_port()
-            with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
-                from SimStackServer import __version__ as server_version
-
-                allversions = f"SERVER,{server_version},REST,1.0"
-                towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
-                outfile.write(towrite)
-        flush_port_and_password_to_stdout(appdirs)
+            allversions = f"SERVER,{server_version},REST,1.0"
+            server_config = ServerConfig(
+                rest_port=myport,
+                client_secret=mysecret,
+                server_version=allversions,
+            )
+            Config.save_server_config(server_config)
+        flush_port_and_password_to_stdout()
         sys.stdout.flush()
 
         mystd = join(appdirs.user_log_dir, "sss.stdout")
