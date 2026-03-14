@@ -136,6 +136,7 @@ def test_submit_single_job_message(workflow_exec_module_fixture):
             "sw_dir_on_resource": "/home/nanomatch/nanomatch",
             "extra_config": "None Required (default)",
             "ssh_private_key": "UseSystemDefault",
+            "client_secret": "",
             "sge_pe": "",
             "reuse_results": "False",
         },

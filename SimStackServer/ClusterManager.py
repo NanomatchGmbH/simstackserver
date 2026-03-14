@@ -37,6 +37,7 @@ class ClusterManager:
         extra_config,
         queueing_system,
         default_queue,
+        client_secret=None,
         software_directory=None,
         rest_port=None,
     ):
@@ -49,6 +50,7 @@ class ClusterManager:
         :param user (str): Username on the respective server.
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
+        :param client_secret (str): Secret for REST API HTTP Basic Auth
         :param rest_port (int): Port the rest session runs on
         """
         self._logger = logging.getLogger("ClusterManager")
@@ -72,13 +74,18 @@ class ClusterManager:
         self._extra_hostkey_file = None
         self._software_directory = software_directory
         self._rest_port = rest_port
+        self._client_secret = client_secret
         self._client = None
 
     def init_client(self):
         base_url = self.get_client_url()
         https_client = HTTPSClient(base_url)
         verify = str(https_client.get_certificate_path())
-        self._client = httpx.Client(base_url=base_url, verify=verify)
+        self._client = httpx.Client(
+            base_url=base_url,
+            verify=verify,
+            auth=("simstack", self._client_secret),
+        )
 
     def get_client_url(self):
         if self._rest_port:
@@ -463,6 +470,10 @@ class ClusterManager:
         software_dir = self._software_directory
         return self.get_server_command_from_software_directory(software_dir)
 
+    def get_client_secret(self) -> str:
+        assert self._client_secret is not None, "Client secret is not set. This should have been set during connection setup."
+        return self._client_secret
+
     def start_server_remote(self, command):
         """
         Executes the servercommand command and sets up the ZMQ tunnel
@@ -527,6 +538,7 @@ class ClusterManager:
             password = myline[3]
             port = int(myline[2])
             self._rest_port = port
+            self._client_secret = password
             server_zmq_version_string = myline[4].strip()
             if server_zmq_version_string.startswith("SERVER"):
                 # Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION

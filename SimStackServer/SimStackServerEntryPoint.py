@@ -160,7 +160,12 @@ def main():
             logger.debug("PID written")
 
             # Start FastAPI server
-            fastapi_port = ss._start_fastapi_server(host="127.0.0.1", port=myport)
+            fastapi_port = ss._start_fastapi_server(
+                host="127.0.0.1",
+                port=myport,
+                username="simstack",
+                password=mysecret,
+            )
             logger.info(f"FastAPI server started on port {fastapi_port}")
 
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open

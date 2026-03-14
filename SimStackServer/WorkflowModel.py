@@ -609,6 +609,7 @@ class Resources(XMLYMLInstantiationBase):
             "m",
         ),
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m"),
+        ("client_secret", str, "", "Secret for REST API authentication", "m"),
         (
             "sge_pe",
             str,
@@ -636,6 +637,7 @@ class Resources(XMLYMLInstantiationBase):
             "port",
             "username",
             "ssh_private_key",
+            "client_secret",
             "sw_dir_on_resource",
             "basepath",
             "queueing_system",
@@ -711,12 +713,22 @@ class Resources(XMLYMLInstantiationBase):
         return self._field_values["ssh_private_key"]
 
     @property
+    def client_secret(self):
+        return self._field_values["client_secret"]
+
+    @property
     def extra_config(self):
         return self._field_values["extra_config"]
 
     @property
     def reuse_results(self):
         return self._field_values["reuse_results"]
+
+    def from_xml(self, in_xml):
+        super().from_xml(in_xml)
+        # client_secret is absent in XML written before this field was introduced
+        if not self._field_values.get("client_secret"):
+            self._field_values["client_secret"] = ""
 
     def overwrite_unset_fields_from_default_resources(
         self, default_resources: "Resources"

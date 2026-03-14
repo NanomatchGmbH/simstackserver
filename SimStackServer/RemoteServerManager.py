@@ -33,6 +33,7 @@ class RemoteServerManager:
                 extra_config=resource.extra_config,
                 queueing_system=resource.queueing_system,
                 default_queue=resource.queue,
+                client_secret=resource.client_secret,
                 software_directory=resource.sw_dir_on_resource,
             )
             self._other_servers[key] = cm

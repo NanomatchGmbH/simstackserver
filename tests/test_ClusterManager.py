@@ -72,6 +72,7 @@ def cluster_manager(
         extra_config="None",
         queueing_system="Internal",
         default_queue="fake-queue",
+        client_secret="test-secret",
         software_directory="/fake/software_dir",
         rest_port=80,
     )
@@ -102,6 +103,7 @@ def test_init(cluster_manager):
         extra_config="None",
         queueing_system="Internal",
         default_queue="fake-queue",
+        client_secret="test-secret",
         software_directory="/fake/software_dir",
     )
     assert cm._port == 22

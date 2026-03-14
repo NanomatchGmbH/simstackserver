@@ -500,13 +500,21 @@ class SimStackServer(object):
         self._http_server.start()
         return user, mypass, myport
 
-    def _start_fastapi_server(self, host="127.0.0.1", port=None):
+    def _start_fastapi_server(
+        self,
+        host="127.0.0.1",
+        port=None,
+        username=None,
+        password=None,
+    ):
         """Start FastAPI server in background thread"""
         if self._fastapi_thread is None:
             if port is None:
                 port = get_open_port()
             self._fastapi_port = port
-            self._fastapi_thread = FastAPIThread(self, host, port)
+            self._fastapi_thread = FastAPIThread(
+                self, host, port, username=username, password=password
+            )
             self._fastapi_thread.start()
             self._logger.info(f"FastAPI server started on {host}:{port}")
         return self._fastapi_port

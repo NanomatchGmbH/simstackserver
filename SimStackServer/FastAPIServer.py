@@ -1,4 +1,5 @@
 import logging
+import secrets
 import threading
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional
@@ -10,7 +11,8 @@ import sys
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -128,6 +130,8 @@ class FastAPIThread(threading.Thread):
         port=8000,
         use_https=True,
         cert_dir: Optional[Path] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
     ):
         super().__init__(name="FastAPI-Thread", daemon=True)
         self.simstack_server = simstack_server
@@ -143,6 +147,31 @@ class FastAPIThread(threading.Thread):
         if self.use_https:
             self._setup_ssl_certificates(cert_dir)
 
+        # Build global auth dependency when credentials are provided
+        global_dependencies = []
+        if username and password:
+            _security = HTTPBasic()
+            _username = username
+            _password = password
+
+            async def _verify_credentials(
+                credentials: HTTPBasicCredentials = Depends(_security),
+            ):
+                correct_username = secrets.compare_digest(
+                    credentials.username.encode("utf-8"), _username.encode("utf-8")
+                )
+                correct_password = secrets.compare_digest(
+                    credentials.password.encode("utf-8"), _password.encode("utf-8")
+                )
+                if not (correct_username and correct_password):
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Invalid credentials",
+                        headers={"WWW-Authenticate": "Basic"},
+                    )
+
+            global_dependencies = [Depends(_verify_credentials)]
+
         # Create FastAPI app
         @asynccontextmanager
         async def lifespan(app: FastAPI):
@@ -157,6 +186,7 @@ class FastAPIThread(threading.Thread):
             description="REST API for SimStackServer workflow management",
             version="1.0.0",
             lifespan=lifespan,
+            dependencies=global_dependencies,
         )
         self._setup_routes()
 

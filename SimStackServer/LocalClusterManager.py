@@ -35,6 +35,7 @@ class LocalClusterManager(ClusterManager):
         extra_config,
         queueing_system,
         default_queue,
+        client_secret,
         software_directory=None,
         filegen_mode=False,
         rest_port=None,
@@ -49,6 +50,7 @@ class LocalClusterManager(ClusterManager):
         :param user (str): Username on the respective server.
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
+        :param client_secret (str): Secret for REST API HTTP Basic Auth
         :param filegen_mode (bool): If True: Do not submit anything and stop once the first WaNo is rendered
         :param rest_port (int): Port the REST server is running on
         """
@@ -62,6 +64,7 @@ class LocalClusterManager(ClusterManager):
             extra_config=extra_config,
             queueing_system=queueing_system,
             default_queue=default_queue,
+            client_secret=client_secret,
             software_directory=software_directory,
             rest_port=rest_port,
         )
