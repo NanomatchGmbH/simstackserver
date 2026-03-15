@@ -585,7 +585,14 @@ class Resources(XMLYMLInstantiationBase):
             "m",
         ),
         ("base_URI", str, "", "Base URI for resource", "m"),
-        ("port", np.uint64, 22, "Port to access resource", "m"),
+        ("port", np.uint64, 22, "SSH port to access resource", "m"),
+        (
+            "rest_port",
+            np.uint64,
+            0,
+            "REST API port (0 = start server via SSH and discover)",
+            "m",
+        ),
         ("username", str, "", "Username on resource", "m"),
         (
             "basepath",
@@ -643,6 +650,7 @@ class Resources(XMLYMLInstantiationBase):
             "resource_name",
             "base_URI",
             "port",
+            "rest_port",
             "username",
             "ssh_private_key",
             "client_secret",
@@ -696,6 +704,10 @@ class Resources(XMLYMLInstantiationBase):
     @property
     def port(self):
         return self._field_values["port"]
+
+    @property
+    def rest_port(self):
+        return self._field_values["rest_port"]
 
     @property
     def username(self):

@@ -347,7 +347,7 @@ def test_ResourceModel(input_directory):
     res = etree.Element("Resources")
     resources.to_xml(res)
 
-    outstring = '<Resources resource_name="&lt;Connected Server&gt;" walltime="3600" cpus_per_node="32" nodes="4" memory="65536" reuse_results="False"><queue>not-default</queue><custom_requests>GPU=3</custom_requests><base_URI></base_URI><port>22</port><username>MaxPower</username><basepath>simstack_workspace</basepath><queueing_system>pbs</queueing_system><sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource><extra_config>None Required (default)</extra_config><ssh_private_key>UseSystemDefault</ssh_private_key><client_secret></client_secret><use_ssh_tunnel>True</use_ssh_tunnel><sge_pe></sge_pe></Resources>'
+    outstring = '<Resources resource_name="&lt;Connected Server&gt;" walltime="3600" cpus_per_node="32" nodes="4" memory="65536" reuse_results="False"><queue>not-default</queue><custom_requests>GPU=3</custom_requests><base_URI></base_URI><port>22</port><rest_port>0</rest_port><username>MaxPower</username><basepath>simstack_workspace</basepath><queueing_system>pbs</queueing_system><sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource><extra_config>None Required (default)</extra_config><ssh_private_key>UseSystemDefault</ssh_private_key><client_secret></client_secret><use_ssh_tunnel>True</use_ssh_tunnel><sge_pe></sge_pe></Resources>'
     otheroutstring = etree.tostring(res).decode()
 
     assert outstring == otheroutstring
@@ -541,6 +541,7 @@ def workflow_exec_module():
             "memory": "4096",
             "nodes": "1",
             "port": "22",
+            "rest_port": "0",
             "queue": "default",
             "queueing_system": "unset",
             "resource_name": "<Connected Server>",
@@ -594,6 +595,7 @@ def test_WorkflowExecModule():
             "memory": "4096",
             "nodes": "1",
             "port": "22",
+            "rest_port": "0",
             "queue": "default",
             "queueing_system": "unset",
             "resource_name": "<Connected Server>",
@@ -617,7 +619,7 @@ def test_WorkflowExecModule():
     a.set_field_value("uid", "1234")
     a.to_xml(myxml)
     xml_str = etree.tounicode(myxml)
-    expected = '<TestWFE uid="1234" given_name="WFEM" path="unset" wano_xml="unset" outputpath="unset" original_result_directory=""><inputs/><outputs/><exec_command>None</exec_command><resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False"><queue>default</queue><custom_requests></custom_requests><base_URI></base_URI><port>22</port><username></username><basepath>simstack_workspace</basepath><queueing_system>unset</queueing_system><sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource><extra_config>None Required (default)</extra_config><ssh_private_key>UseSystemDefault</ssh_private_key><client_secret></client_secret><use_ssh_tunnel>True</use_ssh_tunnel><sge_pe></sge_pe></resources><runtime_directory>unstarted</runtime_directory><jobid>unstarted</jobid><external_runtime_directory></external_runtime_directory></TestWFE>'
+    expected = '<TestWFE uid="1234" given_name="WFEM" path="unset" wano_xml="unset" outputpath="unset" original_result_directory=""><inputs/><outputs/><exec_command>None</exec_command><resources resource_name="&lt;Connected Server&gt;" walltime="86399" cpus_per_node="1" nodes="1" memory="4096" reuse_results="False"><queue>default</queue><custom_requests></custom_requests><base_URI></base_URI><port>22</port><rest_port>0</rest_port><username></username><basepath>simstack_workspace</basepath><queueing_system>unset</queueing_system><sw_dir_on_resource>/home/nanomatch/nanomatch</sw_dir_on_resource><extra_config>None Required (default)</extra_config><ssh_private_key>UseSystemDefault</ssh_private_key><client_secret></client_secret><use_ssh_tunnel>True</use_ssh_tunnel><sge_pe></sge_pe></resources><runtime_directory>unstarted</runtime_directory><jobid>unstarted</jobid><external_runtime_directory></external_runtime_directory></TestWFE>'
     assert xml_str == expected
     b = WorkflowExecModule()
     b.from_xml(test_xml)

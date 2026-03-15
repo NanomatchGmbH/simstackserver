@@ -35,6 +35,8 @@ class RemoteServerManager:
                 default_queue=resource.queue,
                 client_secret=resource.client_secret,
                 software_directory=resource.sw_dir_on_resource,
+                rest_port=int(resource.rest_port) if resource.rest_port else None,
+                use_ssh_tunnel=resource.use_ssh_tunnel,
             )
             self._other_servers[key] = cm
         return self._other_servers[key]

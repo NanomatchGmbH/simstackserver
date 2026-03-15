@@ -75,10 +75,41 @@ def cluster_manager(
         client_secret="test-secret",
         software_directory="/fake/software_dir",
         rest_port=80,
+        use_ssh_tunnel=True,
     )
     # Create a real httpx client for REST API tests (respx will intercept it)
     # Use verify=False to avoid SSL certificate issues in tests
     cm._client = httpx.Client(base_url="http://fake-url", verify=False)
+    return cm
+
+
+@pytest.fixture
+@patch("paramiko.SSHClient", autospec=True)
+@patch("SimStackServer.SSHTunnelForwarder.SSHTunnelForwarder", autospec=True)
+def direct_cluster_manager(
+    mock_sshtunnel_forwarder_class,
+    mock_sshclient_class,
+    mock_sshclient,
+    mock_sshtunnel_forwarder,
+):
+    """ClusterManager configured for direct REST access (no SSH required)."""
+    mock_sshclient_class.return_value = mock_sshclient
+    mock_sshtunnel_forwarder_class.return_value = mock_sshtunnel_forwarder
+
+    cm = ClusterManager.ClusterManager(
+        url="fake-url",
+        port=22,
+        calculation_basepath="/fake/basepath",
+        user="fake-user",
+        sshprivatekey="UseSystemDefault",
+        extra_config="None",
+        queueing_system="Internal",
+        default_queue="fake-queue",
+        client_secret="test-secret",
+        software_directory="/fake/software_dir",
+        rest_port=8443,
+        use_ssh_tunnel=False,
+    )
     return cm
 
 
@@ -159,12 +190,10 @@ def test_connection_context_already_connected(cluster_manager):
 def test_connection_context_not_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=False)
     with patch.object(
-        cluster_manager,
-        "connect_if_disconnected",
-        return_value="some_tunnel_info",
+        cluster_manager, "connect_if_disconnected"
     ) as mock_connect, patch.object(cluster_manager, "disconnect") as mock_disconnect:
         with cluster_manager.connection_context() as result:
-            assert result == "some_tunnel_info"
+            assert result is None
             mock_connect.assert_called_once_with()
         mock_disconnect.assert_called_once()
 
@@ -888,3 +917,97 @@ def test_set_connect_to_unknown_hosts(cluster_manager):
     assert cluster_manager._unknown_host_connect_workaround is False
     cluster_manager.set_connect_to_unknown_hosts(True)
     assert cluster_manager._unknown_host_connect_workaround is True
+
+
+###########################
+# Direct REST mode tests (no SSH)
+###########################
+
+
+def test_needs_ssh_true_when_use_ssh_tunnel(cluster_manager):
+    """SSH mode fixture always needs SSH."""
+    assert cluster_manager._needs_ssh() is True
+
+
+def test_needs_ssh_false_when_direct_config(direct_cluster_manager):
+    """Direct mode: rest_port + client_secret + no tunnel → SSH not needed."""
+    assert direct_cluster_manager._needs_ssh() is False
+
+
+def test_needs_ssh_true_when_no_rest_port(cluster_manager):
+    """No rest_port → SSH still needed regardless of use_ssh_tunnel."""
+    cluster_manager._use_ssh_tunnel = False
+    cluster_manager._rest_port = None
+    assert cluster_manager._needs_ssh() is True
+
+
+def test_needs_ssh_true_when_no_client_secret(cluster_manager):
+    """No client_secret → SSH still needed."""
+    cluster_manager._use_ssh_tunnel = False
+    cluster_manager._rest_port = 8443
+    cluster_manager._client_secret = ""
+    assert cluster_manager._needs_ssh() is True
+
+
+def test_direct_is_connected_false_when_no_client(direct_cluster_manager):
+    """Direct mode: not connected when HTTP client is None."""
+    assert direct_cluster_manager._client is None
+    assert direct_cluster_manager.is_connected() is False
+
+
+def test_direct_is_connected_true_when_client_set(direct_cluster_manager):
+    """Direct mode: connected once HTTP client is initialised."""
+    direct_cluster_manager._client = MagicMock()
+    assert direct_cluster_manager.is_connected() is True
+
+
+def test_direct_connect_if_disconnected_calls_init_client(direct_cluster_manager):
+    """connect_if_disconnected in direct mode calls init_client, not connect."""
+    with patch.object(
+        direct_cluster_manager, "init_client"
+    ) as mock_init, patch.object(
+        direct_cluster_manager, "connect"
+    ) as mock_ssh_connect:
+        direct_cluster_manager.connect_if_disconnected()
+    mock_init.assert_called_once()
+    mock_ssh_connect.assert_not_called()
+
+
+def test_direct_connect_if_disconnected_skips_init_when_already_connected(
+    direct_cluster_manager,
+):
+    """If HTTP client is already set, init_client is not called again."""
+    direct_cluster_manager._client = MagicMock()
+    with patch.object(direct_cluster_manager, "init_client") as mock_init:
+        direct_cluster_manager.connect_if_disconnected()
+    mock_init.assert_not_called()
+
+
+def test_direct_disconnect_closes_client_not_ssh(direct_cluster_manager):
+    """disconnect in direct mode closes HTTP client and skips SSH close."""
+    mock_client = MagicMock()
+    mock_sshclient = MagicMock()
+    direct_cluster_manager._client = mock_client
+    direct_cluster_manager._ssh_client = mock_sshclient
+
+    direct_cluster_manager.disconnect()
+
+    mock_client.close.assert_called_once()
+    assert direct_cluster_manager._client is None
+    mock_sshclient.close.assert_not_called()
+
+
+def test_direct_connection_context(direct_cluster_manager, respx_mock):
+    """Full connection_context cycle in direct mode uses init_client."""
+    respx_mock.post("http://fake-url/api/server/clear-state").mock(
+        return_value=httpx.Response(200, json={"status": "cleared"})
+    )
+    with patch.object(
+        direct_cluster_manager, "init_client"
+    ) as mock_init, patch.object(
+        direct_cluster_manager, "disconnect"
+    ) as mock_disconnect:
+        with direct_cluster_manager.connection_context() as result:
+            assert result is None
+            mock_init.assert_called_once()
+        mock_disconnect.assert_called_once()

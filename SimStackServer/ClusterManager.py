@@ -80,8 +80,19 @@ class ClusterManager:
         self._client_secret = client_secret
         self._client = None
         self._ssh_tunnel = None
-        print("Using ssh tunnel {%s}" % use_ssh_tunnel)
         self._use_ssh_tunnel = use_ssh_tunnel
+
+    def _needs_ssh(self) -> bool:
+        """Returns True if an SSH connection is required.
+
+        SSH is skipped when use_ssh_tunnel is False AND both rest_port and
+        client_secret are already known (pre-configured in Resources).
+        """
+        if self._use_ssh_tunnel:
+            return True
+        if self._rest_port and self._client_secret:
+            return False
+        return True
 
     def init_client(self):
         if self._use_ssh_tunnel:
@@ -195,28 +206,35 @@ class ClusterManager:
 
     @contextmanager
     def connection_context(self):
-        # Code to acquire resource, e.g.:
         try:
             if self.is_connected():
                 yield None
             else:
-                yield self.connect_if_disconnected()
+                self.connect_if_disconnected()
+                yield None
         finally:
             self.disconnect()
 
     def connect_if_disconnected(self):
+        if not self._needs_ssh():
+            if self._client is None:
+                self.init_client()
+            return
         if not self.is_connected():
             self.connect()
 
     def disconnect(self):
         """
-        disconnect the ssh client
-        :return: Nothing
+        Tear down the active connection (SSH or direct REST).
         """
         if self._ssh_tunnel is not None:
             self._ssh_tunnel.stop()
             self._ssh_tunnel = None
-        self._ssh_client.close()
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+        if self._needs_ssh():
+            self._ssh_client.close()
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
@@ -744,9 +762,13 @@ class ClusterManager:
 
     def is_connected(self):
         """
-        Returns True if the ssh transport is currently connected. Returns not True otherwise
-        :return (bool): True or not True
+        Returns True if a usable connection is available.
+
+        In direct REST mode (no SSH required) this means the HTTP client is
+        initialised.  In SSH mode it means the SSH transport is active.
         """
+        if not self._needs_ssh():
+            return self._client is not None
         transport = self._ssh_client.get_transport()
         if transport is None:
             return False
