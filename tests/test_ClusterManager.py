@@ -148,7 +148,7 @@ def test_is_connected_false_when_transport_none(cluster_manager, mock_sshclient)
 def test_connection_context_already_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=True)
     with patch.object(
-        cluster_manager, "connect_ssh_and_zmq_if_disconnected"
+        cluster_manager, "connect_if_disconnected"
     ) as mock_connect, patch.object(cluster_manager, "disconnect") as mock_disconnect:
         with cluster_manager.connection_context() as result:
             assert result is None
@@ -160,30 +160,26 @@ def test_connection_context_not_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=False)
     with patch.object(
         cluster_manager,
-        "connect_ssh_and_zmq_if_disconnected",
+        "connect_if_disconnected",
         return_value="some_tunnel_info",
     ) as mock_connect, patch.object(cluster_manager, "disconnect") as mock_disconnect:
         with cluster_manager.connection_context() as result:
             assert result == "some_tunnel_info"
-            mock_connect.assert_called_once_with(connect_http=False, verbose=False)
+            mock_connect.assert_called_once_with()
         mock_disconnect.assert_called_once()
 
 
-def test_connect_ssh_and_zmq_if_disconnected_already_connected(cluster_manager):
+def test_connect_if_disconnected_already_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=True)
     with patch.object(cluster_manager, "connect") as mock_connect:
-        cluster_manager.connect_ssh_and_zmq_if_disconnected(
-            connect_http=False, verbose=False
-        )
+        cluster_manager.connect_if_disconnected()
     mock_connect.assert_not_called()
 
 
-def test_connect_ssh_and_zmq_if_disconnected_not_connected(cluster_manager):
+def test_connect_if_disconnected_not_connected(cluster_manager):
     cluster_manager.is_connected = MagicMock(return_value=False)
     with patch.object(cluster_manager, "connect") as mock_connect:
-        cluster_manager.connect_ssh_and_zmq_if_disconnected(
-            connect_http=True, verbose=True
-        )
+        cluster_manager.connect_if_disconnected()
     mock_connect.assert_called_once()
 
 

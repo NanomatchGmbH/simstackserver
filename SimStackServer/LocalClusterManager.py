@@ -319,17 +319,6 @@ class LocalClusterManager(ClusterManager):
         resolved = self.resolve_file_in_basepath(path, basepath_override)
         return (Path.home() / resolved).is_dir()
 
-    def get_http_server_address(self):
-        """
-        Function, which communicates with the server asking for the server port and setting up the
-        server tunnel if it is not present.
-        :return:
-        """
-        # ZMQ functionality removed - this method no longer works without ZMQ
-        raise NotImplementedError(
-            "HTTP server address retrieval requires ZMQ, which has been removed"
-        )
-
     def exists_as_directory(self, path):
         """
         Checks if an absolute path on remote exists and is a directory. Throws if it exists as file

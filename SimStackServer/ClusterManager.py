@@ -200,14 +200,11 @@ class ClusterManager:
             if self.is_connected():
                 yield None
             else:
-                yield self.connect_ssh_and_zmq_if_disconnected(
-                    connect_http=False, verbose=False
-                )
+                yield self.connect_if_disconnected()
         finally:
             self.disconnect()
 
-    def connect_ssh_and_zmq_if_disconnected(self, connect_http=True, verbose=True):
-        """Legacy method - now just connects SSH if needed"""
+    def connect_if_disconnected(self):
         if not self.is_connected():
             self.connect()
 
@@ -502,7 +499,7 @@ class ClusterManager:
 
     def start_server_remote(self, command):
         """
-        Executes the servercommand command and sets up the ZMQ tunnel
+        Executes the server command remotely and reads the port/secret from stdout.
 
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
@@ -556,56 +553,44 @@ class ClusterManager:
                 continue
             firstline = line[:-1]
             myline = firstline.split()
-            if not len(myline) == 5:
+            if len(myline) < 4:
                 raise ConnectionError(
-                    "Expected port and secret key and zmq version but server responded: <%s>"
+                    "Expected port and secret key but server responded: <%s>"
                     % firstline
                 )
             password = myline[3]
             port = int(myline[2])
             self._rest_port = port
             self._client_secret = password
-            server_zmq_version_string = myline[4].strip()
-            if server_zmq_version_string.startswith("SERVER"):
-                # Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION
-                splitversion = server_zmq_version_string.split(",")
-                serverversion = splitversion[1]
+            if len(myline) >= 5:
+                version_string = myline[4].strip()
+                if version_string.startswith("SERVER"):
+                    # Versionstring is SERVER,VERSION,...
+                    splitversion = version_string.split(",")
+                    serverversion = splitversion[1]
+                    semver_serversion = serverversion.split(".")[0:2]
+                    from SimStackServer import __version__ as myversion
 
-                semver_serversion = serverversion.split(".")[0:2]
-                from SimStackServer import __version__ as myversion
-
-                semver_myversion = myversion.split(".")[0:2]
-                for client_single, server_single in zip(
-                    semver_myversion, semver_serversion
-                ):
-                    if server_single > client_single:
-                        print(
-                            f"Server version {serverversion} newer than Client version {myversion}. This might lead to issues. Please update client."
-                        )
-                        print("Will still try to connect")
-                        break
-                    if client_single > server_single:
-                        print(
-                            f"Client version {myversion} newer than Server version {serverversion}. This might lead to issues. Please update server."
-                        )
-                        print("Will still try to connect")
-                        break
-
-                zmq_version_string = splitversion[3]
-            else:
-                print(
-                    "Client version newer than Server version. This might lead to issues. Please update server."
-                )
-
-                zmq_version_string = server_zmq_version_string
-
-            if zmq_version_string.startswith("4.2."):
-                # If new issues with ZMQ versions crop up, please specify here.
-                errstring = (
-                    "ZMQ version mismatch: Client requires version newer than 4.3.x"
-                )
-                print(errstring)
-
+                    semver_myversion = myversion.split(".")[0:2]
+                    for client_single, server_single in zip(
+                        semver_myversion, semver_serversion
+                    ):
+                        if server_single > client_single:
+                            print(
+                                f"Server version {serverversion} newer than Client version {myversion}. This might lead to issues. Please update client."
+                            )
+                            print("Will still try to connect")
+                            break
+                        if client_single > server_single:
+                            print(
+                                f"Client version {myversion} newer than Server version {serverversion}. This might lead to issues. Please update server."
+                            )
+                            print("Will still try to connect")
+                            break
+                else:
+                    print(
+                        "Client version newer than Server version. This might lead to issues. Please update server."
+                    )
             break
         stderrmessage = " - ".join(stderr)
         if stderrmessage != "":
@@ -614,25 +599,6 @@ class ClusterManager:
             )
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
-
-        # socket.plain_username = b"simstack_client"
-        # socket.plain_password = password.encode("utf8").strip()
-
-        # key_filename = None
-        # if self._sshprivatekeyfilename != "UseSystemDefault":
-        #    key_filename = self._sshprivatekeyfilename
-        """
-        connect_address = "tcp://127.0.0.1:%d" % port
-        if self._url != "localhost":
-            ssh_url = self.get_ssh_url()
-            self._zmq_ssh_tunnel = ssh.tunnel_connection(
-                socket, connect_address, ssh_url, keyfile=key_filename, paramiko=True
-            )
-        else:
-            self._zmq_ssh_tunnel = None
-            socket.connect(connect_address)
-            print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
-        """
 
     def get_url_for_workflow(self, workflow):
         if not workflow.startswith("/"):
@@ -648,7 +614,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ submission not available with REST session"
+                "No REST client connected"
             )
 
     def submit_single_job(self, wfem):
@@ -660,7 +626,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ submission not available with REST session"
+                "No REST client connected"
             )
 
     def send_jobstatus_message(self, wfem_uid: str):
@@ -671,7 +637,7 @@ class ClusterManager:
             return response.json()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def send_abortsinglejob_message(self, wfem_uid: str):
@@ -681,7 +647,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def send_noop_message(self):
@@ -695,7 +661,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def abort_wf(self, workflow_submitname):
@@ -708,7 +674,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def send_clearserverstate_message(self):
@@ -718,7 +684,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def configure(self, resources):
@@ -732,7 +698,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def delete_wf(self, workflow_submitname):
@@ -745,7 +711,7 @@ class ClusterManager:
             response.raise_for_status()
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def get_workflow_list(self):
@@ -761,7 +727,7 @@ class ClusterManager:
             return workflows
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def get_workflow_job_list(self, workflow):
@@ -773,7 +739,7 @@ class ClusterManager:
             return data.get("jobs", [])
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ messaging not available with REST session"
+                "No REST client connected"
             )
 
     def is_connected(self):
@@ -822,7 +788,7 @@ class ClusterManager:
             return data.get("url")
         else:
             raise NotImplementedError(
-                "Legacy ZeroMQ HTTP server not available with REST session"
+                "No REST client connected"
             )
 
     def exists_as_directory(self, path):
