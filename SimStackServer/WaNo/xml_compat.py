@@ -90,7 +90,7 @@ def element_to_spec(xml_el) -> Dict[str, Any]:
     """
     tag = xml_el.tag
     spec_type = XML_TAG_TO_SPEC_TYPE[tag]
-    spec: Dict[str, Any] = {"type": spec_type}
+    spec: Dict[str, Any] = {"type": spec_type, "xml_tag": tag}
     spec.update(_common_fields(xml_el))
 
     if spec_type == "float":

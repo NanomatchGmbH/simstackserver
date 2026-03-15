@@ -65,4 +65,13 @@ def spec_to_model(spec: Dict[str, Any]):
 
     spec_type = spec["type"]
     ModelClass = _SPEC_TYPE_TO_CLASS[spec_type]
-    return ModelClass.from_spec(spec)
+    model = ModelClass.from_spec(spec)
+
+    xml_tag = spec.get("xml_tag")
+    if xml_tag is not None:
+        import SimStackServer.WaNo.WaNoFactory as _factory
+        view_cls = _factory.WaNoFactory.get_qt_view_class(xml_tag)
+        if view_cls is not None:
+            model.set_view_class(view_cls)
+
+    return model
