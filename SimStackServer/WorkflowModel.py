@@ -1,3 +1,4 @@
+import base64
 import copy
 import datetime
 import json
@@ -856,6 +857,27 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._rendered_body_html = None
         self._failed = False
         self._my_external_cluster_manager = None
+        self._wano_bundle: dict = {}
+
+    def get_wano_bundle_dict(self) -> dict:
+        """Return the WaNo bundle as a plain dict (filename -> base64-encoded content)."""
+        return self._wano_bundle
+
+    def set_wano_bundle_dict(self, bundle: dict) -> None:
+        """Set the WaNo bundle from a plain dict (filename -> base64-encoded content)."""
+        self._wano_bundle = bundle
+
+    def to_dict(self, parent_dict):
+        super().to_dict(parent_dict)
+        parent_dict["wano_bundle"] = json.dumps(self._wano_bundle)
+
+    def from_dict(self, in_dict):
+        super().from_dict(in_dict)
+        raw = in_dict.get("wano_bundle", "{}")
+        if raw and raw != "None":
+            self._wano_bundle = json.loads(raw)
+        else:
+            self._wano_bundle = {}
 
     @staticmethod
     def _get_conda_basedir():
@@ -2667,6 +2689,23 @@ class Workflow(XMLYMLInstantiationBase):
     def _get_clustermanager_from_job(self, job: WorkflowExecModule):
         return self._remote_server_manager.server_from_resource(job.resources)
 
+    @staticmethod
+    def _unpack_wano_bundle(wfem: WorkflowExecModule, wano_dir_root: pathlib.Path) -> None:
+        """Write bundle files from the WFEM to wano_dir_root so _prepare_job can read them.
+
+        If the bundle is empty, this is a no-op and the existing files on disk are used
+        (backward-compatible with old workflows that were submitted without a bundle).
+        """
+        bundle = wfem.get_wano_bundle_dict()
+        if not bundle:
+            return
+        wano_dir_root.mkdir(parents=True, exist_ok=True)
+        for filename, b64content in bundle.items():
+            content = base64.b64decode(b64content)
+            dest = wano_dir_root / filename
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(content)
+
     def delete_storage(self):
         """
         This routine deletes all files this workflow has generated.
@@ -2901,6 +2940,7 @@ class Workflow(XMLYMLInstantiationBase):
         mkdir_p(jobdirectory)
 
         wano_dir_root = Path(join(self.storage, "workflow_data", wfem.path, "inputs"))
+        self._unpack_wano_bundle(wfem, wano_dir_root)
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
         from SimStackServer.WaNo.xml_compat import xml_file_to_spec

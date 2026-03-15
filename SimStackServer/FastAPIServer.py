@@ -27,6 +27,12 @@ from SimStackServer.REST.files_api import (
     MkdirResponse,
     FileOperationResponse,
     FileInfo,
+    ExternalInputFileInfo,
+    WanoRequiredFilesRequest,
+    WanoRequiredFilesResponse,
+    WorkflowRequiredFilesRequest,
+    WorkflowRequiredFilesResponse,
+    UploadItemResponse,
 )
 from SimStackServer.WorkflowModel import WorkflowExecModule, Resources
 from SimStackServer.Config import Config
@@ -631,6 +637,78 @@ class FastAPIThread(threading.Thread):
             except Exception as e:
                 self._logger.exception("Error submitting single job")
                 raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.post("/api/wano/required-files", response_model=WanoRequiredFilesResponse)
+        async def wano_required_files(request: WanoRequiredFilesRequest):
+            """Return the list of external input files a WaNo requires.
+
+            The caller should POST a ``wano_spec`` dict (as produced by
+            ``WaNoModelRoot.to_spec()``).  The response lists every file that the
+            user must upload separately before the job can be executed.
+            """
+            try:
+                from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+
+                wmr = WaNoModelRoot.from_spec(request.wano_spec)
+                external_files = wmr.get_external_input_files()
+                return WanoRequiredFilesResponse(
+                    wano_name=wmr.name,
+                    external_input_files=[
+                        ExternalInputFileInfo(logical_name=lname, source_path=src)
+                        for lname, src in external_files
+                    ],
+                )
+            except Exception as e:
+                self._logger.exception("Error resolving required files for WaNo")
+                raise HTTPException(status_code=400, detail=str(e))
+
+        @self.app.post("/api/workflows/required-files", response_model=WorkflowRequiredFilesResponse)
+        async def workflow_required_files(request: WorkflowRequiredFilesRequest):
+            """Return the upload manifest for a full workflow.
+
+            POST a list of ``{wano_spec, wfem_path}`` objects — one per WaNo node in
+            the workflow.  The response splits all required files into two groups:
+
+            * ``wano_definition`` — generated automatically by the submission pipeline.
+              No action required from the user.
+            * ``external_input`` — scientific data files the user must supply.
+              These are the only items that can block a submission.
+
+            ``required_user_uploads`` in the response is the filtered list of
+            ``external_input`` items and is the primary thing to act on.
+            """
+            try:
+                from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+                from SimStackServer.WaNo.upload_manifest import WorkflowUploadManifest
+
+                manifest = WorkflowUploadManifest()
+                for node in request.nodes:
+                    wmr = WaNoModelRoot.from_spec(node.wano_spec)
+                    manifest.add_wano(wmr, node.wfem_path)
+
+                def _to_response(items):
+                    return [
+                        UploadItemResponse(
+                            server_path=i.server_path,
+                            logical_name=i.logical_name,
+                            wfem_name=i.wfem_name,
+                            wfem_path=i.wfem_path,
+                            category=i.category,
+                            local_source=i.local_source,
+                            required=i.required,
+                        )
+                        for i in items
+                    ]
+
+                return WorkflowRequiredFilesResponse(
+                    all_items=_to_response(manifest.all_items()),
+                    required_user_uploads=_to_response(manifest.required_user_uploads()),
+                    wano_definition_items=_to_response(manifest.wano_definition_items()),
+                    summary=manifest.summary(),
+                )
+            except Exception as e:
+                self._logger.exception("Error building workflow upload manifest")
+                raise HTTPException(status_code=400, detail=str(e))
 
         @self.app.post("/api/server/shutdown", response_model=ShutdownResponse)
         async def shutdown_server():

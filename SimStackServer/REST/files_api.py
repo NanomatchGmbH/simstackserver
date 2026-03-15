@@ -136,3 +136,86 @@ class FileOperationResponse(BaseModel):
     message: str
     path: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
+
+
+class ExternalInputFileInfo(BaseModel):
+    """Describes a single user-supplied file that a WaNo requires."""
+
+    logical_name: str = Field(..., description="Logical filename used inside the WaNo")
+    source_path: str = Field(
+        ..., description="Current value / hint for the expected source path on the client"
+    )
+
+
+class WanoRequiredFilesRequest(BaseModel):
+    """Request body for the required-files endpoint."""
+
+    wano_spec: Dict[str, Any] = Field(
+        ..., description="WaNo spec dict as produced by WaNoModelRoot.to_spec()"
+    )
+
+
+class WanoRequiredFilesResponse(BaseModel):
+    """Lists external input files that the user must upload before job execution."""
+
+    wano_name: str
+    external_input_files: List[ExternalInputFileInfo]
+
+
+# ---------------------------------------------------------------------------
+# Workflow-level upload manifest
+# ---------------------------------------------------------------------------
+
+
+class WorkflowNodeSpec(BaseModel):
+    """One WaNo node in a workflow, identified by its spec and DAG path."""
+
+    wano_spec: Dict[str, Any] = Field(
+        ..., description="WaNo spec dict as produced by WaNoModelRoot.to_spec()"
+    )
+    wfem_path: str = Field(
+        ..., description='Path of this node in the workflow DAG, e.g. "Step1" or "ForEach/0/MyWaNo"'
+    )
+
+
+class UploadItemResponse(BaseModel):
+    """Describes one file that must (or will be) present on the server."""
+
+    server_path: str = Field(..., description="Destination path on server, relative to storage")
+    logical_name: str = Field(..., description="Filename as seen inside the job directory")
+    wfem_name: str = Field(..., description="Name of the WaNo that requires this file")
+    wfem_path: str = Field(..., description="Path of the WaNo node in the workflow DAG")
+    category: str = Field(
+        ...,
+        description=(
+            '"wano_definition" = generated automatically, no user action needed; '
+            '"external_input" = user must supply this file'
+        ),
+    )
+    local_source: Optional[str] = Field(None, description="Hint for the local source path")
+    required: bool = Field(True, description="False if the file is optional")
+
+
+class WorkflowRequiredFilesRequest(BaseModel):
+    """Request body for the workflow-level required-files endpoint."""
+
+    nodes: List[WorkflowNodeSpec] = Field(
+        ..., description="All WaNo nodes in the workflow, each with its DAG path"
+    )
+
+
+class WorkflowRequiredFilesResponse(BaseModel):
+    """Upload manifest for a full workflow.
+
+    Splits items into ``wano_definition`` (auto-handled) and ``external_input``
+    (user must provide) so the caller can focus only on what they need to supply.
+    """
+
+    all_items: List[UploadItemResponse]
+    required_user_uploads: List[UploadItemResponse] = Field(
+        ..., description="Subset of all_items where category == external_input"
+    )
+    wano_definition_items: List[UploadItemResponse] = Field(
+        ..., description="Subset of all_items where category == wano_definition"
+    )
+    summary: str = Field(..., description="Human-readable summary of the manifest")

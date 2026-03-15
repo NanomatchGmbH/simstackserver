@@ -555,6 +555,7 @@ def workflow_exec_module():
         },
         "runtime_directory": "unstarted",
         "uid": ANY,
+        "wano_bundle": "{}",
         "wano_xml": "unset",
     }
     return fromdict
@@ -607,6 +608,7 @@ def test_WorkflowExecModule():
         },
         "runtime_directory": "unstarted",
         "uid": ANY,
+        "wano_bundle": "{}",
         "wano_xml": "unset",
     }
     assert parent_dict == expected

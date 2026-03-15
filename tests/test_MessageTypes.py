@@ -144,6 +144,7 @@ def test_submit_single_job_message(workflow_exec_module_fixture):
         "runtime_directory": "unstarted",
         "jobid": "unstarted",
         "external_runtime_directory": "",
+        "wano_bundle": "{}",
     }
     assert unpacked_message["wfem"] == ref_dict
 
