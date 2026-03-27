@@ -382,9 +382,91 @@ class WorkflowManager:
             and self._processfarm_thread is None
         ):
             self._start_internal_queue()
-        self._inprogress_singlejobs[tostart.uid] = tostart
 
+        self._prepare_singlejob(tostart)
+
+        self._inprogress_singlejobs[tostart.uid] = tostart
         tostart.run_jobfile(None)
+
+    def _prepare_singlejob(self, wfem: WorkflowExecModule) -> None:
+        """Set up the execution directory for a bundle-based single job.
+
+        Creates a job directory under the server basepath, unpacks the WaNo
+        bundle, renders the WaNo, writes ``rendered_wano.yml``, and copies
+        static input files so the exec command can run correctly.
+        """
+        import yaml
+        from pathlib import Path as _Path
+
+        from SimStackServer.Config import Config
+        from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+        from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
+        from SimStackServer.WorkflowModel import Workflow
+
+        basepath = Config.get_resources().basepath
+        if not os.path.isabs(basepath):
+            basepath = str(_Path.home() / basepath)
+
+        jobdirectory = os.path.join(basepath, "singlejobs", wfem.uid)
+        os.makedirs(jobdirectory, exist_ok=True)
+
+        # Unpack WaNo bundle to inputs sub-directory
+        wano_dir_root = _Path(jobdirectory) / "inputs"
+        Workflow._unpack_wano_bundle(wfem, wano_dir_root)
+
+        if not wfem.wano_xml:
+            wfem.set_runtime_directory(jobdirectory)
+            return
+
+        # Load the WaNo model and render it
+        xml_path = wano_dir_root / wfem.wano_xml
+        if not xml_path.exists():
+            wfem.set_runtime_directory(jobdirectory)
+            return
+
+        wmr = WaNoModelRoot.from_spec(
+            xml_file_to_spec(xml_path), wano_dir_root=wano_dir_root
+        )
+        try:
+            wmr.read(wano_dir_root)
+        except FileNotFoundError:
+            pass
+        wmr = wano_without_view_constructor_helper(wmr)
+        wmr.datachanged_force()
+        wmr.datachanged_force()
+
+        rendered_wano = wmr.wano_walker()
+        rendered_wano = wmr.wano_walker_render_pass(
+            rendered_wano,
+            submitdir=None,
+            flat_variable_list=None,
+            input_var_db={},
+            output_var_db={},
+            runtime_variables=wfem.get_runtime_variables(),
+        )
+
+        with open(os.path.join(jobdirectory, "rendered_wano.yml"), "wt") as fh:
+            yaml.safe_dump(rendered_wano, fh)
+
+        # Render Jinja2 templates in the exec command (e.g. {{ wano["name"] }})
+        from jinja2 import Template
+
+        rendered_cmd = Template(wfem.exec_command, newline_sequence="\n").render(
+            wano=rendered_wano
+        )
+        rendered_cmd = rendered_cmd.strip(" \t\n\r") + "\n"
+        wfem.set_exec_command(rendered_cmd)
+
+        # Copy static WaNo input files (from <WaNoInputFiles>) into the job dir
+        for remote_file, local_file in wmr.input_files:
+            src = wano_dir_root / local_file
+            if src.exists():
+                import shutil
+
+                shutil.copy(str(src), os.path.join(jobdirectory, remote_file))
+
+        wfem.set_runtime_directory(jobdirectory)
 
     def get_singlejob_status(self, wfem_uid: str):
         resultdict = {"status": "inprogress"}

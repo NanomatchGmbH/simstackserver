@@ -414,9 +414,7 @@ class MultipleOf(_Node):
         return {
             "type": "multipleof",
             "template": {"children": [c.to_spec() for c in self.template]},
-            "items": [
-                {"children": [c.to_spec() for c in item]} for item in self.items
-            ],
+            "items": [{"children": [c.to_spec() for c in item]} for item in self.items],
             **self._common(),
         }
 
@@ -464,8 +462,7 @@ class Root:
             "exec_command": self.exec_command,
             "output_files": self.output_files,
             "input_files": [
-                {"logical_filename": lf, "path": p}
-                for lf, p in self.input_files
+                {"logical_filename": lf, "path": p} for lf, p in self.input_files
             ],
             "metas": self.metas,
             "children": [c.to_spec() for c in self.children],

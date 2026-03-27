@@ -963,9 +963,7 @@ def test_direct_is_connected_true_when_client_set(direct_cluster_manager):
 
 def test_direct_connect_if_disconnected_calls_init_client(direct_cluster_manager):
     """connect_if_disconnected in direct mode calls init_client, not connect."""
-    with patch.object(
-        direct_cluster_manager, "init_client"
-    ) as mock_init, patch.object(
+    with patch.object(direct_cluster_manager, "init_client") as mock_init, patch.object(
         direct_cluster_manager, "connect"
     ) as mock_ssh_connect:
         direct_cluster_manager.connect_if_disconnected()
@@ -1002,9 +1000,7 @@ def test_direct_connection_context(direct_cluster_manager, respx_mock):
     respx_mock.post("http://fake-url/api/server/clear-state").mock(
         return_value=httpx.Response(200, json={"status": "cleared"})
     )
-    with patch.object(
-        direct_cluster_manager, "init_client"
-    ) as mock_init, patch.object(
+    with patch.object(direct_cluster_manager, "init_client") as mock_init, patch.object(
         direct_cluster_manager, "disconnect"
     ) as mock_disconnect:
         with direct_cluster_manager.connection_context() as result:

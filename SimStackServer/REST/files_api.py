@@ -143,7 +143,8 @@ class ExternalInputFileInfo(BaseModel):
 
     logical_name: str = Field(..., description="Logical filename used inside the WaNo")
     source_path: str = Field(
-        ..., description="Current value / hint for the expected source path on the client"
+        ...,
+        description="Current value / hint for the expected source path on the client",
     )
 
 
@@ -174,15 +175,20 @@ class WorkflowNodeSpec(BaseModel):
         ..., description="WaNo spec dict as produced by WaNoModelRoot.to_spec()"
     )
     wfem_path: str = Field(
-        ..., description='Path of this node in the workflow DAG, e.g. "Step1" or "ForEach/0/MyWaNo"'
+        ...,
+        description='Path of this node in the workflow DAG, e.g. "Step1" or "ForEach/0/MyWaNo"',
     )
 
 
 class UploadItemResponse(BaseModel):
     """Describes one file that must (or will be) present on the server."""
 
-    server_path: str = Field(..., description="Destination path on server, relative to storage")
-    logical_name: str = Field(..., description="Filename as seen inside the job directory")
+    server_path: str = Field(
+        ..., description="Destination path on server, relative to storage"
+    )
+    logical_name: str = Field(
+        ..., description="Filename as seen inside the job directory"
+    )
     wfem_name: str = Field(..., description="Name of the WaNo that requires this file")
     wfem_path: str = Field(..., description="Path of the WaNo node in the workflow DAG")
     category: str = Field(
@@ -192,7 +198,9 @@ class UploadItemResponse(BaseModel):
             '"external_input" = user must supply this file'
         ),
     )
-    local_source: Optional[str] = Field(None, description="Hint for the local source path")
+    local_source: Optional[str] = Field(
+        None, description="Hint for the local source path"
+    )
     required: bool = Field(True, description="False if the file is optional")
 
 

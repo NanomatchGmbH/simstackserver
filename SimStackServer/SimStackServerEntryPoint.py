@@ -46,7 +46,11 @@ def flush_port_and_password_to_stdout(other_process_setup=False):
         raise FileNotFoundError("No server_config.yml found")
     print(
         "Port Pass %d %s %s"
-        % (server_config.rest_port, server_config.client_secret, server_config.server_version)
+        % (
+            server_config.rest_port,
+            server_config.client_secret,
+            server_config.server_version,
+        )
     )
 
 

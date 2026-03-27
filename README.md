@@ -38,6 +38,72 @@ To stop the running SimStackServer daemon:
 KillSimStackServer
 ```
 
+### Workflow Composition DSL
+
+`SimStackServer.WorkflowDSL` provides a Python-native API for composing workflows
+without writing XML or managing UUIDs by hand.
+
+```python
+from SimStackServer.WorkflowDSL import Step, foreach
+
+WANO_DIR = "path/to/MyWaNo"   # directory containing MyWaNo.xml
+
+# --- Flat parameters (simple WaNos) ---
+step = Step(WANO_DIR, node_name="Run1", name="Alice", Job="Developer")
+wf = step.build("my_workflow")
+
+# --- Nested parameters (complex WaNos) ---
+# Keyword arguments mirror the WaNo XML hierarchy as nested dicts.
+step = Step(
+    "path/to/Deposit",
+    node_name="Sim",
+    TABS={
+        "Simulation Parameters": {
+            "Simulation Box": {"Lx": 80.0, "Ly": 80.0, "Lz": 80.0,
+                               "PBC": {"enabled": True, "Cutoff": 40.0}},
+            "Simulation Parameters": {"Number of Molecules": 50},
+        },
+        "Postprocessing": {"Extend morphology (x,y)": False},
+    },
+)
+
+# --- Variable references (wire outputs to inputs) ---
+# Use "global://${NodeName/output_file}" to reference another step's output.
+initial = Step("path/to/Deposit", node_name="InitialDeposit",
+               TABS={"Simulation Parameters": {"Simulation Box": {"Lx": 80.0}}})
+continued = Step("path/to/Deposit", node_name="ContinuedDeposit",
+                 TABS={"Molecules": {
+                     "Restart from existing morphology": True,
+                     "Restartfile": "global://${InitialDeposit/restartfile.zip}",
+                 }})
+wf = (initial >> continued).build("restart_wf")
+
+# --- Sequential (step_a runs first, then step_b) ---
+wf = (step_a >> step_b).build("sequential_wf")
+
+# --- Parallel (step_a and step_b run simultaneously, then step_c joins) ---
+wf = ((step_a & step_b) >> step_c).build("parallel_wf")
+
+# --- Fan-out over a list ---
+names = ["Alice", "Bob", "Eve"]
+fan = foreach(names, lambda n: Step(WANO_DIR, node_name=n, name=n))
+wf = fan.build("fanout_wf")
+
+# --- Submit to a running server ---
+wf.submit("http://localhost:8080")
+# With authentication:
+wf.submit("http://localhost:8080", username="admin", password="secret")
+```
+
+`>>` chains steps sequentially; `&` runs them in parallel.
+Any combination can be arbitrarily nested:
+
+```python
+wf = (step_a >> (step_b & step_c) >> step_d).build("complex_wf")
+```
+
+See `demo_singlejob_submission.py` for a runnable end-to-end example (Demo D).
+
 ## Development
 
 ### Prerequisites
@@ -71,17 +137,6 @@ pixi run tests
 ```bash
 pixi run lint
 ```
-
-## Dependencies
-
-Key dependencies include:
-- ZeroMQ for communication
-- NetworkX for workflow representation
-- Paramiko for SSH connections
-- Jinja2 for templating
-- SQLAlchemy for database operations
-- Lxml for XML processing
-- Python-daemon for daemon process management
 
 ## License
 

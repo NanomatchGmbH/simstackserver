@@ -50,7 +50,10 @@ class TestFloatSpec:
         assert spec["visibility_var_path"] == "a.b"
 
     def test_import_from(self):
-        assert Float("x", import_from="other.path").to_spec()["import_from"] == "other.path"
+        assert (
+            Float("x", import_from="other.path").to_spec()["import_from"]
+            == "other.path"
+        )
 
     def test_force_disable(self):
         assert Float("x", force_disable=True).to_spec()["force_disable"] is True
@@ -94,7 +97,10 @@ class TestStringSpec:
         assert String("s", value="hello").to_spec()["value"] == "hello"
 
     def test_dynamic_output(self):
-        assert String("s", dynamic_output="out.yml").to_spec()["dynamic_output"] == "out.yml"
+        assert (
+            String("s", dynamic_output="out.yml").to_spec()["dynamic_output"]
+            == "out.yml"
+        )
 
     def test_no_dynamic_output_key_when_absent(self):
         assert "dynamic_output" not in String("s").to_spec()
@@ -109,7 +115,9 @@ class TestFileSpec:
         assert spec["local"] is True
 
     def test_fields(self):
-        spec = File("f", path="data.txt", logical_filename="input.dat", local=False).to_spec()
+        spec = File(
+            "f", path="data.txt", logical_filename="input.dat", local=False
+        ).to_spec()
         assert spec["path"] == "data.txt"
         assert spec["logical_filename"] == "input.dat"
         assert spec["local"] is False
@@ -150,7 +158,9 @@ class TestMatrixSpec:
         assert "data_text" not in spec
 
     def test_headers(self):
-        spec = Matrix("m", rows=1, cols=2, col_header=["A", "B"], row_header=["R1"]).to_spec()
+        spec = Matrix(
+            "m", rows=1, cols=2, col_header=["A", "B"], row_header=["R1"]
+        ).to_spec()
         assert spec["col_header"] == ["A", "B"]
         assert spec["row_header"] == ["R1"]
 
@@ -396,7 +406,9 @@ class TestRootToModel:
         ).to_model()
         assert len(model["atoms"].list_of_dicts) == 2
         assert model["atoms"].list_of_dicts[0]["element"].get_data() == "C"
-        assert model["atoms"].list_of_dicts[1]["charge"].get_data() == pytest.approx(1.0)
+        assert model["atoms"].list_of_dicts[1]["charge"].get_data() == pytest.approx(
+            1.0
+        )
 
     def test_round_trip_spec(self):
         """Builder → to_spec → Root.from_spec → to_spec produces same dict."""
@@ -416,8 +428,12 @@ class TestRootToModel:
         assert round_tripped["exec_command"] == "run.sh"
         assert round_tripped["output_files"] == ["out.yml"]
         assert round_tripped["children"][0]["name"] == "S"
-        assert round_tripped["children"][0]["children"][0]["value"] == pytest.approx(300.0)
-        assert round_tripped["children"][0]["children"][1]["value"] == pytest.approx(5.0)
+        assert round_tripped["children"][0]["children"][0]["value"] == pytest.approx(
+            300.0
+        )
+        assert round_tripped["children"][0]["children"][1]["value"] == pytest.approx(
+            5.0
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +592,9 @@ class TestMolecularDynamicsWaNo:
         assert "gmx grompp" in spec["exec_command"]
         assert "gmx mdrun" in spec["exec_command"]
         assert set(spec["output_files"]) == {"md.xtc", "md.edr", "md.gro", "md.log"}
-        assert {"logical_filename": "topology.top", "path": "system.top"} in spec["input_files"]
+        assert {"logical_filename": "topology.top", "path": "system.top"} in spec[
+            "input_files"
+        ]
 
     def test_top_level_box_names(self):
         spec = _MD_WANO.to_spec()
@@ -617,7 +635,9 @@ class TestMolecularDynamicsWaNo:
         spec = _MD_WANO.to_spec()
         sim = next(c for c in spec["children"] if c["name"] == "Simulation")
         switch = next(c for c in sim["children"] if c["name"] == "ensemble")
-        npt_spec = next(o["spec"] for o in switch["options"] if o["switch_name"] == "NPT")
+        npt_spec = next(
+            o["spec"] for o in switch["options"] if o["switch_name"] == "NPT"
+        )
         child_names = [c["name"] for c in npt_spec["children"]]
         assert "barostat" in child_names
         assert "tau_p_ps" in child_names
@@ -713,7 +733,9 @@ class TestMolecularDynamicsWaNo:
     def test_round_trip_preserves_multipleof(self):
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 
-        model = WaNoModelRoot.from_spec(WaNoModelRoot.from_spec(_MD_WANO.to_spec()).to_spec())
+        model = WaNoModelRoot.from_spec(
+            WaNoModelRoot.from_spec(_MD_WANO.to_spec()).to_spec()
+        )
         components = model["System"]["components"]
         assert len(components.list_of_dicts) == 2
         assert components.list_of_dicts[0]["molecule_name"].get_data() == "water"

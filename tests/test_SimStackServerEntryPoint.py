@@ -5,7 +5,6 @@ from contextlib import nullcontext
 import lockfile
 import pytest
 from unittest.mock import patch, MagicMock
-import logging
 
 from SimStackServer.SimStackServerEntryPoint import (
     get_my_runtime,
@@ -156,9 +155,7 @@ class TestSimStackServerEntryPoint:
             ), patch(
                 "SimStackServer.SimStackServerEntryPoint.setup_pid",
                 return_value=mock_pid,
-            ), patch(
-                "sys.exit", side_effect=SystemExit
-            ) as mock_exit:
+            ), patch("sys.exit", side_effect=SystemExit) as mock_exit:
                 with pytest.raises(SystemExit):
                     main()
                 mock_exit.assert_called_once_with(1)

@@ -394,7 +394,8 @@ class WorkflowElementList(object):
                 self._uid_to_seqnum[element.uid] = seqnum
 
     def _add_to_list(self, mytype, actual_object):
-        self._typelist.append(mytype)
+        # Accept either a string type name or the class itself
+        self._typelist.append(mytype if isinstance(mytype, str) else mytype.__name__)
         self._storage.append(actual_object)
 
     def __eq__(self, other):
@@ -2702,7 +2703,9 @@ class Workflow(XMLYMLInstantiationBase):
         return self._remote_server_manager.server_from_resource(job.resources)
 
     @staticmethod
-    def _unpack_wano_bundle(wfem: WorkflowExecModule, wano_dir_root: pathlib.Path) -> None:
+    def _unpack_wano_bundle(
+        wfem: WorkflowExecModule, wano_dir_root: pathlib.Path
+    ) -> None:
         """Write bundle files from the WFEM to wano_dir_root so _prepare_job can read them.
 
         If the bundle is empty, this is a no-op and the existing files on disk are used
@@ -2927,6 +2930,29 @@ class Workflow(XMLYMLInstantiationBase):
             queueing_system = self.default_wf_resources.queueing_system
         return queueing_system
 
+    def _resolve_stagein_source(self, source: str) -> str:
+        """Resolve a stage-in source string to an absolute filesystem path.
+
+        Handles two placeholder forms:
+        - ``${STORAGE}/...``  → absolute path rooted at this workflow's storage dir
+        - ``${NodeName/file}`` → output of a predecessor node, staged at
+          ``storage/workflow_data/NodeName/outputs/file``
+        """
+        # Strip surrounding whitespace that may creep in from XML text nodes
+        resolved = source.strip().replace("${STORAGE}", self.storage)
+        # Replace global variable references like ${InitialDeposit/restartfile.zip}
+        # Use simple string operations rather than regex to avoid encoding surprises.
+        if resolved.startswith("${") and resolved.endswith("}"):
+            inner = resolved[2:-1]
+            slash = inner.find("/")
+            if slash != -1:
+                node_name = inner[:slash]
+                filename = inner[slash + 1 :]
+                resolved = join(
+                    self.storage, "workflow_data", node_name, "outputs", filename
+                )
+        return resolved
+
     def _prepare_job(self, wfem: WorkflowExecModule):
         queueing_system = wfem.resources.queueing_system
         secure_mode = SecureModeGlobal.get_secure_mode()
@@ -3024,7 +3050,7 @@ class Workflow(XMLYMLInstantiationBase):
         for myinput in wfem.inputs:
             tofile = myinput[0]
             source = myinput[1]
-            absfile = self.storage + "/" + source
+            absfile = self._resolve_stagein_source(source)
             print(source)
             allfiles = []
             if "*" in absfile:
@@ -3047,7 +3073,7 @@ class Workflow(XMLYMLInstantiationBase):
         for myinput in wfem.inputs:
             tofile = jobdirectory + "/" + myinput[0]
             source = myinput[1]
-            myabsfile = self.storage + "/" + source
+            myabsfile = self._resolve_stagein_source(source)
 
             allfiles = []
             globmode = False  # In this case we need to rewrite something

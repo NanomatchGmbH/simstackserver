@@ -146,9 +146,7 @@ def element_to_spec(xml_el) -> Dict[str, Any]:
 
     elif spec_type == "dict":
         spec["children"] = [
-            element_to_spec(child)
-            for child in xml_el
-            if _is_regular_element(child)
+            element_to_spec(child) for child in xml_el if _is_regular_element(child)
         ]
         if "style" in xml_el.attrib:
             spec["style"] = xml_el.attrib["style"]
@@ -172,19 +170,13 @@ def element_to_spec(xml_el) -> Dict[str, Any]:
         if items_xml:
             spec["template"] = {
                 "children": [
-                    element_to_spec(c)
-                    for c in items_xml[0]
-                    if _is_regular_element(c)
+                    element_to_spec(c) for c in items_xml[0] if _is_regular_element(c)
                 ]
             }
         else:
             spec["template"] = {"children": []}
         spec["items"] = [
-            {
-                "children": [
-                    element_to_spec(c) for c in item if _is_regular_element(c)
-                ]
-            }
+            {"children": [element_to_spec(c) for c in item if _is_regular_element(c)]}
             for item in items_xml
         ]
 

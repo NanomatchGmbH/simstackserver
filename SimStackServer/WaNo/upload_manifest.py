@@ -15,7 +15,7 @@ submitting?" by classifying every file a WaNo requires into one of two categorie
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 
@@ -126,9 +126,7 @@ class WorkflowUploadManifest:
     def missing_local_sources(self) -> List[UploadItem]:
         """Return ``external_input`` items whose local source is missing or unset."""
         return [
-            i
-            for i in self._items
-            if i.is_external_input and not i.local_source_exists
+            i for i in self._items if i.is_external_input and not i.local_source_exists
         ]
 
     def validate(self) -> None:
@@ -141,7 +139,11 @@ class WorkflowUploadManifest:
         if missing:
             lines = "\n".join(
                 f"  [{i.wfem_path}] {i.logical_name}"
-                + (f" (expected at: {i.local_source})" if i.local_source else " (no path set)")
+                + (
+                    f" (expected at: {i.local_source})"
+                    if i.local_source
+                    else " (no path set)"
+                )
                 for i in missing
             )
             raise FileNotFoundError(

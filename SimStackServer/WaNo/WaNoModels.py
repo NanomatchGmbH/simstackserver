@@ -959,12 +959,14 @@ class MultipleOfModel(AbstractWanoModel):
         # Build _template_spec from the first XML child so that the spec-based
         # add_item() path works after XML-based construction too.
         if self.first_xml_child is not None:
-            from SimStackServer.WaNo.xml_compat import element_to_spec, _is_regular_element as _ire
+            from SimStackServer.WaNo.xml_compat import (
+                element_to_spec,
+                _is_regular_element as _ire,
+            )
+
             self._template_spec = {
                 "children": [
-                    element_to_spec(c)
-                    for c in self.first_xml_child
-                    if _ire(c)
+                    element_to_spec(c) for c in self.first_xml_child if _ire(c)
                 ]
             }
 
@@ -1112,6 +1114,7 @@ class MultipleOfModel(AbstractWanoModel):
         else:
             # Spec-based path: instantiate fresh models from the template spec.
             from SimStackServer.WaNo.WaNoSpec import spec_to_model
+
             model_dict = OrderedDictIterHelper()
             for child_spec in self._template_spec.get("children", []):
                 model = spec_to_model(child_spec)
@@ -1191,11 +1194,7 @@ class MultipleOfModel(AbstractWanoModel):
         out.update(self._common_spec_fields())
         out["template"] = self._template_spec
         out["items"] = [
-            {
-                "children": [
-                    child.to_spec() for child in wano_dict.values()
-                ]
-            }
+            {"children": [child.to_spec() for child in wano_dict.values()]}
             for wano_dict in self.list_of_dicts
         ]
         return out
@@ -1267,6 +1266,13 @@ class WaNoModelRoot(WaNoModelDictLike):
         _spec = kwargs.get("_spec", None)
         if _spec is not None:
             self._apply_root_spec(_spec)
+            # Wire up root refs, paths, and parent pointers so that
+            # visibility callbacks and datachanged signals work correctly.
+            from SimStackServer.WaNo.WaNoFactory import (
+                wano_without_view_constructor_helper,
+            )
+
+            wano_without_view_constructor_helper(self)
         else:
             self._parse_defaults()
 
@@ -1470,7 +1476,12 @@ class WaNoModelRoot(WaNoModelDictLike):
         if only_static:
             return return_files
 
-        return_files = return_files + [a[0] for a in self.export_model.get_contents()]
+        export_model = self.export_model
+        return_files = return_files + (
+            [a[0] for a in export_model.get_contents()]
+            if export_model is not None
+            else []
+        )
         for callback in self._outputfile_callbacks:
             return_files += callback()
         return return_files
@@ -1559,10 +1570,16 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._new_resource_model.to_json(resources_fn)
 
         imports_fn = outfolder / "imports.yml"
-        self.import_model.save(imports_fn)
+        if self.import_model is not None:
+            self.import_model.save(imports_fn)
+        else:
+            imports_fn.write_text("{}\n")
 
         exports_fn = outfolder / "exports.yml"
-        self.export_model.save(exports_fn)
+        if self.export_model is not None:
+            self.export_model.save(exports_fn)
+        else:
+            exports_fn.write_text("{}\n")
 
     def save(self, outfolder):
         delta_json = Path(outfolder) / "wano_configuration.json"
@@ -1905,7 +1922,10 @@ class WaNoModelRoot(WaNoModelDictLike):
         # xmlfile = self._name + ".xml"
         # runtime_stagein_files.append([self._name + ".xml","${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, "rendered_wano.yml)])
 
-        for otherfiles in self.get_import_model().get_contents():
+        import_model = self.get_import_model()
+        for otherfiles in (
+            import_model.get_contents() if import_model is not None else []
+        ):
             name, importloc, tostage = otherfiles[0], otherfiles[1], otherfiles[2]
             if self._filename_is_global_var(importloc):
                 runtime_stagein_files.append([name, importloc])
@@ -2192,8 +2212,7 @@ class WaNoModelRoot(WaNoModelDictLike):
             "exec_command": getattr(self, "exec_command", ""),
             "output_files": list(self.output_files),
             "input_files": [
-                {"logical_filename": lf, "path": p}
-                for lf, p in self.input_files
+                {"logical_filename": lf, "path": p} for lf, p in self.input_files
             ],
             "metas": dict(self.metas) if self.metas else {},
             "children": [child.to_spec() for child in self.wano_dict.values()],
@@ -2225,7 +2244,9 @@ class WaNoModelRoot(WaNoModelDictLike):
         # WaNo XML
         if self.full_xml is not None:
             xml_filename = f"{self._name}.xml"
-            xml_bytes = etree.tounicode(self.full_xml, pretty_print=True).encode("utf-8")
+            xml_bytes = etree.tounicode(self.full_xml, pretty_print=True).encode(
+                "utf-8"
+            )
             bundle[xml_filename] = base64.b64encode(xml_bytes).decode("ascii")
 
         # wano_configuration.json + imports/exports/resources
@@ -2312,51 +2333,66 @@ class WaNoModelRoot(WaNoModelDictLike):
 
         # WaNo-definition files (auto-generated by prepare_files_submission)
         xml_filename = f"{self._name}.xml"
-        items.append(UploadItem(
-            server_path=_srv(xml_filename),
-            logical_name=xml_filename,
-            wfem_name=self._name,
-            wfem_path=wfem_path,
-            category="wano_definition",
-        ))
-        for cfg_file in ("wano_configuration.json", "imports.yml", "exports.yml", "resources.yml"):
-            items.append(UploadItem(
-                server_path=_srv(cfg_file),
-                logical_name=cfg_file,
+        items.append(
+            UploadItem(
+                server_path=_srv(xml_filename),
+                logical_name=xml_filename,
                 wfem_name=self._name,
                 wfem_path=wfem_path,
                 category="wano_definition",
-                required=False,  # only produced when non-default
-            ))
+            )
+        )
+        for cfg_file in (
+            "wano_configuration.json",
+            "imports.yml",
+            "exports.yml",
+            "resources.yml",
+        ):
+            items.append(
+                UploadItem(
+                    server_path=_srv(cfg_file),
+                    logical_name=cfg_file,
+                    wfem_name=self._name,
+                    wfem_path=wfem_path,
+                    category="wano_definition",
+                    required=False,  # only produced when non-default
+                )
+            )
 
         for _logical, local_file in self.input_files:
-            items.append(UploadItem(
-                server_path=_srv(local_file),
-                logical_name=local_file,
-                wfem_name=self._name,
-                wfem_path=wfem_path,
-                category="wano_definition",
-                local_source=str(self._wano_dir_root / local_file),
-            ))
+            items.append(
+                UploadItem(
+                    server_path=_srv(local_file),
+                    logical_name=local_file,
+                    wfem_name=self._name,
+                    wfem_path=wfem_path,
+                    category="wano_definition",
+                    local_source=str(self._wano_dir_root / local_file),
+                )
+            )
 
         # External input files (user must supply)
         external = []
         for child in self.wano_dict.values():
             self._collect_external_file_items(child, external)
         for logical_name, source_path in external:
-            items.append(UploadItem(
-                server_path=_srv(logical_name),
-                logical_name=logical_name,
-                wfem_name=self._name,
-                wfem_path=wfem_path,
-                category="external_input",
-                local_source=source_path if source_path else None,
-                required=True,
-            ))
+            items.append(
+                UploadItem(
+                    server_path=_srv(logical_name),
+                    logical_name=logical_name,
+                    wfem_name=self._name,
+                    wfem_path=wfem_path,
+                    category="external_input",
+                    local_source=source_path if source_path else None,
+                    required=True,
+                )
+            )
 
         return items
 
-    def build_wfem_with_bundle(self, stageout_basedir: str = "") -> "WorkflowExecModule":
+    def build_wfem_with_bundle(
+        self, stageout_basedir: str = ""
+    ) -> "WorkflowExecModule":
         """Build a self-contained :class:`WorkflowExecModule` with an embedded WaNo bundle.
 
         The bundle contains all WaNo-owned files so the server can execute the job
@@ -2502,7 +2538,7 @@ class WaNoItemIntModel(AbstractWanoModel):
 
     def apply_delta(self, delta):
         if not self._apply_import_delta(delta):
-            self.myint = delta
+            self.set_data(delta)
 
     def changed_from_default(self) -> bool:
         if self.do_import:
@@ -2580,7 +2616,7 @@ class WaNoItemBoolModel(AbstractWanoModel):
         return schema
 
     def apply_delta(self, delta):
-        self.mybool = delta
+        self.set_data(delta)
 
     def changed_from_default(self) -> bool:
         return self.mybool != self._default
@@ -2725,6 +2761,8 @@ class WaNoItemFileModel(AbstractWanoModel):
             # print("Copying",self._root.wano_dir_root,rendered_logical_name,destdir)
             try:
                 shutil.copy(self.mystring, destfile)
+            except FileNotFoundError:
+                pass  # source file not yet provided (e.g. DSL placeholder)
             except IsADirectoryError as e:
                 raise WorkflowSubmitError(
                     "%s points to a directory, but a filename was expected in %s"
@@ -2876,7 +2914,7 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def apply_delta(self, delta):
         if not self._apply_import_delta(delta):
-            self.mystring = delta
+            self.set_data(delta)
 
     def changed_from_default(self) -> bool:
         if self.do_import:

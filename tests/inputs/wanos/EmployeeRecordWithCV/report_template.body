@@ -1,0 +1,13 @@
+    <h1>Information about the family of our in-house {{ output_dict["Job"] }}: {{ output_dict["name"] }}</h1>
+    {{ output_dict["name"] }} has {{ output_dict["Kids"] | length }} kid{% if output_dict["Kids"]|length > 1 %}s{% endif %}.
+    Their names are:
+    <ul>
+       {% for kid in output_dict["Kids"] %}
+       <li>{{ kid["name"] }}</li>
+       {% endfor %}
+    </ul>
+    We are happy he is working for us and hereby certify the unlimited wisdom and foresight he had naming his children. <br/>
+    His wife is called {{ output_config["spouse"]["name"] }}. Her density was: {{ output_config["spouse"]["density"] }}.
+    <img src="test.png">hello</img>
+    This here is a sample vector:
+    {{ wano["Simple Vector"] }}

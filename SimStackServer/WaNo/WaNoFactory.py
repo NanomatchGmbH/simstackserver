@@ -119,9 +119,7 @@ def wano_constructor(wano: WaNoListEntry, model_only=False):
     wano_dir_root = wano.folder
     from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
 
-    wmr = WaNoModelRoot(
-        wano_dir_root=wano_dir_root, model_only=model_only
-    )
+    wmr = WaNoModelRoot(wano_dir_root=wano_dir_root, model_only=model_only)
     if model_only:
         wmr = wano_without_view_constructor_helper(wmr)
         rootview = None

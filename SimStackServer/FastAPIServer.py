@@ -638,7 +638,9 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error submitting single job")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/wano/required-files", response_model=WanoRequiredFilesResponse)
+        @self.app.post(
+            "/api/wano/required-files", response_model=WanoRequiredFilesResponse
+        )
         async def wano_required_files(request: WanoRequiredFilesRequest):
             """Return the list of external input files a WaNo requires.
 
@@ -662,7 +664,10 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error resolving required files for WaNo")
                 raise HTTPException(status_code=400, detail=str(e))
 
-        @self.app.post("/api/workflows/required-files", response_model=WorkflowRequiredFilesResponse)
+        @self.app.post(
+            "/api/workflows/required-files",
+            response_model=WorkflowRequiredFilesResponse,
+        )
         async def workflow_required_files(request: WorkflowRequiredFilesRequest):
             """Return the upload manifest for a full workflow.
 
@@ -702,8 +707,12 @@ class FastAPIThread(threading.Thread):
 
                 return WorkflowRequiredFilesResponse(
                     all_items=_to_response(manifest.all_items()),
-                    required_user_uploads=_to_response(manifest.required_user_uploads()),
-                    wano_definition_items=_to_response(manifest.wano_definition_items()),
+                    required_user_uploads=_to_response(
+                        manifest.required_user_uploads()
+                    ),
+                    wano_definition_items=_to_response(
+                        manifest.wano_definition_items()
+                    ),
                     summary=manifest.summary(),
                 )
             except Exception as e:

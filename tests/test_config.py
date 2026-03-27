@@ -215,15 +215,29 @@ def test_load_server_config_nonexistent(config):
 def test_save_server_config_overwrites_existing(config):
     """Test that save_server_config overwrites existing configuration"""
     resources1 = Resources()
-    resources1.from_dict({"resource_name": "first_config", "walltime": 1000, "cpus_per_node": 4})
+    resources1.from_dict(
+        {"resource_name": "first_config", "walltime": 1000, "cpus_per_node": 4}
+    )
     Config.save_server_config(
-        ServerConfig(rest_port=8080, client_secret="s1", server_version="v1", resources=resources1)
+        ServerConfig(
+            rest_port=8080,
+            client_secret="s1",
+            server_version="v1",
+            resources=resources1,
+        )
     )
 
     resources2 = Resources()
-    resources2.from_dict({"resource_name": "second_config", "walltime": 2000, "cpus_per_node": 8})
+    resources2.from_dict(
+        {"resource_name": "second_config", "walltime": 2000, "cpus_per_node": 8}
+    )
     Config.save_server_config(
-        ServerConfig(rest_port=9090, client_secret="s2", server_version="v2", resources=resources2)
+        ServerConfig(
+            rest_port=9090,
+            client_secret="s2",
+            server_version="v2",
+            resources=resources2,
+        )
     )
 
     loaded = Config.load_server_config()
@@ -312,7 +326,9 @@ def test_get_resources_loads_config_on_first_call(config):
     Config._server_config = None
 
     resources = Resources()
-    resources.from_dict({"resource_name": "cached_config", "walltime": 5000, "cpus_per_node": 12})
+    resources.from_dict(
+        {"resource_name": "cached_config", "walltime": 5000, "cpus_per_node": 12}
+    )
     Config.save_server_config(_make_server_config(resources))
 
     loaded_resources = Config.get_resources()
@@ -337,7 +353,9 @@ def test_get_server_config_returns_cached_value(config):
     import yaml
 
     different_resources = Resources()
-    different_resources.from_dict({"resource_name": "different_config", "walltime": 9999})
+    different_resources.from_dict(
+        {"resource_name": "different_config", "walltime": 9999}
+    )
     sc2 = _make_server_config(different_resources)
     filepath = Config._get_config_file("server_config.yml")
     with open(filepath, "w") as f:
@@ -378,7 +396,9 @@ def test_get_resources_after_save_server_config(config):
     Config._server_config = None
 
     resources = Resources()
-    resources.from_dict({"resource_name": "save_then_get", "walltime": 7777, "memory": 20480})
+    resources.from_dict(
+        {"resource_name": "save_then_get", "walltime": 7777, "memory": 20480}
+    )
     Config.save_server_config(_make_server_config(resources))
 
     loaded = Config.get_resources()

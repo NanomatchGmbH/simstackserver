@@ -512,7 +512,9 @@ class ClusterManager:
         return self.get_server_command_from_software_directory(software_dir)
 
     def get_client_secret(self) -> str:
-        assert self._client_secret is not None, "Client secret is not set. This should have been set during connection setup."
+        assert (
+            self._client_secret is not None
+        ), "Client secret is not set. This should have been set during connection setup."
         return self._client_secret
 
     def start_server_remote(self, command):
@@ -631,9 +633,7 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def submit_single_job(self, wfem):
         """Submit a single job using REST API"""
@@ -643,9 +643,7 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def send_jobstatus_message(self, wfem_uid: str):
         """Get single job status using REST API"""
@@ -654,9 +652,7 @@ class ClusterManager:
             response.raise_for_status()
             return response.json()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def send_abortsinglejob_message(self, wfem_uid: str):
         """Abort a single job using REST API"""
@@ -664,9 +660,7 @@ class ClusterManager:
             response = self._client.post(f"/api/singlejobs/{wfem_uid}/abort")
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def send_noop_message(self):
         """No-op - not needed with REST API"""
@@ -678,9 +672,7 @@ class ClusterManager:
             response = self._client.post("/api/server/shutdown")
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def abort_wf(self, workflow_submitname):
         """Abort a workflow using REST API"""
@@ -691,9 +683,7 @@ class ClusterManager:
             response = self._client.post(f"/api/workflows/{workflow_submitname}/abort")
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def send_clearserverstate_message(self):
         """Clear server state using REST API"""
@@ -701,9 +691,7 @@ class ClusterManager:
             response = self._client.post("/api/server/clear-state")
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def configure(self, resources):
         """Configure server resources using REST API"""
@@ -715,9 +703,7 @@ class ClusterManager:
             )
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def delete_wf(self, workflow_submitname):
         """Delete a workflow using REST API"""
@@ -728,9 +714,7 @@ class ClusterManager:
             response = self._client.delete(f"/api/workflows/{workflow_submitname}")
             response.raise_for_status()
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def get_workflow_list(self):
         """Get list of workflows using REST API"""
@@ -744,9 +728,7 @@ class ClusterManager:
             }
             return workflows
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def get_workflow_job_list(self, workflow):
         """Get job list for a workflow using REST API"""
@@ -756,9 +738,7 @@ class ClusterManager:
             data = response.json()
             return data.get("jobs", [])
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def is_connected(self):
         """
@@ -809,9 +789,7 @@ class ClusterManager:
             # Return the URL from the FastAPI server
             return data.get("url")
         else:
-            raise NotImplementedError(
-                "No REST client connected"
-            )
+            raise NotImplementedError("No REST client connected")
 
     def exists_as_directory(self, path):
         """
