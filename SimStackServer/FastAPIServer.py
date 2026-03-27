@@ -11,10 +11,10 @@ import sys
 from pathlib import Path
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import Depends, FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from SimStackServer.REST.files_api import (
     FilePathRequest,
@@ -44,31 +44,58 @@ if TYPE_CHECKING:
 
 # Request/Response models for workflow operations
 class SubmitWorkflowRequest(BaseModel):
-    """Request model for workflow submission"""
+    """Submit a previously uploaded workflow for execution."""
 
-    filename: str
+    filename: str = Field(
+        ...,
+        description=(
+            "Path to `rendered_workflow.xml` **relative to the server basepath**. "
+            "The file and the accompanying `workflow_data/` tree must already "
+            "have been uploaded via `/api/files/upload`."
+        ),
+        json_schema_extra={"examples": ["my_workflow_2024-01-01/rendered_workflow.xml"]},
+    )
 
 
 class SubmitWorkflowResponse(BaseModel):
-    """Response model for workflow submission"""
+    """Acknowledgement that a workflow has been queued for execution."""
 
-    status: str
+    status: str = Field(..., description='Always `"submitted"` on success.')
     message: str
-    filename: str
+    filename: str = Field(..., description="Echo of the submitted filename.")
 
 
 class SubmitSingleJobRequest(BaseModel):
-    """Request model for single job submission"""
+    """Submit a self-contained single job for execution.
 
-    wfem: dict
+    The `wfem` dict is a serialised `WorkflowExecModule` — typically produced
+    by calling `wfem.to_dict(d)` on a WFEM built with
+    `WaNoModelRoot.build_wfem_with_bundle()`.  It contains all WaNo definition
+    files as base64-encoded entries, so no prior file upload is needed for the
+    WaNo itself.  External user-supplied files (e.g. from `<WaNoFile>` parameters)
+    must still be uploaded separately via `/api/files/upload` before submission.
+    """
+
+    wfem: dict = Field(
+        ...,
+        description=(
+            "Serialised WorkflowExecModule dict.  Must include at minimum: "
+            "`uid`, `exec_command`, `inputs`, `outputs`, `resources`, "
+            "and (for bundle jobs) `wano_bundle`."
+        ),
+    )
 
 
 class SubmitSingleJobResponse(BaseModel):
-    """Response model for single job submission"""
+    """Acknowledgement that a single job has been queued for execution."""
 
-    status: str
+    status: str = Field(..., description='Always `"submitted"` on success.')
     message: str
-    job_uid: str
+    job_uid: str = Field(
+        ...,
+        description="Unique identifier for this job.  Use it to poll status via "
+        "`GET /api/singlejobs/{job_uid}/status`.",
+    )
 
 
 class HTTPServerInfo(BaseModel):
@@ -189,7 +216,62 @@ class FastAPIThread(threading.Thread):
 
         self.app = FastAPI(
             title="SimStackServer API",
-            description="REST API for SimStackServer workflow management",
+            description="""\
+REST API for the SimStack scientific-workflow execution server.
+
+## Core concepts
+
+| Concept | Description |
+|---------|-------------|
+| **WaNo** | *Workflow Active Node* — a reusable computational step defined by an XML file, input/output declarations, and an exec command. |
+| **WFEM** | *WorkflowExecModule* — the runtime representation of a single WaNo step, including its parameters, resource requirements, stage-in/out file lists, and (optionally) a base64-encoded file bundle. |
+| **Workflow** | A directed acyclic graph (DAG) of WFEMs, serialised as `rendered_workflow.xml`. |
+| **Basepath** | A server-side root directory (default `~/simstack_workspace`).  **All paths accepted and returned by the API are relative to this basepath** unless stated otherwise. |
+
+## Submission modes
+
+### 1. Single job (bundle API)
+Build a self-contained WFEM on the client (all WaNo files embedded as base64),
+then submit it in one call.  The server unpacks the bundle, renders the WaNo,
+and executes the job.
+
+**Typical flow:**
+
+1. `GET /health` — verify server is reachable.
+2. Build a WFEM dict on the client (see `WaNoModelRoot.build_wfem_with_bundle()`).
+3. *(optional)* `POST /api/files/upload` — upload any external input files that
+   are not part of the bundle (e.g. user-supplied scientific data).
+4. `POST /api/singlejobs/submit` — submit the WFEM dict.
+5. `GET /api/singlejobs/{job_uid}/status` — poll until `status.status == "finished"`.
+6. `POST /api/files/list` — list output files under `singlejobs/{job_uid}/`.
+
+### 2. Multi-step workflow (DSL / XML)
+Compose multiple steps into a DAG, upload the staging directory and
+`rendered_workflow.xml`, then submit.
+
+**Typical flow:**
+
+1. `GET /health` — verify server is reachable.
+2. Build the workflow on the client (e.g. via `WorkflowDSL`). This produces a
+   staging directory with `workflow_data/<StepName>/inputs/…` for each step, plus
+   a `rendered_workflow.xml`.
+3. `POST /api/files/upload` — upload every file from the staging directory.
+   Use `to_file` to set the relative path under the basepath
+   (e.g. `my_workflow_2024-01-01/workflow_data/Step1/inputs/config.xml`).
+4. `POST /api/files/upload` — upload `rendered_workflow.xml` to
+   `my_workflow_2024-01-01/rendered_workflow.xml`.
+5. `POST /api/workflows/submit` — submit with
+   `{"filename": "my_workflow_2024-01-01/rendered_workflow.xml"}`.
+6. `GET /api/workflows/inprogress` / `GET /api/workflows/finished` — poll until
+   the workflow name appears in the finished list.
+7. `POST /api/files/list` — list results under `my_workflow_2024-01-01/`.
+
+## Authentication
+
+When the server is started with `--username` and `--password`, all endpoints
+require HTTP Basic authentication.  Swagger UI's *Authorize* button can be
+used to set credentials for interactive testing.
+""",
             version="1.0.0",
             lifespan=lifespan,
             dependencies=global_dependencies,
@@ -372,18 +454,26 @@ class FastAPIThread(threading.Thread):
     def _setup_routes(self):
         """Setup FastAPI routes with access to SimStackServer"""
 
-        @self.app.get("/")
+        @self.app.get("/", tags=["Server"])
         async def root():
-            """Root endpoint - service information"""
+            """Service identity and API version.
+
+            Use this endpoint to verify the server is reachable and to
+            discover the API version before making further calls.
+            """
             return {
                 "status": "running",
                 "service": "SimStackServer",
                 "api_version": "1.0.0",
             }
 
-        @self.app.get("/health")
+        @self.app.get("/health", tags=["Server"])
         async def health_check():
-            """Health check endpoint"""
+            """Server health check.
+
+            Returns the current number of running workflows.  Useful as a
+            liveness probe or pre-flight check before submitting work.
+            """
             return {
                 "status": "healthy",
                 "workflows_running": self.simstack_server._workflow_manager.workflows_running(),
@@ -391,7 +481,7 @@ class FastAPIThread(threading.Thread):
 
         # ==================== HTTP Server Routes (Directory Browsing) ====================
 
-        @self.app.get("/http/static/{filename}")
+        @self.app.get("/http/static/{filename}", tags=["Browse"], include_in_schema=False)
         async def serve_static_file(filename: str):
             """Serve static files (favicon.ico, dirlist.css)"""
             try:
@@ -424,17 +514,26 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error serving static file: {filename}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/http/browse")
+        @self.app.get("/http/browse", tags=["Browse"])
         async def browse_root():
-            """Browse root directory - redirect to default path"""
+            """Interactive HTML directory browser (root).
+
+            Opens the basepath directory in a web-browser-friendly HTML listing.
+            Useful for quick manual inspection of workflow results.
+            """
             base_dir = self._get_http_base_directory()
             return HTMLResponse(
                 content=self._generate_directory_listing_html(base_dir, "/http/browse/")
             )
 
-        @self.app.get("/http/browse/{path:path}")
+        @self.app.get("/http/browse/{path:path}", tags=["Browse"])
         async def browse_directory(path: str):
-            """Browse directory structure and serve files"""
+            """Interactive HTML directory browser (navigate into sub-paths).
+
+            If the path points to a directory, an HTML listing is returned.
+            If it points to a file, the file content is returned directly
+            (with an appropriate MIME type).
+            """
             try:
                 base_dir = self._get_http_base_directory()
 
@@ -483,9 +582,14 @@ class FastAPIThread(threading.Thread):
 
         # ==================== API Routes ====================
 
-        @self.app.get("/api/workflows")
+        @self.app.get("/api/workflows", tags=["Workflows"])
         async def list_workflows():
-            """List all workflows (in-progress and finished)"""
+            """List all workflows grouped by state.
+
+            Returns both in-progress and finished workflows in a single call.
+            Each workflow entry contains `id` (the submit name), `name`, and
+            `path` (storage directory relative to basepath).
+            """
             try:
                 inprogress = (
                     self.simstack_server._workflow_manager.get_inprogress_workflows()
@@ -502,9 +606,14 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error listing workflows")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/workflows/inprogress")
+        @self.app.get("/api/workflows/inprogress", tags=["Workflows"])
         async def list_inprogress_workflows():
-            """List in-progress workflows"""
+            """List workflows that are currently executing.
+
+            Poll this endpoint (together with `/api/workflows/finished`) to
+            detect when a submitted workflow completes.  Each entry contains
+            `id` (the submit name used to identify the workflow) and `name`.
+            """
             try:
                 workflows = (
                     self.simstack_server._workflow_manager.get_inprogress_workflows()
@@ -514,9 +623,14 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error listing in-progress workflows")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/workflows/finished")
+        @self.app.get("/api/workflows/finished", tags=["Workflows"])
         async def list_finished_workflows():
-            """List finished workflows"""
+            """List workflows that have completed (successfully or with errors).
+
+            A workflow moves here once all its steps finish or if it is
+            aborted.  Match on the `name` field to detect completion of a
+            specific submission.
+            """
             try:
                 workflows = (
                     self.simstack_server._workflow_manager.get_finished_workflows()
@@ -526,9 +640,13 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error listing finished workflows")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/workflows/{workflow_id}/jobs")
+        @self.app.get("/api/workflows/{workflow_id}/jobs", tags=["Workflows"])
         async def list_workflow_jobs(workflow_id: str):
-            """List jobs for a specific workflow"""
+            """List the individual jobs (WFEMs) inside a workflow.
+
+            `workflow_id` is the submit name returned when the workflow was
+            submitted (e.g. `demo_dsl_wf_2024-01-01-12h00m00s`).
+            """
             try:
                 jobs = self.simstack_server._workflow_manager.list_jobs_of_workflow(
                     workflow_id
@@ -538,9 +656,14 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error listing jobs for workflow {workflow_id}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/workflows/{workflow_id}/abort")
+        @self.app.post("/api/workflows/{workflow_id}/abort", tags=["Workflows"])
         async def abort_workflow(workflow_id: str):
-            """Abort a specific workflow"""
+            """Request cancellation of a running workflow.
+
+            All pending jobs are cancelled.  Already-finished jobs are not
+            affected.  The workflow moves to the finished list with an
+            aborted status.
+            """
             try:
                 self.simstack_server._workflow_manager.abort_workflow(workflow_id)
                 self._logger.info(f"Workflow {workflow_id} abort requested via API")
@@ -553,9 +676,14 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error aborting workflow {workflow_id}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.delete("/api/workflows/{workflow_id}")
+        @self.app.delete("/api/workflows/{workflow_id}", tags=["Workflows"])
         async def delete_workflow(workflow_id: str):
-            """Delete a workflow"""
+            """Delete a workflow and its storage directory.
+
+            Removes the workflow from the server's internal tracking and
+            deletes the associated files under the basepath.  Only call this
+            after you have retrieved any results you need.
+            """
             try:
                 self.simstack_server._workflow_manager.delete_workflow(workflow_id)
                 self._logger.info(f"Workflow {workflow_id} deletion requested via API")
@@ -568,9 +696,18 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error deleting workflow {workflow_id}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/singlejobs/{job_uid}/status")
+        @self.app.get("/api/singlejobs/{job_uid}/status", tags=["Single Jobs"])
         async def get_singlejob_status(job_uid: str):
-            """Get status of a single job"""
+            """Poll the execution status of a single job.
+
+            Returns `{"job_uid": "...", "status": {"status": "inprogress"}}` while
+            the job is running, and `{"job_uid": "...", "status": {"status": "finished"}}`
+            once it completes.  Poll this endpoint at a reasonable interval
+            (e.g. every 2 s) after submission.
+
+            Output files are available under `singlejobs/{job_uid}/` once the
+            job finishes — use `/api/files/list` to enumerate them.
+            """
             try:
                 status = self.simstack_server._workflow_manager.get_singlejob_status(
                     job_uid
@@ -580,9 +717,9 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error getting status for job {job_uid}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/singlejobs/{job_uid}/abort")
+        @self.app.post("/api/singlejobs/{job_uid}/abort", tags=["Single Jobs"])
         async def abort_singlejob(job_uid: str):
-            """Abort a single job"""
+            """Request cancellation of a running single job."""
             try:
                 self.simstack_server._workflow_manager.abort_singlejob(job_uid)
                 self._logger.info(f"Single job {job_uid} abort requested via API")
@@ -595,9 +732,21 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error aborting single job {job_uid}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/workflows/submit", response_model=SubmitWorkflowResponse)
+        @self.app.post("/api/workflows/submit", response_model=SubmitWorkflowResponse, tags=["Workflows"])
         async def submit_workflow(request: SubmitWorkflowRequest):
-            """Submit a workflow for execution"""
+            """Submit a previously uploaded workflow for execution.
+
+            Before calling this endpoint you must upload the full workflow tree:
+
+            1. Upload all files under `workflow_data/<StepName>/inputs/…` via
+               `/api/files/upload` with `to_file` set to the relative path.
+            2. Upload `rendered_workflow.xml` to `<workflow_name>/rendered_workflow.xml`.
+            3. Call this endpoint with `filename` pointing to that XML file.
+
+            The server reads the XML, resolves all step dependencies, and begins
+            executing the DAG.  Poll `/api/workflows/inprogress` and
+            `/api/workflows/finished` to track progress.
+            """
             try:
                 workflow_filename = self._resolve_path(request.filename)
 
@@ -615,9 +764,22 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error submitting workflow: {request.filename}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/singlejobs/submit", response_model=SubmitSingleJobResponse)
+        @self.app.post("/api/singlejobs/submit", response_model=SubmitSingleJobResponse, tags=["Single Jobs"])
         async def submit_singlejob(request: SubmitSingleJobRequest):
-            """Submit a single job for execution"""
+            """Submit a self-contained single job for execution.
+
+            The request body must contain a serialised WFEM dict (see
+            `SubmitSingleJobRequest`).  The server unpacks the embedded WaNo
+            bundle, renders the WaNo parameters, and executes the job script.
+
+            If the WaNo has external input files (e.g. `<WaNoFile>` parameters),
+            upload them via `/api/files/upload` **before** calling this endpoint.
+            The WFEM's stage-in list tells the server where to find each file
+            relative to the basepath.
+
+            Returns a `job_uid` that you use with
+            `GET /api/singlejobs/{job_uid}/status` to poll for completion.
+            """
             try:
                 # Create WorkflowExecModule from dict
                 wfem = WorkflowExecModule()
@@ -639,14 +801,16 @@ class FastAPIThread(threading.Thread):
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post(
-            "/api/wano/required-files", response_model=WanoRequiredFilesResponse
+            "/api/wano/required-files", response_model=WanoRequiredFilesResponse, tags=["WaNo Introspection"]
         )
         async def wano_required_files(request: WanoRequiredFilesRequest):
-            """Return the list of external input files a WaNo requires.
+            """Discover which external files a WaNo requires before execution.
 
-            The caller should POST a ``wano_spec`` dict (as produced by
-            ``WaNoModelRoot.to_spec()``).  The response lists every file that the
-            user must upload separately before the job can be executed.
+            POST a `wano_spec` dict (produced client-side by
+            `WaNoModelRoot.to_spec()`) and receive back the list of
+            user-supplied files that must be uploaded before the job can run.
+            Files that are part of the WaNo definition itself (XML, scripts)
+            are **not** listed here — only files the user must provide.
             """
             try:
                 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
@@ -667,20 +831,21 @@ class FastAPIThread(threading.Thread):
         @self.app.post(
             "/api/workflows/required-files",
             response_model=WorkflowRequiredFilesResponse,
+            tags=["WaNo Introspection"],
         )
         async def workflow_required_files(request: WorkflowRequiredFilesRequest):
-            """Return the upload manifest for a full workflow.
+            """Build an upload manifest for a complete multi-step workflow.
 
-            POST a list of ``{wano_spec, wfem_path}`` objects — one per WaNo node in
-            the workflow.  The response splits all required files into two groups:
+            POST a list of `{wano_spec, wfem_path}` objects — one per WaNo node
+            in the workflow DAG.  The response categorises every file into:
 
-            * ``wano_definition`` — generated automatically by the submission pipeline.
-              No action required from the user.
-            * ``external_input`` — scientific data files the user must supply.
-              These are the only items that can block a submission.
+            - **wano_definition** — generated by the submission pipeline (XML,
+              scripts, config files).  These are uploaded automatically.
+            - **external_input** — scientific data files the **user** must supply.
 
-            ``required_user_uploads`` in the response is the filtered list of
-            ``external_input`` items and is the primary thing to act on.
+            The `required_user_uploads` field is the filtered list of
+            external-input items — this is what the client should present to
+            the user as "files you need to provide".
             """
             try:
                 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
@@ -719,9 +884,9 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error building workflow upload manifest")
                 raise HTTPException(status_code=400, detail=str(e))
 
-        @self.app.post("/api/server/shutdown", response_model=ShutdownResponse)
+        @self.app.post("/api/server/shutdown", response_model=ShutdownResponse, tags=["Server"])
         async def shutdown_server():
-            """Shutdown the SimStackServer"""
+            """Initiate a graceful server shutdown."""
             try:
                 self._logger.info("Server shutdown requested via API")
                 self.simstack_server._stop_main = True
@@ -734,9 +899,13 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error during server shutdown")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/server/clear-state")
+        @self.app.post("/api/server/clear-state", tags=["Server"])
         async def clear_server_state():
-            """Clear server state (for testing)"""
+            """Clear all in-memory server state (for testing).
+
+            Removes all tracked workflows and single jobs from the server's
+            internal state.  Does **not** delete files on disk.
+            """
             try:
                 self._logger.info("Hard clearing server state via API")
                 self.simstack_server._clear_server_state()
@@ -746,9 +915,13 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception("Error clearing server state")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/configure", response_model=ConfigureResponse)
+        @self.app.post("/api/configure", response_model=ConfigureResponse, tags=["Server"])
         async def configure(request: ConfigureRequest):
-            """Configure server resources"""
+            """Update the server's compute-resource configuration.
+
+            Accepts a serialised `Resources` dict (queueing system, walltime,
+            CPUs, memory, etc.) and persists it to the server's config file.
+            """
             try:
                 # Create Resources object from dict
                 resources = Resources()
@@ -776,9 +949,13 @@ class FastAPIThread(threading.Thread):
 
         # File Operations API
 
-        @self.app.post("/api/files/exists", response_model=ExistsResponse)
+        @self.app.post("/api/files/exists", response_model=ExistsResponse, tags=["Files"])
         async def check_file_exists(request: FilePathRequest):
-            """Check if a file or directory exists"""
+            """Check whether a file or directory exists on the server.
+
+            The `filename` is resolved relative to the server basepath
+            (default `~/simstack_workspace`).
+            """
             try:
                 filepath = self._resolve_path(
                     request.filename, request.basepath_override
@@ -794,9 +971,22 @@ class FastAPIThread(threading.Thread):
                 )
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/files/list", response_model=ListDirResponse)
+        @self.app.post("/api/files/list", response_model=ListDirResponse, tags=["Files"])
         async def list_directory(request: ListDirRequest):
-            """List contents of a directory"""
+            """List the contents of a directory on the server.
+
+            The `path` is resolved relative to the server basepath.  Each entry
+            in the response has a `type` field: `"d"` for directories, `"f"` for
+            files.
+
+            **Common paths to list:**
+
+            - `singlejobs/{job_uid}/` — output files of a single job.
+            - `<workflow_name>/` — top-level workflow directory (contains
+              `exec_directories/`, `workflow_data/`, `rendered_workflow.xml`).
+            - `<workflow_name>/workflow_data/<StepName>/outputs/` — output files
+              of a specific workflow step.
+            """
             try:
                 dirpath = self._resolve_path(request.path, request.basepath_override)
 
@@ -825,9 +1015,14 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error listing directory: {request.path}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/files/mkdir", response_model=MkdirResponse)
+        @self.app.post("/api/files/mkdir", response_model=MkdirResponse, tags=["Files"])
         async def create_directory(request: MkdirRequest):
-            """Create a directory (recursively)"""
+            """Create a directory on the server (recursively).
+
+            The path is resolved relative to the server basepath.  Parent
+            directories are created automatically.  Returns `created: false` if
+            the directory already exists (not an error).
+            """
             try:
                 dirpath = self._resolve_path(
                     request.directory, request.basepath_override
@@ -855,9 +1050,9 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error creating directory: {request.directory}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.delete("/api/files/delete", response_model=DeleteResponse)
+        @self.app.delete("/api/files/delete", response_model=DeleteResponse, tags=["Files"])
         async def delete_file(request: FilePathRequest):
-            """Delete a file"""
+            """Delete a single file.  Use `/api/files/rmtree` for directories."""
             try:
                 filepath = self._resolve_path(
                     request.filename, request.basepath_override
@@ -889,9 +1084,13 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error deleting file: {request.filename}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.delete("/api/files/rmtree", response_model=DeleteResponse)
+        @self.app.delete("/api/files/rmtree", response_model=DeleteResponse, tags=["Files"])
         async def remove_directory_tree(request: DirectoryPathRequest):
-            """Delete a directory and all its contents recursively"""
+            """Recursively delete a directory and all its contents.
+
+            Safety checks prevent deletion of paths outside the basepath or
+            too close to the home directory.
+            """
             try:
                 # --- Safety gate 1: basepath must be explicitly configured ---
                 if request.basepath_override in [None, ""]:
@@ -976,13 +1175,46 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error deleting directory: {request.dirname}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/files/upload")
+        @self.app.post("/api/files/upload", tags=["Files"])
         async def upload_file(
-            file: UploadFile = File(...),
-            to_file: Optional[str] = Form(None),
-            basepath_override: Optional[str] = Form(None),
+            file: UploadFile = File(..., description="The file to upload (multipart form)."),
+            to_file: Optional[str] = Form(
+                None,
+                description=(
+                    "Destination path **relative to the server basepath**.  "
+                    "Parent directories are created automatically.  "
+                    "If omitted, the original filename from the upload is used.  "
+                    "Example: `my_workflow/workflow_data/Step1/inputs/config.xml`"
+                ),
+            ),
+            basepath_override: Optional[str] = Form(None, description="Override the default basepath (advanced)."),
         ):
-            """Upload a file to the server"""
+            """Upload a file to the server.
+
+            This is the primary mechanism for staging workflow data before
+            submission.  Use the `to_file` form field to control where the file
+            lands relative to the basepath.
+
+            **Example with curl:**
+
+            ```bash
+            curl -X POST https://localhost:8080/api/files/upload \\
+              -u user:pass \\
+              -F 'file=@local_data.csv' \\
+              -F 'to_file=my_workflow/workflow_data/Step1/inputs/data.csv'
+            ```
+
+            **Example with Python requests:**
+
+            ```python
+            requests.post(
+                "https://localhost:8080/api/files/upload",
+                auth=("user", "pass"),
+                files={"file": ("data.csv", open("local_data.csv", "rb"))},
+                data={"to_file": "my_workflow/workflow_data/Step1/inputs/data.csv"},
+            )
+            ```
+            """
             try:
                 # Use the provided path or fall back to the original filename
                 destination = to_file if to_file else file.filename
@@ -1026,11 +1258,22 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error uploading file to: {to_file}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.get("/api/files/download")
+        @self.app.get("/api/files/download", tags=["Files"])
         async def download_file(
-            from_file: str, basepath_override: Optional[str] = None
+            from_file: str = Query(..., description="Path to download, relative to basepath."),
+            basepath_override: Optional[str] = Query(None, description="Override the default basepath (advanced)."),
         ):
-            """Download a file from the server"""
+            """Download a file from the server.
+
+            Returns the raw file content as `application/octet-stream`.
+            The `from_file` path is resolved relative to the server basepath.
+
+            **Example:** To retrieve a job's output after completion:
+
+            ```
+            GET /api/files/download?from_file=singlejobs/{job_uid}/output_dict.yml
+            ```
+            """
             try:
                 filepath = self._resolve_path(from_file, basepath_override)
 
@@ -1059,13 +1302,18 @@ class FastAPIThread(threading.Thread):
                 self._logger.exception(f"Error downloading file: {from_file}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/files/put")
+        @self.app.post("/api/files/put", tags=["Files"])
         async def put_file_content(
-            content: UploadFile = File(...),
-            to_file: str = Form(...),
-            basepath_override: Optional[str] = Form(None),
+            content: UploadFile = File(..., description="File content to write."),
+            to_file: str = Form(..., description="Destination path relative to basepath."),
+            basepath_override: Optional[str] = Form(None, description="Override the default basepath (advanced)."),
         ):
-            """Write content directly to a file on the server"""
+            """Write content directly to a file on the server.
+
+            Similar to `/api/files/upload` but uses `content` as the form
+            field name.  Functionally equivalent — prefer `/api/files/upload`
+            for new clients.
+            """
             try:
                 filepath = self._resolve_path(to_file, basepath_override)
 
@@ -1108,15 +1356,22 @@ class FastAPIThread(threading.Thread):
         return basepath
 
     def _resolve_path(self, path: str, basepath_override: Optional[str] = None) -> str:
-        """
-        Resolve a path relative to the calculation basepath
+        """Resolve a client-supplied path to an absolute filesystem path.
 
-        Args:
-            path: The relative path
-            basepath_override: Optional override for the basepath
+        Every path accepted by the API (file uploads, downloads, directory
+        listings, workflow filenames) passes through this method.  The
+        algorithm is:
 
-        Returns:
-            Absolute path
+        1. Strip any leading ``/`` from *path*.
+        2. Determine the basepath: use *basepath_override* if provided,
+           otherwise the server's configured ``resources.basepath``
+           (default ``simstack_workspace``).
+        3. If the basepath is relative, prepend the user's home directory.
+        4. Return ``os.path.join(basepath, path)``.
+
+        This means clients should always send paths **relative to the
+        basepath** (e.g. ``my_workflow/rendered_workflow.xml``), never
+        absolute filesystem paths.
         """
         if basepath_override in [None, ""]:
             basepath = Config.get_resources().basepath

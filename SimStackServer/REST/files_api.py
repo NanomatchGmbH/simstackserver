@@ -12,11 +12,14 @@ from pydantic import BaseModel, Field
 
 
 class FilePathRequest(BaseModel):
-    """Model for file path operations"""
+    """Identify a file on the server by its path relative to the basepath."""
 
-    filename: str = Field(..., description="Path to the file")
+    filename: str = Field(
+        ...,
+        description="Path to the file, **relative to the server basepath** (e.g. `singlejobs/{uid}/output.yml`).",
+    )
     basepath_override: Optional[str] = Field(
-        None, description="Override the default basepath"
+        None, description="Override the default basepath (advanced; omit for normal use)."
     )
 
 
@@ -42,27 +45,33 @@ class MkdirRequest(BaseModel):
 
 
 class ListDirRequest(BaseModel):
-    """Model for listing directory contents"""
+    """Identify a directory to list, relative to the server basepath."""
 
-    path: str = Field(..., description="Directory path to list")
+    path: str = Field(
+        ...,
+        description=(
+            "Directory path relative to the server basepath.  "
+            "Examples: `singlejobs/{job_uid}`, `my_workflow/workflow_data/Step1/outputs`."
+        ),
+    )
     basepath_override: Optional[str] = Field(
-        None, description="Override the default basepath"
+        None, description="Override the default basepath (advanced; omit for normal use)."
     )
 
 
 class FileInfo(BaseModel):
-    """Model for file information"""
+    """One entry in a directory listing."""
 
-    name: str
-    path: str
-    type: str  # 'f' for file, 'd' for directory
+    name: str = Field(..., description="Filename or subdirectory name.")
+    path: str = Field(..., description="Absolute path of the parent directory on the server.")
+    type: str = Field(..., description='`"f"` for a regular file, `"d"` for a directory.')
 
 
 class ListDirResponse(BaseModel):
-    """Model for directory listing response"""
+    """Directory listing returned by `/api/files/list`."""
 
-    files: List[FileInfo]
-    count: int
+    files: List[FileInfo] = Field(..., description="Entries in the directory.")
+    count: int = Field(..., description="Number of entries.")
 
 
 class ExistsResponse(BaseModel):

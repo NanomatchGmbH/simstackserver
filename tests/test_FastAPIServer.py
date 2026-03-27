@@ -360,7 +360,7 @@ def test_workflow_manager_called_correctly(test_client, mock_workflow_manager):
 def test_fastapi_app_metadata(fastapi_thread):
     """Test FastAPI app has correct metadata"""
     assert fastapi_thread.app.title == "SimStackServer API"
-    assert "SimStackServer workflow management" in fastapi_thread.app.description
+    assert "SimStack" in fastapi_thread.app.description
     assert fastapi_thread.app.version == "1.0.0"
 
 
