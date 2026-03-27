@@ -2933,10 +2933,12 @@ class Workflow(XMLYMLInstantiationBase):
     def _resolve_stagein_source(self, source: str) -> str:
         """Resolve a stage-in source string to an absolute filesystem path.
 
-        Handles two placeholder forms:
+        Handles three forms:
         - ``${STORAGE}/...``  → absolute path rooted at this workflow's storage dir
         - ``${NodeName/file}`` → output of a predecessor node, staged at
           ``storage/workflow_data/NodeName/outputs/file``
+        - relative path       → resolved relative to self.storage (legacy clients
+          strip ``${STORAGE}/`` before uploading the XML)
         """
         # Strip surrounding whitespace that may creep in from XML text nodes
         resolved = source.strip().replace("${STORAGE}", self.storage)
@@ -2951,6 +2953,10 @@ class Workflow(XMLYMLInstantiationBase):
                 resolved = join(
                     self.storage, "workflow_data", node_name, "outputs", filename
                 )
+        # Legacy clients (SSHConnector) strip "${STORAGE}/" before uploading, so
+        # the source arrives as a relative path. Prepend storage to make it absolute.
+        if not path.isabs(resolved):
+            resolved = join(self.storage, resolved)
         return resolved
 
     def _prepare_job(self, wfem: WorkflowExecModule):
