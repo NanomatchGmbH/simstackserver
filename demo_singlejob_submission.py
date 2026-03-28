@@ -53,7 +53,7 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 60019
 USE_HTTPS = True  # Set True when server is started with HTTPS
 USERNAME = "simstack"  # Set to your username string if auth is enabled
-PASSWORD = "yuwMhANsprNmR2K3iOSL3Q3rLn2XZApmXVYGf2Aejd3LktjP"  # Set to your password string if auth is enabled
+PASSWORD = "change_your_password_here"  # Set to your password string if auth is enabled
 
 # Path to the EmployeeRecord WaNo directory used by Demo A.
 WANO_DIR = Path(__file__).parent / "tests/inputs/wanos/EmployeeRecord"
