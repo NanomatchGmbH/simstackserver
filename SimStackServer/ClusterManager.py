@@ -94,6 +94,37 @@ class ClusterManager:
             return False
         return True
 
+    def _wait_for_server(self, max_attempts: int = 10, delay: float = 2.0) -> None:
+        """Probe /health until the server responds, retrying on transient errors.
+
+        After the SSH tunnel is started the remote server may still be
+        initialising its SSL layer.  The first few requests will fail with
+        SSL protocol errors or connection errors.  This method retries until
+        the server is ready or the attempt limit is reached.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(max_attempts):
+            try:
+                response = self._client.get("/health", timeout=5.0)
+                response.raise_for_status()
+                return
+            except (
+                httpx.ConnectError,
+                httpx.ConnectTimeout,
+                httpx.RemoteProtocolError,
+            ) as exc:
+                last_exc = exc
+                self._logger.debug(
+                    "Server not ready yet (attempt %d/%d): %s",
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                )
+                time.sleep(delay)
+        raise ConnectionError(
+            f"Server did not become ready after {max_attempts} attempts."
+        ) from last_exc
+
     def init_client(self):
         if self._use_ssh_tunnel:
             transport = self._ssh_client.get_transport()
@@ -111,6 +142,7 @@ class ClusterManager:
                 verify=False,
                 auth=("simstack", self._client_secret),
             )
+            self._wait_for_server()
         else:
             base_url = self.get_client_url()
             https_client = HTTPSClient(base_url)

@@ -19,7 +19,8 @@ class FilePathRequest(BaseModel):
         description="Path to the file, **relative to the server basepath** (e.g. `singlejobs/{uid}/output.yml`).",
     )
     basepath_override: Optional[str] = Field(
-        None, description="Override the default basepath (advanced; omit for normal use)."
+        None,
+        description="Override the default basepath (advanced; omit for normal use).",
     )
 
 
@@ -55,7 +56,8 @@ class ListDirRequest(BaseModel):
         ),
     )
     basepath_override: Optional[str] = Field(
-        None, description="Override the default basepath (advanced; omit for normal use)."
+        None,
+        description="Override the default basepath (advanced; omit for normal use).",
     )
 
 
@@ -63,8 +65,12 @@ class FileInfo(BaseModel):
     """One entry in a directory listing."""
 
     name: str = Field(..., description="Filename or subdirectory name.")
-    path: str = Field(..., description="Absolute path of the parent directory on the server.")
-    type: str = Field(..., description='`"f"` for a regular file, `"d"` for a directory.')
+    path: str = Field(
+        ..., description="Absolute path of the parent directory on the server."
+    )
+    type: str = Field(
+        ..., description='`"f"` for a regular file, `"d"` for a directory.'
+    )
 
 
 class ListDirResponse(BaseModel):

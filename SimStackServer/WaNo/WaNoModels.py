@@ -1116,8 +1116,22 @@ class MultipleOfModel(AbstractWanoModel):
             from SimStackServer.WaNo.WaNoSpec import spec_to_model
 
             model_dict = OrderedDictIterHelper()
+            current_id = len(self.list_of_dicts)
             for child_spec in self._template_spec.get("children", []):
                 model = spec_to_model(child_spec)
+                if build_view and self.view is not None:
+                    start_path = [*self.path.split(".")] + [str(current_id), model.name]
+                    model.set_root(self.get_root())
+                    (
+                        model,
+                        rootview,
+                    ) = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(
+                        model,
+                        start_path=start_path,
+                        parent_view=self.view,
+                    )
+                    rootview.set_parent(self.view)
+                    model.set_parent(self)
                 model_dict[child_spec["name"]] = model
         self.list_of_dicts.append(model_dict)
         self._root.block_signals(before)

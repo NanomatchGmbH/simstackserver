@@ -53,7 +53,9 @@ class SubmitWorkflowRequest(BaseModel):
             "The file and the accompanying `workflow_data/` tree must already "
             "have been uploaded via `/api/files/upload`."
         ),
-        json_schema_extra={"examples": ["my_workflow_2024-01-01/rendered_workflow.xml"]},
+        json_schema_extra={
+            "examples": ["my_workflow_2024-01-01/rendered_workflow.xml"]
+        },
     )
 
 
@@ -481,7 +483,9 @@ used to set credentials for interactive testing.
 
         # ==================== HTTP Server Routes (Directory Browsing) ====================
 
-        @self.app.get("/http/static/{filename}", tags=["Browse"], include_in_schema=False)
+        @self.app.get(
+            "/http/static/{filename}", tags=["Browse"], include_in_schema=False
+        )
         async def serve_static_file(filename: str):
             """Serve static files (favicon.ico, dirlist.css)"""
             try:
@@ -732,7 +736,11 @@ used to set credentials for interactive testing.
                 self._logger.exception(f"Error aborting single job {job_uid}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/workflows/submit", response_model=SubmitWorkflowResponse, tags=["Workflows"])
+        @self.app.post(
+            "/api/workflows/submit",
+            response_model=SubmitWorkflowResponse,
+            tags=["Workflows"],
+        )
         async def submit_workflow(request: SubmitWorkflowRequest):
             """Submit a previously uploaded workflow for execution.
 
@@ -764,7 +772,11 @@ used to set credentials for interactive testing.
                 self._logger.exception(f"Error submitting workflow: {request.filename}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/singlejobs/submit", response_model=SubmitSingleJobResponse, tags=["Single Jobs"])
+        @self.app.post(
+            "/api/singlejobs/submit",
+            response_model=SubmitSingleJobResponse,
+            tags=["Single Jobs"],
+        )
         async def submit_singlejob(request: SubmitSingleJobRequest):
             """Submit a self-contained single job for execution.
 
@@ -801,7 +813,9 @@ used to set credentials for interactive testing.
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post(
-            "/api/wano/required-files", response_model=WanoRequiredFilesResponse, tags=["WaNo Introspection"]
+            "/api/wano/required-files",
+            response_model=WanoRequiredFilesResponse,
+            tags=["WaNo Introspection"],
         )
         async def wano_required_files(request: WanoRequiredFilesRequest):
             """Discover which external files a WaNo requires before execution.
@@ -884,7 +898,9 @@ used to set credentials for interactive testing.
                 self._logger.exception("Error building workflow upload manifest")
                 raise HTTPException(status_code=400, detail=str(e))
 
-        @self.app.post("/api/server/shutdown", response_model=ShutdownResponse, tags=["Server"])
+        @self.app.post(
+            "/api/server/shutdown", response_model=ShutdownResponse, tags=["Server"]
+        )
         async def shutdown_server():
             """Initiate a graceful server shutdown."""
             try:
@@ -915,7 +931,9 @@ used to set credentials for interactive testing.
                 self._logger.exception("Error clearing server state")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/configure", response_model=ConfigureResponse, tags=["Server"])
+        @self.app.post(
+            "/api/configure", response_model=ConfigureResponse, tags=["Server"]
+        )
         async def configure(request: ConfigureRequest):
             """Update the server's compute-resource configuration.
 
@@ -949,7 +967,9 @@ used to set credentials for interactive testing.
 
         # File Operations API
 
-        @self.app.post("/api/files/exists", response_model=ExistsResponse, tags=["Files"])
+        @self.app.post(
+            "/api/files/exists", response_model=ExistsResponse, tags=["Files"]
+        )
         async def check_file_exists(request: FilePathRequest):
             """Check whether a file or directory exists on the server.
 
@@ -971,7 +991,9 @@ used to set credentials for interactive testing.
                 )
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.post("/api/files/list", response_model=ListDirResponse, tags=["Files"])
+        @self.app.post(
+            "/api/files/list", response_model=ListDirResponse, tags=["Files"]
+        )
         async def list_directory(request: ListDirRequest):
             """List the contents of a directory on the server.
 
@@ -1050,7 +1072,9 @@ used to set credentials for interactive testing.
                 self._logger.exception(f"Error creating directory: {request.directory}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.delete("/api/files/delete", response_model=DeleteResponse, tags=["Files"])
+        @self.app.delete(
+            "/api/files/delete", response_model=DeleteResponse, tags=["Files"]
+        )
         async def delete_file(request: FilePathRequest):
             """Delete a single file.  Use `/api/files/rmtree` for directories."""
             try:
@@ -1084,7 +1108,9 @@ used to set credentials for interactive testing.
                 self._logger.exception(f"Error deleting file: {request.filename}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-        @self.app.delete("/api/files/rmtree", response_model=DeleteResponse, tags=["Files"])
+        @self.app.delete(
+            "/api/files/rmtree", response_model=DeleteResponse, tags=["Files"]
+        )
         async def remove_directory_tree(request: DirectoryPathRequest):
             """Recursively delete a directory and all its contents.
 
@@ -1177,7 +1203,9 @@ used to set credentials for interactive testing.
 
         @self.app.post("/api/files/upload", tags=["Files"])
         async def upload_file(
-            file: UploadFile = File(..., description="The file to upload (multipart form)."),
+            file: UploadFile = File(
+                ..., description="The file to upload (multipart form)."
+            ),
             to_file: Optional[str] = Form(
                 None,
                 description=(
@@ -1187,7 +1215,9 @@ used to set credentials for interactive testing.
                     "Example: `my_workflow/workflow_data/Step1/inputs/config.xml`"
                 ),
             ),
-            basepath_override: Optional[str] = Form(None, description="Override the default basepath (advanced)."),
+            basepath_override: Optional[str] = Form(
+                None, description="Override the default basepath (advanced)."
+            ),
         ):
             """Upload a file to the server.
 
@@ -1260,8 +1290,12 @@ used to set credentials for interactive testing.
 
         @self.app.get("/api/files/download", tags=["Files"])
         async def download_file(
-            from_file: str = Query(..., description="Path to download, relative to basepath."),
-            basepath_override: Optional[str] = Query(None, description="Override the default basepath (advanced)."),
+            from_file: str = Query(
+                ..., description="Path to download, relative to basepath."
+            ),
+            basepath_override: Optional[str] = Query(
+                None, description="Override the default basepath (advanced)."
+            ),
         ):
             """Download a file from the server.
 
@@ -1305,8 +1339,12 @@ used to set credentials for interactive testing.
         @self.app.post("/api/files/put", tags=["Files"])
         async def put_file_content(
             content: UploadFile = File(..., description="File content to write."),
-            to_file: str = Form(..., description="Destination path relative to basepath."),
-            basepath_override: Optional[str] = Form(None, description="Override the default basepath (advanced)."),
+            to_file: str = Form(
+                ..., description="Destination path relative to basepath."
+            ),
+            basepath_override: Optional[str] = Form(
+                None, description="Override the default basepath (advanced)."
+            ),
         ):
             """Write content directly to a file on the server.
 
