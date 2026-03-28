@@ -29,8 +29,8 @@
             name="Restartfile">restartfile.zip</WaNoFile>
   <WaNoMultipleOf name="Molecules">
     <Element id="0">
-       <WaNoFile logical_filename="molecule_{{ path[3] }}.pdb" name="Molecule">Choose Molecule</WaNoFile>
-       <WaNoFile logical_filename="molecule_{{ path[3] }}.spf" name="Forcefield">Choose Forcefield</WaNoFile>
+       <WaNoFile logical_filename="molecule_{{ path[3] }}.pdb" name="Molecule">molecule.pdb</WaNoFile>
+       <WaNoFile logical_filename="molecule_{{ path[3] }}.spf" name="Forcefield">forcefield.spf</WaNoFile>
        <WaNoFloat name="Mixing Ratio">1.0</WaNoFloat>
     </Element>
   </WaNoMultipleOf>
@@ -44,6 +44,8 @@
  <WaNoExecCommand>bash ./deposit_init.sh</WaNoExecCommand>
  <WaNoInputFiles>
    <WaNoInputFile logical_filename="deposit_init.sh">deposit_init.sh</WaNoInputFile>
+   <WaNoInputFile logical_filename="molecule.pdb">molecule.pdb</WaNoInputFile>
+   <WaNoInputFile logical_filename="forcefield.spf">forcefield.spf</WaNoInputFile>
  </WaNoInputFiles>
  <WaNoOutputFiles>
     <WaNoOutputFile>structure.cml</WaNoOutputFile>

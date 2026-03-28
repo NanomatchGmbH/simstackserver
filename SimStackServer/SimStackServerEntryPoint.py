@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import signal
 import sys
-import os
 import time
 import lockfile
 import logging
-import zmq
 import contextlib
 
 
@@ -15,7 +13,7 @@ from SimStackServer.SecureWaNos import SecureModeGlobal, SecureWaNos
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
 
 from SimStackServer.SimStackServerMain import SimStackServer, AlreadyRunningException
-from SimStackServer.Config import Config
+from SimStackServer.Config import Config, ServerConfig
 import daemon
 
 
@@ -37,22 +35,23 @@ def setup_pid():
     )
 
 
-def flush_port_and_password_to_stdout(appdirs, other_process_setup=False):
-    myfile = join(appdirs.user_config_dir, "portconfig.txt")
-    if other_process_setup and not os.path.exists(myfile):
+def flush_port_and_password_to_stdout(other_process_setup=False):
+    server_config = Config.load_server_config()
+    if server_config is None and other_process_setup:
         # In this case another process might just be in the process of writing this file.
         # We have to wait 5 seconds for it to appear
         time.sleep(5.0)
-    with open(myfile, "rt") as infile:
-        line = infile.read()
-        splitline = line.split()
-        if not len(splitline) == 5:
-            raise InputFileError(
-                "Input of portconfig was expected to be four fields, got <%s>" % line
-            )
-        port = int(splitline[2])
-        mypass = splitline[3].strip()
-        print("Port Pass %d %s %s" % (port, mypass, zmq.zmq_version()))
+        server_config = Config.load_server_config()
+    if server_config is None:
+        raise FileNotFoundError("No server_config.yml found")
+    print(
+        "Port Pass %d %s %s"
+        % (
+            server_config.rest_port,
+            server_config.client_secret,
+            server_config.server_version,
+        )
+    )
 
 
 def main():
@@ -73,15 +72,13 @@ def main():
         setup_pidfile.acquire(timeout=0.0)
     except lockfile.AlreadyLocked:
         try:
-            flush_port_and_password_to_stdout(appdirs, True)
-        except FileNotFoundError as e:
-            if "portconfig.txt" in str(e):
-                print(
-                    "App Lock was found, but no portconfig. Most probably SimStackServer start process was interupted."
-                )
-                print(f"Please check logs and remove {setup_pidfile}")
-                sys.exit(1)
-            raise
+            flush_port_and_password_to_stdout(other_process_setup=True)
+        except FileNotFoundError:
+            print(
+                "App Lock was found, but no server config. Most probably SimStackServer start process was interrupted."
+            )
+            print(f"Please check logs and remove {setup_pidfile}")
+            sys.exit(1)
     logfilehandler = Config._setup_root_logger()
     my_runtime = get_my_runtime()
     try:
@@ -93,25 +90,29 @@ def main():
         except lockfile.AlreadyLocked as e:
             raise AlreadyRunningException("Second stage locking did not work.") from e
     except AlreadyRunningException:
-        # print("Exiting, because lock exists.")
-        # print("PID was",SimStackServer.register_pidfile().read_pid())
         # In case we are already running we silently discard and exit.
-        flush_port_and_password_to_stdout(appdirs, False)
+        flush_port_and_password_to_stdout()
         setup_pidfile.release()
         sys.exit(0)
     try:
         # We should be locked and running here:
-        # Start a zero mq context
-        mysecret = random_pass()
-        myport = get_open_port()
-
-        with open(join(appdirs.user_config_dir, "portconfig.txt"), "wt") as outfile:
+        server_config = Config.load_server_config()
+        if server_config is not None:
+            myport = server_config.rest_port
+            mysecret = server_config.client_secret
+        else:
             from SimStackServer import __version__ as server_version
 
-            allversions = f"SERVER,{server_version},ZMQ,{zmq.zmq_version()}"
-            towrite = f"Port, Secret {myport} {mysecret} {allversions}\n"
-            outfile.write(towrite)
-            print(towrite[:-1])
+            mysecret = random_pass()
+            myport = get_open_port()
+            allversions = f"SERVER,{server_version},REST,1.0"
+            server_config = ServerConfig(
+                rest_port=myport,
+                client_secret=mysecret,
+                server_version=allversions,
+            )
+            Config.save_server_config(server_config)
+        flush_port_and_password_to_stdout()
         sys.stdout.flush()
 
         mystd = join(appdirs.user_log_dir, "sss.stdout")
@@ -149,8 +150,16 @@ def main():
                 logger.info("SimStackServer Daemon Startup")
             mypidfile.update_pid_to_current_process()  # "PIDFILE TAKEOVER
             logger.debug("PID written")
-            ss.setup_zmq_port(myport, mysecret)
-            logger.debug("ZMQ port setup finished")
+
+            # Start FastAPI server
+            fastapi_port = ss._start_fastapi_server(
+                host="127.0.0.1",
+                port=myport,
+                username="simstack",
+                password=mysecret,
+            )
+            logger.info(f"FastAPI server started on port {fastapi_port}")
+
             # At this point the daemon pid is in the correct pidfile and we can remove the setup pid with break_open
             # Reason we have to break it is because we are in another process.
             setup_pidfile.break_lock()

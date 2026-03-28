@@ -1,8 +1,6 @@
-import errno
 import logging
 import os
 import pathlib
-import stat
 import string
 import time
 from contextlib import contextmanager
@@ -11,27 +9,22 @@ import random
 
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
+import httpx
+from fastapilocalhttps import HTTPSClient
 
 with warnings.catch_warnings(action="ignore", category=CryptographyDeprecationWarning):
     import paramiko
-    from paramiko import SFTPAttributes
 
 from os import path
 import posixpath
 from pathlib import Path
 
-import sshtunnel
-import zmq
-
-
-from SimStackServer.MessageTypes import Message
-from SimStackServer.MessageTypes import SSS_MESSAGETYPE as MTS
 from SimStackServer.Util.FileUtilities import (
-    split_directory_in_subdirectories,
     filewalker,
 )
 
 from SimStackServer.BaseClusterManager import SSHExpectedDirectoryError
+from SimStackServer.SSHTunnelForwarder import SSHTunnelForwarder
 
 
 class ClusterManager:
@@ -45,17 +38,23 @@ class ClusterManager:
         extra_config,
         queueing_system,
         default_queue,
+        client_secret=None,
         software_directory=None,
+        rest_port=None,
+        use_ssh_tunnel=False,
     ):
         """
 
         :param default_queue:
         :param url (str): URL to connect to (int-nanomatchcluster.int.kit.edu, ipv4, ipv6)
-        :param port (int): Port to connect to, i.e. 22
+        :param port (int): Port to connect to, i.e. 22 for SSH or 8000 for REST API
         :param calculation_basepath (str): Where everything will be stored by default. "" == home directory.
         :param user (str): Username on the respective server.
         :param sshprivatekey (str): Filename of ssh private key
         :param default_queue (str): Jobs will be submitted to this queue, if none is given.
+        :param client_secret (str): Secret for REST API HTTP Basic Auth
+        :param rest_port (int): Port the rest session runs on
+        :param use_ssh_tunnel (bool): If True, tunnel REST traffic through the SSH connection
         """
         self._logger = logging.getLogger("ClusterManager")
         self._url = url
@@ -72,20 +71,94 @@ class ClusterManager:
         self._ssh_client = paramiko.SSHClient()
         self._ssh_client.load_system_host_keys()
         self._should_be_connected = False
-        self._sftp_client: paramiko.SFTPClient = None
         self._queueing_system = queueing_system
-        self._default_mode = 770
-        self._context = zmq.Context.instance()
-        self._socket = None
-        self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
-        self._http_server_tunnel = None
-        self._zmq_ssh_tunnel = None
-        self._http_user = None
-        self._http_pass = None
-        self._http_base_address = None
+        self._default_mode = 0o770
         self._unknown_host_connect_workaround = False
         self._extra_hostkey_file = None
         self._software_directory = software_directory
+        self._rest_port = rest_port
+        self._client_secret = client_secret
+        self._client = None
+        self._ssh_tunnel = None
+        self._use_ssh_tunnel = use_ssh_tunnel
+
+    def _needs_ssh(self) -> bool:
+        """Returns True if an SSH connection is required.
+
+        SSH is skipped when use_ssh_tunnel is False AND both rest_port and
+        client_secret are already known (pre-configured in Resources).
+        """
+        if self._use_ssh_tunnel:
+            return True
+        if self._rest_port and self._client_secret:
+            return False
+        return True
+
+    def _wait_for_server(self, max_attempts: int = 10, delay: float = 2.0) -> None:
+        """Probe /health until the server responds, retrying on transient errors.
+
+        After the SSH tunnel is started the remote server may still be
+        initialising its SSL layer.  The first few requests will fail with
+        SSL protocol errors or connection errors.  This method retries until
+        the server is ready or the attempt limit is reached.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(max_attempts):
+            try:
+                response = self._client.get("/health", timeout=5.0)
+                response.raise_for_status()
+                return
+            except (
+                httpx.ConnectError,
+                httpx.ConnectTimeout,
+                httpx.RemoteProtocolError,
+            ) as exc:
+                last_exc = exc
+                self._logger.debug(
+                    "Server not ready yet (attempt %d/%d): %s",
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                )
+                time.sleep(delay)
+        raise ConnectionError(
+            f"Server did not become ready after {max_attempts} attempts."
+        ) from last_exc
+
+    def init_client(self):
+        if self._use_ssh_tunnel:
+            transport = self._ssh_client.get_transport()
+            self._ssh_tunnel = SSHTunnelForwarder.from_transport(
+                transport,
+                remote_bind_address=("127.0.0.1", self._rest_port),
+            )
+            self._ssh_tunnel.start()
+            local_port = self._ssh_tunnel.local_bind_port
+            base_url = f"https://127.0.0.1:{local_port}"
+            # SSH tunnel already provides encryption and authentication,
+            # so we skip SSL certificate verification.
+            self._client = httpx.Client(
+                base_url=base_url,
+                verify=False,
+                auth=("simstack", self._client_secret),
+            )
+            self._wait_for_server()
+        else:
+            base_url = self.get_client_url()
+            https_client = HTTPSClient(base_url)
+            verify = str(https_client.get_certificate_path())
+            self._client = httpx.Client(
+                base_url=base_url,
+                verify=verify,
+                auth=("simstack", self._client_secret),
+            )
+
+    def get_client_url(self):
+        if self._rest_port:
+            base_url = f"https://{self._url}:{self._rest_port}"
+        else:
+            base_url = f"https://{self._url}"
+        return base_url
 
     def _dummy_callback(self, bytes_written, total_bytes):
         """
@@ -144,7 +217,7 @@ class ClusterManager:
 
     def connect(self):
         """
-        Connect the ssh_client and setup the sftp tunnel.
+        Connect the ssh_client.
         :return: Nothing
         """
         key_filename = None
@@ -162,57 +235,38 @@ class ClusterManager:
         )
         self._ssh_client.get_transport().set_keepalive(30)
         self._should_be_connected = True
-        self._sftp_client = self._ssh_client.open_sftp()
-        self._sftp_client.get_channel().settimeout(1.0)
-        self.mkdir_p(self._calculation_basepath, basepath_override="")
 
     @contextmanager
     def connection_context(self):
-        # Code to acquire resource, e.g.:
         try:
             if self.is_connected():
                 yield None
             else:
-                yield self.connect_ssh_and_zmq_if_disconnected(
-                    connect_http=False, verbose=False
-                )
+                self.connect_if_disconnected()
+                yield None
         finally:
             self.disconnect()
 
-    def connect_ssh_and_zmq_if_disconnected(self, connect_http=True, verbose=True):
+    def connect_if_disconnected(self):
+        if not self._needs_ssh():
+            if self._client is None:
+                self.init_client()
+            return
         if not self.is_connected():
             self.connect()
-            com = self._get_server_command()
-            self.connect_zmq_tunnel(com, connect_http=connect_http, verbose=verbose)
 
     def disconnect(self):
         """
-        disconnect the ssh client
-        :return: Nothing
+        Tear down the active connection (SSH or direct REST).
         """
-        if self._socket is not None:
-            self._socket.close()
-
-        if self._sftp_client is not None:
-            self._sftp_client.close()
-
-        self._ssh_client.close()
-
-        if self._http_server_tunnel is not None:
-            # This handling here is purely for windows. Somehow, the transport is not closed, if not set.
-            for _srv in self._http_server_tunnel._server_list:
-                _srv.timeout = 0.01
-
-            self._http_server_tunnel._transport.close()
-            self._http_server_tunnel.stop()
-            # print("http server stopped")
-
-        # print("Killing ZMQ tunnel")
-        if self._zmq_ssh_tunnel is not None:
-            if hasattr(self._zmq_ssh_tunnel, "kill"):
-                # This is because it can be that the tunnel was not done via paramiko subprocess
-                self._zmq_ssh_tunnel.kill()
-                # print("Killed zmq tunnel")
+        if self._ssh_tunnel is not None:
+            self._ssh_tunnel.stop()
+            self._ssh_tunnel = None
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+        if self._needs_ssh():
+            self._ssh_client.close()
 
     def resolve_file_in_basepath(self, filename, basepath_override):
         if basepath_override is None:
@@ -221,30 +275,32 @@ class ClusterManager:
         return basepath_override + "/" + filename
 
     def delete_file(self, filename, basepath_override=None):
-        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
-        self._sftp_client.remove(resolved_filename)
-
-    def __rmtree_helper(self, abspath):
-        postremove_files = []
-        for file_attr in self._sftp_client.listdir_attr(abspath):
-            fname = file_attr.filename
-
-            newabspath = abspath + "/" + fname
-            if stat.S_ISDIR(file_attr.st_mode):
-                self.__rmtree_helper(newabspath)
-            else:
-                postremove_files.append(newabspath)
-        for myfile in postremove_files:
-            # print("Im deleting: %s" %myfile)
-            self._sftp_client.remove(myfile)
-        self._sftp_client.rmdir(abspath)
-        # print("Im deleting %s"%abspath)
+        """Delete a file using REST API"""
+        if self._client:
+            response = self._client.request(
+                "DELETE",
+                "/api/files/delete",
+                json={"filename": filename, "basepath_override": basepath_override},
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "File deletion is not implemented for SSH connections. Please use REST API or implement it in SSH."
+            )
 
     def rmtree(self, dirname, basepath_override=None):
-        abspath = self.resolve_file_in_basepath(dirname, basepath_override)
-        if not self.exists_as_directory(abspath):
-            return
-        self.__rmtree_helper(abspath)
+        """Delete a directory tree using REST API"""
+        if self._client:
+            response = self._client.request(
+                "DELETE",
+                "/api/files/rmtree",
+                json={"dirname": dirname, "basepath_override": basepath_override},
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError(
+                "Recursive directory deletion is not implemented for SSH connections. Please use REST API or implement it in SSH."
+            )
 
     def put_directory(
         self,
@@ -265,14 +321,14 @@ class ClusterManager:
         )
 
     def exists_remote(self, path):
-        try:
-            self._sftp_client.stat(path)
-        except IOError as e:
-            if e.errno == errno.ENOENT:
-                return False
-            raise
-        else:
-            return True
+        """Check if a path exists using REST API"""
+        if self._client:
+            # For absolute paths, use empty basepath_override
+            response = self._client.post(
+                "/api/files/exists", json={"filename": path, "basepath_override": ""}
+            )
+            response.raise_for_status()
+            return response.json()["exists"]
 
     def get_directory(
         self,
@@ -301,16 +357,22 @@ class ClusterManager:
         if not os.path.exists(to_directory):
             os.mkdir(to_directory)
 
-        for filename in self._sftp_client.listdir(from_directory_on_server_resolved):
+        entries = self.list_dir(from_directory_on_server_resolved, basepath_override="")
+        for entry in entries:
+            filename = entry["name"]
             tocheck = f"{from_directory_on_server_resolved}/{filename}"
-            if stat.S_ISDIR(self._sftp_client.stat(tocheck).st_mode):
+            if entry["type"] == "d":
                 # uses '/' path delimiter for remote server
                 self._get_directory_recurse_helper(
                     tocheck + "/", os.path.join(to_directory, filename)
                 )
             else:
                 if not os.path.isfile(os.path.join(to_directory, filename)):
-                    self._sftp_client.get(tocheck, os.path.join(to_directory, filename))
+                    self.get_file(
+                        tocheck,
+                        os.path.join(to_directory, filename),
+                        basepath_override="",
+                    )
 
     def put_file(
         self, from_file, to_file, optional_callback=None, basepath_override=None
@@ -322,7 +384,7 @@ class ClusterManager:
 
         :param from_file (str): Existing file on host
         :param to_file (str): Remote file (will be overwritten)
-        :param optional_callWorkback (function): Function looking like this: callback(bytes_written, total_bytes)
+        :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :param basepath_override (str): Overrides the basepath in case of uploads somewhere else.
         :return: Nothing
         """
@@ -330,33 +392,50 @@ class ClusterManager:
             raise FileNotFoundError(
                 "File %s was not found during ssh put file on local host" % (from_file)
             )
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
-        abstofile = basepath_override + "/" + to_file
-        # In case a directory was specified, we have to add the filename to upload into it as paramiko does not automatically.
-        if self.exists_as_directory(abstofile):
-            abstofile += "/" + posixpath.basename(from_file)
-        self._sftp_client.put(from_file, abstofile, optional_callback)
 
-    def remote_open(self, filename, mode, basepath_override=None):
-        abspath = self.resolve_file_in_basepath(filename, basepath_override)
-        return self._sftp_client.open(abspath, mode)
+        if self._client:
+            # Use REST API for file upload
+            with open(from_file, "rb") as f:
+                files = {"file": (posixpath.basename(from_file), f)}
+                data = {"to_file": to_file, "basepath_override": basepath_override}
+                response = self._client.post(
+                    "/api/files/upload", files=files, data=data
+                )
+                response.raise_for_status()
+
+    def put_file_content(self, content, to_file, basepath_override=None):
+        """
+        Write content directly to a remote file without creating a local temporary file.
+
+        :param content (bytes or str): Content to write to the file
+        :param to_file (str): Remote file path (will be overwritten)
+        :param basepath_override (str): Overrides the basepath in case of uploads somewhere else.
+        :return: Nothing
+        """
+        if self._client:
+            # Convert string to bytes if necessary
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+
+            # Send content as a file upload
+            files = {"content": ("content", content, "application/octet-stream")}
+            data = {"to_file": to_file}
+            if basepath_override is not None:
+                data["basepath_override"] = basepath_override
+
+            response = self._client.post("/api/files/put", files=files, data=data)
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("put_file_content requires REST API connection")
 
     def list_dir(self, path, basepath_override=None):
-        files = []
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
-
-        abspath = basepath_override + "/" + path
-
-        for file_attr in self._sftp_client.listdir_iter(abspath):
-            file_attr: SFTPAttributes
-            file_char = "d" if stat.S_ISDIR(file_attr.st_mode) else "f"
-            fname = file_attr.filename
-            longname = file_attr.longname
-            print(fname, longname, file_char)
-            files.append({"name": fname, "path": abspath, "type": file_char})
-        return files
+        """List directory contents using REST API"""
+        response = self._client.post(
+            "/api/files/list",
+            json={"path": path, "basepath_override": basepath_override},
+        )
+        response.raise_for_status()
+        return response.json()["files"]
 
     def get_default_queue(self):
         """
@@ -392,7 +471,7 @@ class ClusterManager:
         """
         Transfer a file from_file (remote) to to_file(local)
 
-        Throws FileNotFoundError in case file does not exist on remote host. TODO
+        Throws FileNotFoundError in case file does not exist on remote host.
 
         :param from_file (str): Existing file on remote
         :param to_file (str): Local file (will be overwritten)
@@ -400,11 +479,14 @@ class ClusterManager:
         :param optional_callback (function): Function looking like this: callback(bytes_written, total_bytes)
         :return: Nothing
         """
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
-
-        getpath = basepath_override + "/" + from_file
-        self._sftp_client.get(getpath, to_file, optional_callback)
+        params = {"from_file": from_file, "basepath_override": basepath_override}
+        with self._client.stream(
+            "GET", "/api/files/download", params=params
+        ) as response:
+            response.raise_for_status()
+            with open(to_file, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    f.write(chunk)
 
     def exec_command(self, command):
         """
@@ -419,28 +501,7 @@ class ClusterManager:
         return stdout, stderr
 
     def get_server_command_from_software_directory(self, software_directory: str):
-        VDIR = self.get_newest_version_directory(software_directory)
-        if VDIR == "V2":
-            raise NotImplementedError(
-                "V2 connection capability removed from SimStack client. Please upgrade to V6."
-            )
-        elif VDIR == "V3":
-            raise NotImplementedError(
-                "V3 connection capability removed from SimStack client. Please upgrade to V6."
-            )
-        elif VDIR == "V4":
-            raise NotImplementedError(
-                "V4 connection capability removed from SimStack client. Please upgrade to V6."
-            )
-        elif VDIR == "V6":
-            pass
-        else:
-            print(
-                "Found a newer server installation than this client supports (Found: %s). Please upgrade your client. Trying to connect with V6."
-                % VDIR
-            )
-            VDIR = "V6"
-
+        VDIR = "V6"
         myenv = "simstack_server_v6"
 
         if self._queueing_system == "AiiDA":
@@ -472,18 +533,9 @@ class ClusterManager:
         if found_micromamba:
             execproc = f"{micromamba_bin} run -r {software_directory} --name=simstack_server_v6"
             serverproc = "SimStackServer"
-        elif VDIR != "V4":
+        else:
             execproc = f"source {found_conda_shell}; conda activate {myenv}; "
             serverproc = "SimStackServer"
-        else:
-            execproc = f"source {found_conda_shell}; conda activate {myenv}; python"
-            serverproc = f"{software_directory}/{VDIR}/SimStackServer/SimStackServer.py"
-
-        if VDIR != "V6" and not self.exists(serverproc):
-            raise FileNotFoundError(
-                "%s serverproc was not found. Please check, whether the software directory in Configuration->Servers is correct and the file exists"
-                % serverproc
-            )
 
         return "%s %s" % (execproc, serverproc)
 
@@ -491,9 +543,15 @@ class ClusterManager:
         software_dir = self._software_directory
         return self.get_server_command_from_software_directory(software_dir)
 
-    def connect_zmq_tunnel(self, command, connect_http=True, verbose=True):
+    def get_client_secret(self) -> str:
+        assert (
+            self._client_secret is not None
+        ), "Client secret is not set. This should have been set during connection setup."
+        return self._client_secret
+
+    def start_server_remote(self, command):
         """
-        Executes the servercommand command and sets up the ZMQ tunnel
+        Executes the server command remotely and reads the port/secret from stdout.
 
         :param command (str): Command to execute remotely.
         :return: Nothing (currently)
@@ -540,60 +598,51 @@ class ClusterManager:
             command = '"%s"' % command
 
         stdout, stderr = self.exec_command("bash -c %s" % command)
-        stderrmessage = None
+
         password = None
-        port = None
         for line in stdout:
+            if "Port" not in line:
+                continue
             firstline = line[:-1]
             myline = firstline.split()
-            if not len(myline) == 5:
+            if len(myline) < 4:
                 raise ConnectionError(
-                    "Expected port and secret key and zmq version but myline was: <%s>"
+                    "Expected port and secret key but server responded: <%s>"
                     % firstline
                 )
             password = myline[3]
             port = int(myline[2])
-            server_zmq_version_string = myline[4].strip()
-            if server_zmq_version_string.startswith("SERVER"):
-                # Versionstring is now SERVER,VERSION,ZMQ,VERSION,FUTUREPACKAGE,VERSION
-                splitversion = server_zmq_version_string.split(",")
-                serverversion = splitversion[1]
+            self._rest_port = port
+            self._client_secret = password
+            if len(myline) >= 5:
+                version_string = myline[4].strip()
+                if version_string.startswith("SERVER"):
+                    # Versionstring is SERVER,VERSION,...
+                    splitversion = version_string.split(",")
+                    serverversion = splitversion[1]
+                    semver_serversion = serverversion.split(".")[0:2]
+                    from SimStackServer import __version__ as myversion
 
-                semver_serversion = serverversion.split(".")[0:2]
-                from SimStackServer import __version__ as myversion
-
-                semver_myversion = myversion.split(".")[0:2]
-                for client_single, server_single in zip(
-                    semver_myversion, semver_serversion
-                ):
-                    if server_single > client_single:
-                        print(
-                            f"Server version {serverversion} newer than Client version {myversion}. This might lead to issues. Please update client."
-                        )
-                        print("Will still try to connect")
-                        break
-                    if client_single > server_single:
-                        print(
-                            f"Client version {myversion} newer than Server version {serverversion}. This might lead to issues. Please update server."
-                        )
-                        print("Will still try to connect")
-                        break
-
-                zmq_version_string = splitversion[3]
-            else:
-                print(
-                    "Client version newer than Server version. This might lead to issues. Please update server."
-                )
-
-                zmq_version_string = server_zmq_version_string
-
-            if zmq_version_string.startswith("4.2."):
-                # If new issues with ZMQ versions crop up, please specify here.
-                errstring = (
-                    "ZMQ version mismatch: Client requires version newer than 4.3.x"
-                )
-                print(errstring)
-
+                    semver_myversion = myversion.split(".")[0:2]
+                    for client_single, server_single in zip(
+                        semver_myversion, semver_serversion
+                    ):
+                        if server_single > client_single:
+                            print(
+                                f"Server version {serverversion} newer than Client version {myversion}. This might lead to issues. Please update client."
+                            )
+                            print("Will still try to connect")
+                            break
+                        if client_single > server_single:
+                            print(
+                                f"Client version {myversion} newer than Server version {serverversion}. This might lead to issues. Please update server."
+                            )
+                            print("Will still try to connect")
+                            break
+                else:
+                    print(
+                        "Client version newer than Server version. This might lead to issues. Please update server."
+                    )
             break
         stderrmessage = " - ".join(stderr)
         if stderrmessage != "":
@@ -603,243 +652,176 @@ class ClusterManager:
         if password is None:
             raise ConnectionError("Did not receive correct response to connection.")
 
-        if verbose:
-            print("Connecting to ZMQ serve at %d with password %s" % (port, password))
-
-        self._socket = self._context.socket(zmq.REQ)
-
-        socket = self._socket
-        socket.plain_username = b"simstack_client"
-        socket.plain_password = password.encode("utf8").strip()
-        socket.setsockopt(zmq.LINGER, True)
-        socket.setsockopt(zmq.SNDTIMEO, 2000)
-        socket.setsockopt(zmq.RCVTIMEO, 2000)
-
-        from zmq import ssh
-
-        key_filename = None
-        if self._sshprivatekeyfilename != "UseSystemDefault":
-            key_filename = self._sshprivatekeyfilename
-
-        connect_address = "tcp://127.0.0.1:%d" % port
-        if self._url != "localhost":
-            ssh_url = self.get_ssh_url()
-            self._zmq_ssh_tunnel = ssh.tunnel_connection(
-                socket, connect_address, ssh_url, keyfile=key_filename, paramiko=True
-            )
-        else:
-            self._zmq_ssh_tunnel = None
-            socket.connect(connect_address)
-            print("Not connecting zmq ssh tunnel, as connection is going to localhost.")
-        # For testing if localhost == jump host, don't do anything. Otherwise, test with different user
-        socket.send(Message.connect_message())
-        # Windows somehow needs this amount of time before the socket is ready:
-        time.sleep(0.25)
-        for i in range(0, 10):
-            try:
-                data = socket.recv()
-                break
-            except zmq.error.Again:
-                print(
-                    "Port was not setup in time. Trying to connect again. Trial %d of 10."
-                    % i
-                )
-                time.sleep(0.15)
-        messagetype, message = Message.unpack(data)
-        if messagetype == MTS.CONNECT:
-            self._should_be_connected = True
-        else:
-            raise ConnectionError(
-                "Received message different from connect: %s" % message
-            )
-
-        if not connect_http:
-            return
-
-        try:
-            self._http_base_address = self.get_http_server_address()
-            if verbose:
-                print("Connected HTTP", self._http_base_address)
-        except Exception as e:
-            print(e)
-            raise ConnectionError(
-                "Could not connect http tunnel. Error was: %s" % e
-            ) from e
-
-    def _recv_ack_message(self):
-        messagetype, message = self._recv_message()
-        if not messagetype == MTS.ACK:
-            raise ConnectionAbortedError(
-                "Did not receive acknowledge after workflow submission."
-            )
-
     def get_url_for_workflow(self, workflow):
         if not workflow.startswith("/"):
             workflow = "/%s" % workflow
-        return self._http_base_address + workflow
-
-    def _recv_message(self):
-        messagetype, message = Message.unpack(self._socket.recv())
-        return messagetype, message
+        return f"{self.get_client_url()}/http/browse{workflow}"
 
     def submit_wf(self, filename, basepath_override=None):
-        resolved_filename = self.resolve_file_in_basepath(filename, basepath_override)
-        self._socket.send(Message.submit_wf_message(resolved_filename))
-        self._recv_ack_message()
+        """Submit a workflow using REST API"""
+        if self._client:
+            response = self._client.post(
+                "/api/workflows/submit", json={"filename": filename}
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def submit_single_job(self, wfem):
-        self._socket.send(Message.submit_single_job_message(wfem))
-        self._recv_ack_message()
+        """Submit a single job using REST API"""
+        if self._client:
+            response = self._client.post(
+                "/api/singlejobs/submit", json={"wfem": wfem.to_dict()}
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def send_jobstatus_message(self, wfem_uid: str):
-        message = Message.getsinglejobstatus_message(wfem_uid=wfem_uid)
-        self._socket.send(message)
-        # This has to be the actual answer message:
-        messagetype, message = self._recv_message()
-        return message
+        """Get single job status using REST API"""
+        if self._client:
+            response = self._client.get(f"/api/singlejobs/{wfem_uid}/status")
+            response.raise_for_status()
+            return response.json()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def send_abortsinglejob_message(self, wfem_uid: str):
-        message = Message.abortsinglejob_message(wfem_uid=wfem_uid)
-        self._socket.send(message)
-        # This has to be the actual answer message:
-        self._recv_message()
+        """Abort a single job using REST API"""
+        if self._client:
+            response = self._client.post(f"/api/singlejobs/{wfem_uid}/abort")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def send_noop_message(self):
-        self._socket.send(Message.noop_message())
-        self._recv_ack_message()
+        """No-op - not needed with REST API"""
+        pass
 
     def send_shutdown_message(self):
-        self._socket.send(Message.shutdown_message())
-        self._recv_ack_message()
+        """Shutdown server using REST API"""
+        if self._client:
+            response = self._client.post("/api/server/shutdown")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def abort_wf(self, workflow_submitname):
+        """Abort a workflow using REST API"""
         self._logger.debug(
             "Sent Abort WF message for submitname %s" % (workflow_submitname)
         )
-        self._socket.send(Message.abort_wf_message(workflow_submitname))
-        self._recv_ack_message()
+        if self._client:
+            response = self._client.post(f"/api/workflows/{workflow_submitname}/abort")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def send_clearserverstate_message(self):
-        self._socket.send(Message.clearserverstate_message())
-        self._recv_ack_message()
+        """Clear server state using REST API"""
+        if self._client:
+            response = self._client.post("/api/server/clear-state")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
+
+    def configure(self, resources):
+        """Configure server resources using REST API"""
+        if self._client:
+            resources_dict = {}
+            resources.to_dict(resources_dict)
+            response = self._client.post(
+                "/api/configure", json={"resources": resources_dict}
+            )
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def delete_wf(self, workflow_submitname):
+        """Delete a workflow using REST API"""
         self._logger.debug(
             "Sent delete WF message for submitname %s" % (workflow_submitname)
         )
-        self._socket.send(Message.delete_wf_message(workflow_submitname))
-        self._recv_ack_message()
+        if self._client:
+            response = self._client.delete(f"/api/workflows/{workflow_submitname}")
+            response.raise_for_status()
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def get_workflow_list(self):
-        self._socket.send(Message.list_wfs_message())
-        messagetype, message = self._recv_message()
-        workflows = message["workflows"]
-        return workflows
+        """Get list of workflows using REST API"""
+        if self._client:
+            response = self._client.get("/api/workflows")
+            response.raise_for_status()
+            data = response.json()
+            workflows = {
+                "inprogress": data.get("inprogress", []),
+                "finished": data.get("finished", []),
+            }
+            return workflows
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def get_workflow_job_list(self, workflow):
-        self._socket.send(
-            Message.list_jobs_of_wf_message(workflow_submit_name=workflow)
-        )
-        messagetype, message = self._recv_message()
-        if "list_of_jobs" not in message:
-            raise ConnectionError(
-                "Could not read message in workflow job list update %s" % message
-            )
-
-        files = message["list_of_jobs"]
-        return files
+        """Get job list for a workflow using REST API"""
+        if self._client:
+            response = self._client.get(f"/api/workflows/{workflow}/jobs")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("jobs", [])
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def is_connected(self):
         """
-        Returns True if the ssh transport is currently connected. Returns not True otherwise
-        :return (bool): True or not True
+        Returns True if a usable connection is available.
+
+        In direct REST mode (no SSH required) this means the HTTP client is
+        initialised.  In SSH mode it means the SSH transport is active.
         """
+        if not self._needs_ssh():
+            return self._client is not None
         transport = self._ssh_client.get_transport()
         if transport is None:
             return False
         return transport.is_active()
 
     def exists(self, path):
-        try:
-            return self.exists_as_directory(path)
-        except SSHExpectedDirectoryError:
-            return True
+        """Check if a path exists (file or directory).
 
-    def get_newest_version_directory(self, path):
-        largest_version = -1
-        try:
-            for entry in self._sftp_client.listdir_attr(path):
-                mode = entry.st_mode
-                if stat.S_ISDIR(mode):
-                    fn = entry.filename
-                    if fn[0] == "V":
-                        try:
-                            myint = int(fn[1:])
-                            if myint > largest_version:
-                                largest_version = myint
-                        except ValueError:
-                            pass
-                if entry.filename == "envs":
-                    largest_version = 6
-        except FileNotFoundError as e:
-            newfilenotfounderror = FileNotFoundError(
-                e.errno, "No such file %s on remote %s" % (path, self._url), path
+        Uses the REST API when the server is already running; falls back to
+        running ``stat`` over SSH before the REST server is up.
+        """
+        if self._client:
+            response = self._client.post(
+                "/api/files/exists",
+                json={"filename": str(path), "basepath_override": ""},
             )
-            raise newfilenotfounderror from e
-
-        return "V%d" % largest_version
-
-    def is_directory(self, path, basepath_override=None):
-        resolved = self.resolve_file_in_basepath(path, basepath_override)
-        sftpa: SFTPAttributes = self._sftp_client.stat(resolved)
-        if stat.S_ISDIR(sftpa.st_mode):
-            return True
-        return False
+            response.raise_for_status()
+            return response.json()["exists"]
+        else:
+            stdout, _ = self.exec_command(f'stat -- "{path}"')
+            return stdout.channel.recv_exit_status() == 0
 
     def get_http_server_address(self):
         """
         Function, which communicates with the server asking for the server port and setting up the
         server tunnel if it is not present.
-        :return:
+        :return: HTTP server URL
         """
-        self._http_server_tunnel: sshtunnel.SSHTunnelForwarder
-
-        if self._http_server_tunnel is None or not self._http_server_tunnel.is_alive:
-            if self._http_server_tunnel is not None:
-                self._http_server_tunnel.stop()
-            """ Reconnect starting here """
-            self._socket.send(
-                Message.get_http_server_request_message(
-                    basefolder=self.get_calculation_basepath()
-                )
+        if self._client:
+            # Use REST API to get HTTP server info
+            response = self._client.post(
+                "/api/http-server", json={"basefolder": self.get_calculation_basepath()}
             )
-            messagetype, message = self._recv_message()
-            if "http_port" not in message:
-                raise ConnectionError("Could not read message in http job starter.")
-            # print(message)
-            myport = int(message["http_port"])
-            self._http_user = message["http_user"]
-            self._http_pass = message["http_pass"]
-            key_filename = None
-            if self._sshprivatekeyfilename != "UseSystemDefault":
-                key_filename = self._sshprivatekeyfilename
-            self._http_server_tunnel = sshtunnel.SSHTunnelForwarder(
-                (self._url, self._port),
-                ssh_username=self._user,
-                ssh_pkey=key_filename,
-                threaded=False,
-                remote_bind_address=("127.0.0.1", myport),
-            )
-            self._http_server_tunnel.start()
-
-        if not self._http_server_tunnel.is_alive:
-            raise sshtunnel.BaseSSHTunnelForwarderError("Cannot start ssh tunnel.")
-
-        return "http://%s:%s@localhost:%d" % (
-            self._http_user,
-            self._http_pass,
-            self._http_server_tunnel.local_bind_port,
-        )
+            response.raise_for_status()
+            data = response.json()
+            self._http_user = data.get("user")
+            self._http_pass = data.get("password")
+            # Return the URL from the FastAPI server
+            return data.get("url")
+        else:
+            raise NotImplementedError("No REST client connected")
 
     def exists_as_directory(self, path):
         """
@@ -847,11 +829,14 @@ class ClusterManager:
         :param path (str): The path to check
         :return bool: Exists, does not exist
         """
-        try:
-            sftpa: SFTPAttributes = self._sftp_client.stat(str(path))
-        except FileNotFoundError:
+        response = self._client.post(
+            "/api/files/exists", json={"filename": path, "basepath_override": ""}
+        )
+        response.raise_for_status()
+        result = response.json()
+        if not result["exists"]:
             return False
-        if stat.S_ISDIR(sftpa.st_mode):
+        if result["is_directory"]:
             return True
         raise SSHExpectedDirectoryError(
             "Path <%s> to expected directory exists, but was not directory" % path
@@ -861,36 +846,23 @@ class ClusterManager:
         """
         Creates a directory, if not existing. Does nothing if it exists. Throws if the path cannot be generated or is a file
         The function will make sure every directory in "directory" is generated but not in basepath or basepath_override.
-        Bug: Mode is still ignored! I think this might be a bug in ubuntu 14.04 ssh and we should try again later.
         :param directory (str): Directory to be generated on the server. basepath will be appended
         :param basepath_override (str): If set, a custom basepath is used. If you want create a specific absolute directory, used basepath_override=""
-        :param mode_override (int): Mode such as 1777
+        :param mode_override (int): Mode such as 0o770
         :return (str): The absolute path of the generated directory.
         """
         if isinstance(directory, pathlib.Path):
             directory = str(directory)
 
-        if mode_override is None:
-            mode_override = self._default_mode
-        if basepath_override is None:
-            basepath_override = self._calculation_basepath
-
-        if not self._calculation_basepath == "":
-            if directory.startswith("/"):
-                directory = directory[1:]
-
-        subdirs = split_directory_in_subdirectories(directory)
-        complete_subdirs = []
-        for mydir in subdirs:
-            complete_subdirs.append(posixpath.join(basepath_override, mydir))
-
-        for dir in complete_subdirs:
-            if self.exists_as_directory(dir):
-                continue
-            else:
-                # self._sftp_client.mkdir(dir,mode = mode_override)
-                self._sftp_client.mkdir(dir)
-
+        response = self._client.post(
+            "/api/files/mkdir",
+            json={
+                "directory": directory,
+                "basepath_override": basepath_override,
+                "mode_override": mode_override or self._default_mode,
+            },
+        )
+        response.raise_for_status()
         return directory
 
     def get_calculation_basepath(self):
@@ -904,18 +876,4 @@ class ClusterManager:
         We make sure that the connections are closed on destruction.
         :return:
         """
-        if self._socket is not None:
-            self._socket.close()
-        if self._sftp_client is not None:
-            self._sftp_client.close()
         self._ssh_client.close()
-        if (
-            self._http_server_tunnel is not None
-            and not self._http_server_tunnel.is_alive
-        ):
-            self._http_server_tunnel.stop()
-
-        if self._zmq_ssh_tunnel is not None:
-            if hasattr(self._zmq_ssh_tunnel, "kill"):
-                # This is because it can be that the tunnel was not done via paramiko subprocess
-                self._zmq_ssh_tunnel.kill()

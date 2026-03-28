@@ -174,6 +174,47 @@ class AbstractWanoModel:
     def is_force_disabled(self):
         return self._force_disabled
 
+    # ------------------------------------------------------------------
+    # Spec-based construction helpers (JSON-compatible dict protocol)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _apply_common_spec(instance: "AbstractWanoModel", spec: dict) -> None:
+        """Apply common spec fields to *instance*.
+
+        This is the spec-based equivalent of ``parse_from_xml`` in the base
+        class.  It sets name, visibility conditions, import_from, description,
+        and force_disable from a plain dict produced by
+        ``xml_compat.element_to_spec`` (or a model's own ``to_spec()``).
+
+        Subclasses call this at the top of their ``_apply_spec`` method before
+        processing type-specific fields.
+        """
+        instance.set_name(spec.get("name", "unnamed"))
+        if "visibility_condition" in spec:
+            instance._visibility_condition = spec["visibility_condition"]
+            instance._visibility_var_path = spec.get("visibility_var_path", "")
+        if "import_from" in spec:
+            instance._do_import = True
+            instance._import_from = spec["import_from"]
+        if "description" in spec:
+            instance._tooltip_text = spec["description"]
+        instance._force_disabled = bool(spec.get("force_disable", False))
+
+    def _common_spec_fields(self) -> dict:
+        """Return a dict of the common fields for inclusion in ``to_spec()`` output."""
+        out: dict = {"name": self._name}
+        if self._visibility_condition is not None:
+            out["visibility_condition"] = self._visibility_condition
+            out["visibility_var_path"] = self._visibility_var_path or ""
+        if self._do_import:
+            out["import_from"] = self._import_from
+        if self._tooltip_text:
+            out["description"] = self._tooltip_text
+        if self._force_disabled:
+            out["force_disable"] = self._force_disabled
+        return out
+
     def set_parent(self, parent):
         self._parent = parent
         self._parent_set = True

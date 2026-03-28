@@ -40,7 +40,6 @@ from SimStackServer.WaNo.AbstractWaNoModel import (
 )
 import SimStackServer.WaNo.WaNoFactory
 from lxml import etree
-import xmltodict
 import copy
 
 import yaml
@@ -202,6 +201,36 @@ class WaNoModelDictLike(AbstractWanoModel):
             wano.decommission()
         super().decommission()
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoModelDictLike":
+        """Create a new instance from a spec dict."""
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        """Populate this instance from a spec dict (no XML required)."""
+        from SimStackServer.WaNo.WaNoSpec import spec_to_model
+
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.wano_dict = OrderedDictIterHelper()
+        for child_spec in spec.get("children", []):
+            model = spec_to_model(child_spec)
+            self.wano_dict[child_spec["name"]] = model
+        if "style" in spec:
+            self.style = spec["style"]
+
+    def to_spec(self) -> dict:
+        """Serialise this instance to a JSON-compatible dict."""
+        out: dict = {"type": "dict"}
+        out.update(self._common_spec_fields())
+        out["children"] = [child.to_spec() for child in self.wano_dict.values()]
+        return out
+
 
 class WaNoChoiceModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -269,6 +298,29 @@ class WaNoChoiceModel(AbstractWanoModel):
             }
         }
         return schema
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoChoiceModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.choices = list(spec.get("choices", []))
+        self.chosen = int(spec.get("chosen", 0))
+        self._default = self.chosen
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "choice"}
+        out.update(self._common_spec_fields())
+        out["choices"] = list(self.choices)
+        out["chosen"] = self.chosen
+        return out
 
 
 class WaNoDynamicChoiceModel(WaNoChoiceModel):
@@ -391,6 +443,35 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         schema = {self.name: {"type": "string"}}
         return schema
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoDynamicChoiceModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        # Do NOT call super()._apply_spec – WaNoChoiceModel reads Entry XML
+        # children; dynamic choice has none of those.
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self._collection_path = spec.get("collection_path", "")
+        self._subpath = spec.get("subpath", "")
+        self.choices = ["uninitialized"]
+        self.chosen = int(spec.get("chosen", 0))
+        self._connected = True
+        self._updating = False
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "dynamic_choice"}
+        out.update(self._common_spec_fields())
+        out["collection_path"] = self._collection_path
+        out["subpath"] = self._subpath
+        out["chosen"] = self.chosen
+        return out
+
 
 class WaNoMatrixModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -507,6 +588,42 @@ class WaNoMatrixModel(AbstractWanoModel):
         # }
         return schema
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoMatrixModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.rows = int(spec.get("rows", 0))
+        self.cols = int(spec.get("cols", 0))
+        self.col_header = spec.get("col_header", None)
+        self.row_header = spec.get("row_header", None)
+        data_text = spec.get("data_text", None)
+        if data_text is None or not str(data_text).strip():
+            self.storage = [["" for _ in range(self.cols)] for _ in range(self.rows)]
+        else:
+            self.storage = self._fromstring(data_text)
+        self._default = copy.deepcopy(self.storage)
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "matrix"}
+        out.update(self._common_spec_fields())
+        out["rows"] = self.rows
+        out["cols"] = self.cols
+        if self.col_header is not None:
+            out["col_header"] = list(self.col_header)
+        if self.row_header is not None:
+            out["row_header"] = list(self.row_header)
+        data = self._tostring(self.storage) if self.storage else None
+        out["data_text"] = data
+        return out
+
 
 class WaNoModelListLike(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -621,6 +738,24 @@ class WaNoNoneModel(AbstractWanoModel):
             }
         }
         return schema
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoNoneModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "none"}
+        out.update(self._common_spec_fields())
+        return out
 
 
 class WaNoSwitchModel(WaNoModelListLike):
@@ -758,6 +893,45 @@ class WaNoSwitchModel(WaNoModelListLike):
         }
         return schema
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoSwitchModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        from SimStackServer.WaNo.WaNoSpec import spec_to_model
+
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self._switch_path = spec.get("switch_path", "")
+        self._switch_name_list = []
+        self._names_list = []
+        self.wano_list = []
+        for option in spec.get("options", []):
+            switch_name = option.get("switch_name", "")
+            child_spec = option["spec"]
+            model = spec_to_model(child_spec)
+            self._switch_name_list.append(switch_name)
+            self._names_list.append(child_spec.get("name", ""))
+            self.wano_list.append(model)
+        self._visible_thing = -1
+        if self._names_list:
+            self._name = self._names_list[self._visible_thing]
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "switch"}
+        out.update(self._common_spec_fields())
+        out["switch_path"] = self._switch_path or ""
+        out["options"] = [
+            {"switch_name": self._switch_name_list[i], "spec": model.to_spec()}
+            for i, model in enumerate(self.wano_list)
+        ]
+        return out
+
 
 class MultipleOfModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -766,6 +940,10 @@ class MultipleOfModel(AbstractWanoModel):
         self.first_xml_child = None
         self.list_of_dicts = []
         self._default_len = -1
+        # Spec-based template (JSON-compatible).  Populated by parse_from_xml
+        # AND by _apply_spec so that add_item() can work on both paths.
+        self._template_spec: dict = {"children": []}
+        self.xml = None
 
     def parse_from_xml(self, xml):
         self.xml = xml
@@ -778,6 +956,19 @@ class MultipleOfModel(AbstractWanoModel):
             self.list_of_dicts.append(wano_temp_dict)
         super().parse_from_xml(xml)
         self._default_len = len(self.list_of_dicts)
+        # Build _template_spec from the first XML child so that the spec-based
+        # add_item() path works after XML-based construction too.
+        if self.first_xml_child is not None:
+            from SimStackServer.WaNo.xml_compat import (
+                element_to_spec,
+                _is_regular_element as _ire,
+            )
+
+            self._template_spec = {
+                "children": [
+                    element_to_spec(c) for c in self.first_xml_child if _ire(c)
+                ]
+            }
 
     def numitems_per_add(self):
         return len(self.first_xml_child)
@@ -898,11 +1089,13 @@ class MultipleOfModel(AbstractWanoModel):
             for wano in self.list_of_dicts[-1].values():
                 wano.decommission()
             self.list_of_dicts.pop()
-            for child in reversed(self.xml):
-                if not is_regular_element(child):
-                    continue
-                self.xml.remove(child)
-                break
+            # Only manipulate the XML tree when we were constructed from XML.
+            if self.xml is not None:
+                for child in reversed(self.xml):
+                    if not is_regular_element(child):
+                        continue
+                    self.xml.remove(child)
+                    break
 
             self._root.block_signals(before)
             self._root.datachanged_force()
@@ -912,10 +1105,34 @@ class MultipleOfModel(AbstractWanoModel):
 
     def add_item(self, build_view=True):
         before = self._root.block_signals(True)
-        my_xml = copy.copy(self.first_xml_child)
-        my_xml.attrib["id"] = str(len(self.list_of_dicts))
-        self.xml.append(my_xml)
-        model_dict = self.parse_one_child(my_xml, build_view=build_view)
+        if self.xml is not None and self.first_xml_child is not None:
+            # Legacy XML path: clone the first XML child and parse it.
+            my_xml = copy.copy(self.first_xml_child)
+            my_xml.attrib["id"] = str(len(self.list_of_dicts))
+            self.xml.append(my_xml)
+            model_dict = self.parse_one_child(my_xml, build_view=build_view)
+        else:
+            # Spec-based path: instantiate fresh models from the template spec.
+            from SimStackServer.WaNo.WaNoSpec import spec_to_model
+
+            model_dict = OrderedDictIterHelper()
+            current_id = len(self.list_of_dicts)
+            for child_spec in self._template_spec.get("children", []):
+                model = spec_to_model(child_spec)
+                if build_view and self.view is not None:
+                    start_path = [*self.path.split(".")] + [str(current_id), model.name]
+                    model.set_root(self.get_root())
+                    (
+                        model,
+                        rootview,
+                    ) = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(
+                        model,
+                        start_path=start_path,
+                        parent_view=self.view,
+                    )
+                    rootview.set_parent(self.view)
+                    model.set_parent(self)
+                model_dict[child_spec["name"]] = model
         self.list_of_dicts.append(model_dict)
         self._root.block_signals(before)
         self.get_root().datachanged_force()
@@ -962,6 +1179,40 @@ class MultipleOfModel(AbstractWanoModel):
 
         super().decommission()
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "MultipleOfModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        from SimStackServer.WaNo.WaNoSpec import spec_to_model
+
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self._template_spec = spec.get("template", {"children": []})
+        self.list_of_dicts = []
+        for item_spec in spec.get("items", []):
+            wano_temp_dict = OrderedDictIterHelper()
+            for child_spec in item_spec.get("children", []):
+                model = spec_to_model(child_spec)
+                wano_temp_dict[child_spec["name"]] = model
+            self.list_of_dicts.append(wano_temp_dict)
+        self._default_len = len(self.list_of_dicts)
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "multipleof"}
+        out.update(self._common_spec_fields())
+        out["template"] = self._template_spec
+        out["items"] = [
+            {"children": [child.to_spec() for child in wano_dict.values()]}
+            for wano_dict in self.list_of_dicts
+        ]
+        return out
+
 
 # This is the parent class and grandfather. Children have to be unique, no lists here
 class WaNoModelRoot(WaNoModelDictLike):
@@ -983,8 +1234,8 @@ class WaNoModelRoot(WaNoModelDictLike):
 
     def __init__(self, *args, **kwargs):
         super(WaNoModelRoot, self).__init__(*args, **kwargs)
-        self._explicit_xml = kwargs.get("explicit_xml", "unset")
         self._logger = logging.getLogger("WaNoModelRoot")
+        self.full_xml = None
         self._datachanged_callbacks = {}
         self._outputfile_callbacks = []
         self._notifying = False
@@ -1024,7 +1275,20 @@ class WaNoModelRoot(WaNoModelDictLike):
         self.output_files = []
 
         self.metas = OrderedDictIterHelper()
-        self._parse_defaults()
+
+        # Spec-based construction: pass ``_spec=<dict>`` to bypass XML loading.
+        _spec = kwargs.get("_spec", None)
+        if _spec is not None:
+            self._apply_root_spec(_spec)
+            # Wire up root refs, paths, and parent pointers so that
+            # visibility callbacks and datachanged signals work correctly.
+            from SimStackServer.WaNo.WaNoFactory import (
+                wano_without_view_constructor_helper,
+            )
+
+            wano_without_view_constructor_helper(self)
+        else:
+            self._parse_defaults()
 
     def get_secure_schema(self) -> Dict[str, Any]:
         child_properties = super().get_secure_schema()
@@ -1090,54 +1354,39 @@ class WaNoModelRoot(WaNoModelDictLike):
             return xml
 
     def _parse_defaults(self):
-        if self._explicit_xml != "unset":
-            xmlpath = Path(self._explicit_xml)
-        else:
-            wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
-            xmlpath = get_wano_xml_path(
-                self._wano_dir_root, wano_name_override=wle.name
-            )
-        xml = self._parse_xml(xmlpath)
-        self._parse_from_xml(xml)
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
 
-    def parse_from_xml(self, xml):
-        print("Fake Call")
+        wle = WaNoListEntry_from_folder_or_zip(self._wano_dir_root)
+        xmlpath = get_wano_xml_path(self._wano_dir_root, wano_name_override=wle.name)
+        try:
+            spec = xml_file_to_spec(xmlpath)
+        except ValueError as exc:
+            raise WaNoParseError(str(exc)) from exc
+        self._apply_root_spec(spec)
+        # Preserve the parsed XML tree so prepare_files_submission can write it
+        # to the workflow submission directory.
+        self.full_xml = self._parse_xml(xmlpath)
+        self._read_export_dictionaries()
 
-    def _parse_from_xml(self, xml):
-        self.full_xml = xml
-        subxml = self.full_xml.find("WaNoRoot")
+    def _read_export_dictionaries(self):
+        """Check for existing output files and set up report export paths."""
         export_dictionaries = {}
-        for child in self.full_xml.findall("./WaNoOutputFiles/WaNoOutputFile"):
-            self.output_files.append(child.text)
-            if child.text == "output_config.ini":
+        for output_file in self.output_files:
+            if output_file == "output_config.ini":
                 absfile = join(self._wano_dir_root, "output_config.ini")
                 if os.path.isfile(absfile):
                     export_dictionaries["ini"] = absfile
-
-            elif child.text == "output_dict.yml":
+            elif output_file == "output_dict.yml":
                 absfile = join(self._wano_dir_root, "output_dict.yml")
                 if os.path.isfile(absfile):
                     export_dictionaries["dict"] = absfile
-
         if len(export_dictionaries) > 0:
             rr = ReportRenderer(export_dictionaries)
             my_exports = rr.consolidate_export_dictionaries()
             self._my_export_paths = [*flatten_dict(my_exports).keys()]
 
-        for child in self.full_xml.findall("./WaNoInputFiles/WaNoInputFile"):
-            self.input_files.append((child.attrib["logical_filename"], child.text))
-
-        el = self.full_xml.find("./WaNoMeta")
-        if el is not None:
-            self.metas = xmltodict.parse(etree.tostring(el))
-
-        self.exec_command = self.full_xml.find("WaNoExecCommand").text
-        for child in self.full_xml.find("WaNoExecCommand"):
-            raise WaNoParseError(
-                "Another XML element was found in WaNoExecCommand. (This can be comments or open and close tags). This is not supported. Aborting Parse."
-            )
-
-        super().parse_from_xml(xml=subxml)
+    def parse_from_xml(self, xml):
+        print("Fake Call")
 
     def _tidy_lists(self):
         while len(self._unregister_list) > 0:
@@ -1241,7 +1490,12 @@ class WaNoModelRoot(WaNoModelDictLike):
         if only_static:
             return return_files
 
-        return_files = return_files + [a[0] for a in self.export_model.get_contents()]
+        export_model = self.export_model
+        return_files = return_files + (
+            [a[0] for a in export_model.get_contents()]
+            if export_model is not None
+            else []
+        )
         for callback in self._outputfile_callbacks:
             return_files += callback()
         return return_files
@@ -1330,10 +1584,16 @@ class WaNoModelRoot(WaNoModelDictLike):
         self._new_resource_model.to_json(resources_fn)
 
         imports_fn = outfolder / "imports.yml"
-        self.import_model.save(imports_fn)
+        if self.import_model is not None:
+            self.import_model.save(imports_fn)
+        else:
+            imports_fn.write_text("{}\n")
 
         exports_fn = outfolder / "exports.yml"
-        self.export_model.save(exports_fn)
+        if self.export_model is not None:
+            self.export_model.save(exports_fn)
+        else:
+            exports_fn.write_text("{}\n")
 
     def save(self, outfolder):
         delta_json = Path(outfolder) / "wano_configuration.json"
@@ -1676,7 +1936,10 @@ class WaNoModelRoot(WaNoModelDictLike):
         # xmlfile = self._name + ".xml"
         # runtime_stagein_files.append([self._name + ".xml","${STORAGE}/workflow_data/%s/inputs/%s" % (stageout_basedir, "rendered_wano.yml)])
 
-        for otherfiles in self.get_import_model().get_contents():
+        import_model = self.get_import_model()
+        for otherfiles in (
+            import_model.get_contents() if import_model is not None else []
+        ):
             name, importloc, tostage = otherfiles[0], otherfiles[1], otherfiles[2]
             if self._filename_is_global_var(importloc):
                 runtime_stagein_files.append([name, importloc])
@@ -1908,6 +2171,269 @@ class WaNoModelRoot(WaNoModelDictLike):
             wano_sub: AbstractWanoModel = self.get_value(key)
             wano_sub.apply_delta(value)
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    def _apply_root_spec(self, spec: dict) -> None:
+        """Populate this root from a spec dict (skips XML / file loading).
+
+        The spec format matches the output of ``xml_compat.root_xml_to_spec()``.
+        """
+        self.exec_command = spec.get("exec_command", "")
+        self.output_files = list(spec.get("output_files", []))
+        # root spec input_files are dicts {"logical_filename": ..., "path": ...}
+        # self.input_files stores (logical_filename, path) tuples
+        self.input_files = [
+            (entry["logical_filename"], entry["path"])
+            for entry in spec.get("input_files", [])
+        ]
+        self.metas = spec.get("metas", {})
+        # Reuse WaNoModelDictLike._apply_spec for name + children
+        WaNoModelDictLike._apply_spec(
+            self,
+            {
+                "name": spec.get("name", "unnamed"),
+                "children": spec.get("children", []),
+            },
+        )
+
+    @classmethod
+    def from_spec(cls, spec: dict, wano_dir_root=None) -> "WaNoModelRoot":
+        """Create a WaNoModelRoot from a root spec dict without loading any XML.
+
+        Parameters
+        ----------
+        spec:
+            Root spec dict as produced by ``xml_compat.root_xml_to_spec()``
+            or by ``WaNoModelRoot.to_spec()``.
+        wano_dir_root:
+            Optional filesystem path for file I/O operations.  A temporary
+            directory is used when omitted.
+        """
+        import pathlib
+        import tempfile
+
+        if wano_dir_root is None:
+            wano_dir_root = pathlib.Path(tempfile.mkdtemp())
+        return cls(model_only=True, wano_dir_root=wano_dir_root, _spec=spec)
+
+    def to_spec(self) -> dict:
+        """Serialise this root to a JSON-compatible dict."""
+        return {
+            "type": "root",
+            "name": self._name,
+            "exec_command": getattr(self, "exec_command", ""),
+            "output_files": list(self.output_files),
+            "input_files": [
+                {"logical_filename": lf, "path": p} for lf, p in self.input_files
+            ],
+            "metas": dict(self.metas) if self.metas else {},
+            "children": [child.to_spec() for child in self.wano_dict.values()],
+        }
+
+    # ------------------------------------------------------------------
+    # Bundle API
+    # ------------------------------------------------------------------
+
+    def build_bundle(self) -> dict:
+        """Build a bundle dict of ``filename -> base64(content)`` for all WaNo-owned files.
+
+        The bundle contains:
+        - The WaNo XML file
+        - ``wano_configuration.json`` (current parameter state)
+        - ``imports.yml``, ``exports.yml``, ``resources.yml`` (if present)
+        - All static input files declared in ``self.input_files`` that exist
+          inside ``_wano_dir_root``
+
+        External input files (user-provided scientific data) are NOT included.
+        Use ``get_external_input_files()`` to discover what the user must supply
+        separately.
+        """
+        import base64
+        import tempfile
+
+        bundle: dict = {}
+
+        # WaNo XML
+        if self.full_xml is not None:
+            xml_filename = f"{self._name}.xml"
+            xml_bytes = etree.tounicode(self.full_xml, pretty_print=True).encode(
+                "utf-8"
+            )
+            bundle[xml_filename] = base64.b64encode(xml_bytes).decode("ascii")
+
+        # wano_configuration.json + imports/exports/resources
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = pathlib.Path(tmpdir)
+            self.save(tmppath)
+            for fname in (
+                "wano_configuration.json",
+                "imports.yml",
+                "exports.yml",
+                "resources.yml",
+            ):
+                fpath = tmppath / fname
+                if fpath.is_file():
+                    bundle[fname] = base64.b64encode(fpath.read_bytes()).decode("ascii")
+
+        # WaNo-owned static input files (relative paths within _wano_dir_root)
+        for _logical_filename, local_file in self.input_files:
+            if pathlib.Path(local_file).is_absolute():
+                # Absolute path → user-provided external file, skip
+                continue
+            src = self._wano_dir_root / local_file
+            if src.is_file():
+                bundle[local_file] = base64.b64encode(src.read_bytes()).decode("ascii")
+
+        return bundle
+
+    def get_external_input_files(self) -> list:
+        """Return ``(logical_name, source_path)`` pairs for files the user must provide.
+
+        These are ``WaNoItemFileModel`` instances that carry a local-file flag and
+        a non-empty path.  They represent scientific data files that are NOT part
+        of the WaNo definition and must be uploaded separately before job execution.
+        """
+        result = []
+        for child in self.wano_dict.values():
+            self._collect_external_file_items(child, result)
+        return result
+
+    @staticmethod
+    def _collect_external_file_items(node, result: list) -> None:
+        """Recursively collect WaNoItemFileModel entries with is_local_file=True."""
+        if isinstance(node, WaNoItemFileModel):
+            if node.is_local_file and node.mystring:
+                result.append((node.logical_name, node.mystring))
+            return
+        if hasattr(node, "wano_dict"):
+            for child in node.wano_dict.values():
+                WaNoModelRoot._collect_external_file_items(child, result)
+        elif hasattr(node, "items"):
+            for _k, child in node.items():
+                WaNoModelRoot._collect_external_file_items(child, result)
+
+    def get_upload_manifest(self, wfem_path: str) -> list:
+        """Return a list of :class:`~upload_manifest.UploadItem` for every file this WaNo needs on the server.
+
+        Items are classified into two categories:
+
+        * ``"wano_definition"`` — WaNo XML, parameter configuration, and static
+          input files declared in the WaNo XML.  These are produced automatically
+          by :meth:`prepare_files_submission` and require no action from the user.
+
+        * ``"external_input"`` — scientific data files the user must supply.
+          Corresponds to ``WaNoItemFileModel`` entries with ``is_local_file=True``.
+
+        Parameters
+        ----------
+        wfem_path:
+            The path of this WaNo node inside the workflow, e.g. ``"Step1"`` or
+            ``"ForEach/0/MyWaNo"``.  Used to construct ``server_path`` values of
+            the form ``workflow_data/{wfem_path}/inputs/{filename}``.
+
+        Returns
+        -------
+        list[UploadItem]
+            All upload items for this WaNo.
+        """
+        from SimStackServer.WaNo.upload_manifest import UploadItem
+
+        def _srv(filename: str) -> str:
+            return f"workflow_data/{wfem_path}/inputs/{filename}"
+
+        items = []
+
+        # WaNo-definition files (auto-generated by prepare_files_submission)
+        xml_filename = f"{self._name}.xml"
+        items.append(
+            UploadItem(
+                server_path=_srv(xml_filename),
+                logical_name=xml_filename,
+                wfem_name=self._name,
+                wfem_path=wfem_path,
+                category="wano_definition",
+            )
+        )
+        for cfg_file in (
+            "wano_configuration.json",
+            "imports.yml",
+            "exports.yml",
+            "resources.yml",
+        ):
+            items.append(
+                UploadItem(
+                    server_path=_srv(cfg_file),
+                    logical_name=cfg_file,
+                    wfem_name=self._name,
+                    wfem_path=wfem_path,
+                    category="wano_definition",
+                    required=False,  # only produced when non-default
+                )
+            )
+
+        for _logical, local_file in self.input_files:
+            items.append(
+                UploadItem(
+                    server_path=_srv(local_file),
+                    logical_name=local_file,
+                    wfem_name=self._name,
+                    wfem_path=wfem_path,
+                    category="wano_definition",
+                    local_source=str(self._wano_dir_root / local_file),
+                )
+            )
+
+        # External input files (user must supply)
+        external = []
+        for child in self.wano_dict.values():
+            self._collect_external_file_items(child, external)
+        for logical_name, source_path in external:
+            items.append(
+                UploadItem(
+                    server_path=_srv(logical_name),
+                    logical_name=logical_name,
+                    wfem_name=self._name,
+                    wfem_path=wfem_path,
+                    category="external_input",
+                    local_source=source_path if source_path else None,
+                    required=True,
+                )
+            )
+
+        return items
+
+    def build_wfem_with_bundle(
+        self, stageout_basedir: str = ""
+    ) -> "WorkflowExecModule":
+        """Build a self-contained :class:`WorkflowExecModule` with an embedded WaNo bundle.
+
+        The bundle contains all WaNo-owned files so the server can execute the job
+        without requiring a prior file-upload step for the WaNo definition itself.
+
+        Files that the user must still provide (scientific data) are listed by
+        :meth:`get_external_input_files`.
+
+        Parameters
+        ----------
+        stageout_basedir:
+            Passed verbatim to :meth:`render_wano`; should be the workflow-relative
+            path prefix used for stage-in/out path construction.
+
+        Returns
+        -------
+        WorkflowExecModule
+            Ready to POST to ``/api/singlejobs/submit``.
+        """
+        _rendered_wano, _jsdl, wem, _local_stagein = self.render_wano(
+            submitdir=None, stageout_basedir=stageout_basedir
+        )
+        bundle = self.build_bundle()
+        wem.set_wano_bundle_dict(bundle)
+        wem.set_wano_xml(f"{self._name}.xml")
+        return wem
+
 
 class WaNoItemFloatModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -1969,6 +2495,27 @@ class WaNoItemFloatModel(AbstractWanoModel):
     def __repr__(self):
         return repr(self._myfloat)
 
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoItemFloatModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self._myfloat = float(spec.get("value", -100.0))
+        self._default = self._myfloat
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "float"}
+        out.update(self._common_spec_fields())
+        out["value"] = self._myfloat
+        return out
+
 
 class WaNoItemIntModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
@@ -2005,7 +2552,7 @@ class WaNoItemIntModel(AbstractWanoModel):
 
     def apply_delta(self, delta):
         if not self._apply_import_delta(delta):
-            self.myint = delta
+            self.set_data(delta)
 
     def changed_from_default(self) -> bool:
         if self.do_import:
@@ -2022,6 +2569,27 @@ class WaNoItemIntModel(AbstractWanoModel):
 
     def __repr__(self):
         return repr(self.myint)
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoItemIntModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.myint = float(spec.get("value", -10000000.0))
+        self._default = self.myint
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "int"}
+        out.update(self._common_spec_fields())
+        out["value"] = self.myint
+        return out
 
 
 class WaNoItemBoolModel(AbstractWanoModel):
@@ -2062,16 +2630,38 @@ class WaNoItemBoolModel(AbstractWanoModel):
         return schema
 
     def apply_delta(self, delta):
-        self.mybool = delta
+        self.set_data(delta)
 
     def changed_from_default(self) -> bool:
         return self.mybool != self._default
 
     def update_xml(self):
-        if self.mybool:
-            self.xml.text = "True"
-        else:
-            self.xml.text = "False"
+        if self.xml is not None:
+            if self.mybool:
+                self.xml.text = "True"
+            else:
+                self.xml.text = "False"
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoItemBoolModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.mybool = bool(spec.get("value", False))
+        self._default = self.mybool
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "bool"}
+        out.update(self._common_spec_fields())
+        out["value"] = self.mybool
+        return out
 
 
 class WaNoItemFileModel(AbstractWanoModel):
@@ -2185,6 +2775,8 @@ class WaNoItemFileModel(AbstractWanoModel):
             # print("Copying",self._root.wano_dir_root,rendered_logical_name,destdir)
             try:
                 shutil.copy(self.mystring, destfile)
+            except FileNotFoundError:
+                pass  # source file not yet provided (e.g. DSL placeholder)
             except IsADirectoryError as e:
                 raise WorkflowSubmitError(
                     "%s points to a directory, but a filename was expected in %s"
@@ -2215,6 +2807,32 @@ class WaNoItemFileModel(AbstractWanoModel):
             self._local_file_default != self.is_local_file
             or self.mystring != self._default
         )
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoItemFileModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.mystring = spec.get("path", "")
+        self._default = self.mystring
+        self.logical_name = spec.get("logical_filename", "")
+        self.is_local_file = bool(spec.get("local", True))
+        self._local_file_default = self.is_local_file
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "file"}
+        out.update(self._common_spec_fields())
+        out["path"] = self.mystring
+        out["logical_filename"] = self.logical_name
+        out["local"] = self.is_local_file
+        return out
 
 
 class WaNoItemScriptFileModel(WaNoItemFileModel):
@@ -2310,7 +2928,7 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def apply_delta(self, delta):
         if not self._apply_import_delta(delta):
-            self.mystring = delta
+            self.set_data(delta)
 
     def changed_from_default(self) -> bool:
         if self.do_import:
@@ -2322,7 +2940,8 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def update_xml(self):
         super().update_xml()
-        self.xml.text = self.mystring
+        if self.xml is not None:
+            self.xml.text = self.mystring
 
     def __repr__(self):
         return repr(self.mystring)
@@ -2330,6 +2949,34 @@ class WaNoItemStringModel(AbstractWanoModel):
     def get_secure_schema(self) -> Optional[str]:
         schema = {self.name: {"type": "string"}}
         return schema
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoItemStringModel":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        AbstractWanoModel._apply_common_spec(self, spec)
+        self.mystring = spec.get("value", "")
+        self._default = self.mystring
+        if "dynamic_output" in spec:
+            self._output_filestring = spec["dynamic_output"]
+            # Register callback if root is already set (rare, but possible).
+            if self._root is not None:
+                self._root.register_outputfile_callback(self.get_extra_output_files)
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "string"}
+        out.update(self._common_spec_fields())
+        out["value"] = self.mystring
+        if self._output_filestring:
+            out["dynamic_output"] = self._output_filestring
+        return out
 
 
 class WaNoThreeRandomLetters(WaNoItemStringModel):
@@ -2376,6 +3023,34 @@ class WaNoThreeRandomLetters(WaNoItemStringModel):
 
     def __repr__(self):
         return repr(self.mystring)
+
+    # ------------------------------------------------------------------
+    # Spec API
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> "WaNoThreeRandomLetters":
+        obj = cls()
+        obj._apply_spec(spec)
+        return obj
+
+    def _apply_spec(self, spec: dict) -> None:
+        # Do NOT call super()._apply_spec to avoid double-applying common fields.
+        AbstractWanoModel._apply_common_spec(self, spec)
+        value = spec.get("value", "")
+        if value:
+            self.mystring = value
+            self.set_data(self.mystring)
+        elif not self.mystring:
+            self.mystring = self._generate_default_string()
+            self.set_data(self.mystring)
+        self._default = self.mystring
+
+    def to_spec(self) -> dict:
+        out: dict = {"type": "three_random"}
+        out.update(self._common_spec_fields())
+        out["value"] = self.mystring or ""
+        return out
 
 
 _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG

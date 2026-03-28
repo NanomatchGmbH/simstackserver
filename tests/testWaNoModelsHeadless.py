@@ -9,7 +9,6 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-from lxml import etree
 
 from SimStackServer.WaNo.MiscWaNoTypes import WaNoListEntry_from_folder_or_zip
 from nestdictmod.nestdictmod import NestDictMod
@@ -81,10 +80,11 @@ class TestWaNoModels(unittest.TestCase):
         myfloatmodel.model_to_dict(outdict)
 
     def test_read_rendered_lf_wano(self):
-        wmr = WaNoModelRoot(
-            wano_dir_root=self.lf_rendered_dir,
-            model_only=True,
-            explicit_xml=self.lf_rendered_xml,
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
+
+        wmr = WaNoModelRoot.from_spec(
+            xml_file_to_spec(Path(self.lf_rendered_xml)),
+            wano_dir_root=Path(self.lf_rendered_dir),
         )
         wmr.read(Path(self.lf_rendered_dir))
         assert wmr.get_value("TABS.general.particle_types.electrons").get_data() is True
@@ -117,15 +117,15 @@ class TestWaNoModels(unittest.TestCase):
         print(wmr.get_changed_command_paths())
 
     def _construct_wano_nogui(self, wanofile):
-        with open(wanofile, "rt") as infile:
-            xml = etree.parse(infile)
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
+
         wano_dir_root = Path(os.path.dirname(os.path.realpath(wanofile)))
 
         # MODELROOTDIRECT
-        wmr = WaNoModelRoot(
-            wano_dir_root=wano_dir_root, model_only=True, explicit_xml=wanofile
+        wmr = WaNoModelRoot.from_spec(
+            xml_file_to_spec(Path(wanofile)),
+            wano_dir_root=wano_dir_root,
         )
-        wmr.parse_from_xml(xml)
         wmr = wano_without_view_constructor_helper(wmr)
         outdict = {}
         wmr.model_to_dict(outdict)

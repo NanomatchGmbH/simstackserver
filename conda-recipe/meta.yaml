@@ -1,6 +1,6 @@
 package:
   name: simstackserver
-  version: "1.6.2"
+  version: "2.0.0"
 about:
   home: https://github.com/NanomatchGmbH/simstackserver
   license: proprietary
@@ -31,7 +31,6 @@ requirements:
     - python-daemon >=2.3.0
     - PyYAML >=6.0
     - pyzmq  >=22.3.0
-    - sshtunnel >=0.4.0
     - jsonschema
     - nestdictmod >=1.1.0
     - pyparsing >=3.0.9

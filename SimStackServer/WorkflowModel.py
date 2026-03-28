@@ -1,3 +1,4 @@
+import base64
 import copy
 import datetime
 import json
@@ -393,7 +394,8 @@ class WorkflowElementList(object):
                 self._uid_to_seqnum[element.uid] = seqnum
 
     def _add_to_list(self, mytype, actual_object):
-        self._typelist.append(mytype)
+        # Accept either a string type name or the class itself
+        self._typelist.append(mytype if isinstance(mytype, str) else mytype.__name__)
         self._storage.append(actual_object)
 
     def __eq__(self, other):
@@ -584,7 +586,14 @@ class Resources(XMLYMLInstantiationBase):
             "m",
         ),
         ("base_URI", str, "", "Base URI for resource", "m"),
-        ("port", np.uint64, 22, "Port to access resource", "m"),
+        ("port", np.uint64, 22, "SSH port to access resource", "m"),
+        (
+            "rest_port",
+            np.uint64,
+            0,
+            "REST API port (0 = start server via SSH and discover)",
+            "m",
+        ),
         ("username", str, "", "Username on resource", "m"),
         (
             "basepath",
@@ -609,6 +618,14 @@ class Resources(XMLYMLInstantiationBase):
             "m",
         ),
         ("ssh_private_key", str, "UseSystemDefault", "File to ssh private key", "m"),
+        ("client_secret", str, "", "Secret for REST API authentication", "m"),
+        (
+            "use_ssh_tunnel",
+            bool,
+            True,
+            "Tunnel REST traffic through SSH connection",
+            "m",
+        ),
         (
             "sge_pe",
             str,
@@ -634,8 +651,11 @@ class Resources(XMLYMLInstantiationBase):
             "resource_name",
             "base_URI",
             "port",
+            "rest_port",
             "username",
             "ssh_private_key",
+            "client_secret",
+            "use_ssh_tunnel",
             "sw_dir_on_resource",
             "basepath",
             "queueing_system",
@@ -687,6 +707,10 @@ class Resources(XMLYMLInstantiationBase):
         return self._field_values["port"]
 
     @property
+    def rest_port(self):
+        return self._field_values["rest_port"]
+
+    @property
     def username(self):
         return self._field_values["username"]
 
@@ -711,12 +735,44 @@ class Resources(XMLYMLInstantiationBase):
         return self._field_values["ssh_private_key"]
 
     @property
+    def client_secret(self):
+        return self._field_values["client_secret"]
+
+    @property
+    def use_ssh_tunnel(self):
+        return self._field_values["use_ssh_tunnel"]
+
+    @property
     def extra_config(self):
         return self._field_values["extra_config"]
 
     @property
     def reuse_results(self):
         return self._field_values["reuse_results"]
+
+    def _apply_defaults_for_missing_fields(self, parsed_keys):
+        """Apply conditional defaults for fields that may be absent in older data.
+
+        :param parsed_keys (set): Field names that were actually present in the source data.
+        """
+        if not self._field_values.get("client_secret"):
+            self._field_values["client_secret"] = ""
+        # use_ssh_tunnel may be absent in older data; default depends on client_secret:
+        # - no client_secret → old-style setup, use SSH tunnel (True)
+        # - client_secret set → new-style setup, direct connection (False)
+        if "use_ssh_tunnel" not in parsed_keys:
+            self._field_values["use_ssh_tunnel"] = not bool(
+                self._field_values["client_secret"]
+            )
+
+    def from_xml(self, in_xml):
+        parsed_keys = {child.tag for child in in_xml} | set(in_xml.attrib.keys())
+        super().from_xml(in_xml)
+        self._apply_defaults_for_missing_fields(parsed_keys)
+
+    def from_dict(self, in_dict):
+        super().from_dict(in_dict)
+        self._apply_defaults_for_missing_fields(set(in_dict.keys()))
 
     def overwrite_unset_fields_from_default_resources(
         self, default_resources: "Resources"
@@ -814,6 +870,27 @@ class WorkflowExecModule(XMLYMLInstantiationBase):
         self._rendered_body_html = None
         self._failed = False
         self._my_external_cluster_manager = None
+        self._wano_bundle: dict = {}
+
+    def get_wano_bundle_dict(self) -> dict:
+        """Return the WaNo bundle as a plain dict (filename -> base64-encoded content)."""
+        return self._wano_bundle
+
+    def set_wano_bundle_dict(self, bundle: dict) -> None:
+        """Set the WaNo bundle from a plain dict (filename -> base64-encoded content)."""
+        self._wano_bundle = bundle
+
+    def to_dict(self, parent_dict):
+        super().to_dict(parent_dict)
+        parent_dict["wano_bundle"] = json.dumps(self._wano_bundle)
+
+    def from_dict(self, in_dict):
+        super().from_dict(in_dict)
+        raw = in_dict.get("wano_bundle", "{}")
+        if raw and raw != "None":
+            self._wano_bundle = json.loads(raw)
+        else:
+            self._wano_bundle = {}
 
     @staticmethod
     def _get_conda_basedir():
@@ -2625,6 +2702,25 @@ class Workflow(XMLYMLInstantiationBase):
     def _get_clustermanager_from_job(self, job: WorkflowExecModule):
         return self._remote_server_manager.server_from_resource(job.resources)
 
+    @staticmethod
+    def _unpack_wano_bundle(
+        wfem: WorkflowExecModule, wano_dir_root: pathlib.Path
+    ) -> None:
+        """Write bundle files from the WFEM to wano_dir_root so _prepare_job can read them.
+
+        If the bundle is empty, this is a no-op and the existing files on disk are used
+        (backward-compatible with old workflows that were submitted without a bundle).
+        """
+        bundle = wfem.get_wano_bundle_dict()
+        if not bundle:
+            return
+        wano_dir_root.mkdir(parents=True, exist_ok=True)
+        for filename, b64content in bundle.items():
+            content = base64.b64decode(b64content)
+            dest = wano_dir_root / filename
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(content)
+
     def delete_storage(self):
         """
         This routine deletes all files this workflow has generated.
@@ -2834,6 +2930,35 @@ class Workflow(XMLYMLInstantiationBase):
             queueing_system = self.default_wf_resources.queueing_system
         return queueing_system
 
+    def _resolve_stagein_source(self, source: str) -> str:
+        """Resolve a stage-in source string to an absolute filesystem path.
+
+        Handles three forms:
+        - ``${STORAGE}/...``  → absolute path rooted at this workflow's storage dir
+        - ``${NodeName/file}`` → output of a predecessor node, staged at
+          ``storage/workflow_data/NodeName/outputs/file``
+        - relative path       → resolved relative to self.storage (legacy clients
+          strip ``${STORAGE}/`` before uploading the XML)
+        """
+        # Strip surrounding whitespace that may creep in from XML text nodes
+        resolved = source.strip().replace("${STORAGE}", self.storage)
+        # Replace global variable references like ${InitialDeposit/restartfile.zip}
+        # Use simple string operations rather than regex to avoid encoding surprises.
+        if resolved.startswith("${") and resolved.endswith("}"):
+            inner = resolved[2:-1]
+            slash = inner.find("/")
+            if slash != -1:
+                node_name = inner[:slash]
+                filename = inner[slash + 1 :]
+                resolved = join(
+                    self.storage, "workflow_data", node_name, "outputs", filename
+                )
+        # Legacy clients (SSHConnector) strip "${STORAGE}/" before uploading, so
+        # the source arrives as a relative path. Prepend storage to make it absolute.
+        if not path.isabs(resolved):
+            resolved = join(self.storage, resolved)
+        return resolved
+
     def _prepare_job(self, wfem: WorkflowExecModule):
         queueing_system = wfem.resources.queueing_system
         secure_mode = SecureModeGlobal.get_secure_mode()
@@ -2858,15 +2983,15 @@ class Workflow(XMLYMLInstantiationBase):
         wfem.set_runtime_directory(jobdirectory)
         mkdir_p(jobdirectory)
 
-        explicit_wfxml = join(
-            self.storage, "workflow_data", wfem.path, "inputs", wfem.wano_xml
-        )
         wano_dir_root = Path(join(self.storage, "workflow_data", wfem.path, "inputs"))
+        self._unpack_wano_bundle(wfem, wano_dir_root)
         from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
         from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
 
-        wmr = WaNoModelRoot(
-            wano_dir_root=wano_dir_root, model_only=True, explicit_xml=explicit_wfxml
+        wmr = WaNoModelRoot.from_spec(
+            xml_file_to_spec(wano_dir_root / wfem.wano_xml),
+            wano_dir_root=wano_dir_root,
         )
         try:
             wmr.read(wano_dir_root)
@@ -2931,7 +3056,7 @@ class Workflow(XMLYMLInstantiationBase):
         for myinput in wfem.inputs:
             tofile = myinput[0]
             source = myinput[1]
-            absfile = self.storage + "/" + source
+            absfile = self._resolve_stagein_source(source)
             print(source)
             allfiles = []
             if "*" in absfile:
@@ -2954,7 +3079,7 @@ class Workflow(XMLYMLInstantiationBase):
         for myinput in wfem.inputs:
             tofile = jobdirectory + "/" + myinput[0]
             source = myinput[1]
-            myabsfile = self.storage + "/" + source
+            myabsfile = self._resolve_stagein_source(source)
 
             allfiles = []
             globmode = False  # In this case we need to rewrite something
@@ -3145,18 +3270,15 @@ class Workflow(XMLYMLInstantiationBase):
                 found_output_dict = True
                 sws = SecureWaNos.get_instance()
 
-                explicit_wfxml = join(
-                    self.storage, "workflow_data", wfem.path, "inputs", wfem.wano_xml
-                )
                 wano_dir_root = Path(
                     join(self.storage, "workflow_data", wfem.path, "inputs")
                 )
                 from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+                from SimStackServer.WaNo.xml_compat import xml_file_to_spec
 
-                wmr = WaNoModelRoot(
+                wmr = WaNoModelRoot.from_spec(
+                    xml_file_to_spec(wano_dir_root / wfem.wano_xml),
                     wano_dir_root=wano_dir_root,
-                    model_only=True,
-                    explicit_xml=explicit_wfxml,
                 )
 
                 secure_wano = sws.get_wano_by_name(wmr.name)

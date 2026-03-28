@@ -7,23 +7,13 @@ from pathlib import Path
 from queue import Queue, Empty
 
 
-from SimStackServer.MessageTypes import (
-    SSS_MESSAGETYPE as MessageTypes,
-    Message,
-    JobStatus,
-)
+from SimStackServer.MessageTypes import JobStatus
 from SimStackServer.HTTPServer.HTTPServer import CustomHTTPServerThread
-
-
-import zmq
+from SimStackServer.FastAPIServer import FastAPIThread
 
 from lxml import etree
 
 import logging
-import threading
-
-# from SimStackServer import ClusterManager
-from zmq.auth.thread import ThreadAuthenticator
 
 from SimStackServer.Config import Config
 from SimStackServer.RemoteServerManager import RemoteServerManager
@@ -392,9 +382,91 @@ class WorkflowManager:
             and self._processfarm_thread is None
         ):
             self._start_internal_queue()
-        self._inprogress_singlejobs[tostart.uid] = tostart
 
+        self._prepare_singlejob(tostart)
+
+        self._inprogress_singlejobs[tostart.uid] = tostart
         tostart.run_jobfile(None)
+
+    def _prepare_singlejob(self, wfem: WorkflowExecModule) -> None:
+        """Set up the execution directory for a bundle-based single job.
+
+        Creates a job directory under the server basepath, unpacks the WaNo
+        bundle, renders the WaNo, writes ``rendered_wano.yml``, and copies
+        static input files so the exec command can run correctly.
+        """
+        import yaml
+        from pathlib import Path as _Path
+
+        from SimStackServer.Config import Config
+        from SimStackServer.WaNo.WaNoModels import WaNoModelRoot
+        from SimStackServer.WaNo.WaNoFactory import wano_without_view_constructor_helper
+        from SimStackServer.WaNo.xml_compat import xml_file_to_spec
+        from SimStackServer.WorkflowModel import Workflow
+
+        basepath = Config.get_resources().basepath
+        if not os.path.isabs(basepath):
+            basepath = str(_Path.home() / basepath)
+
+        jobdirectory = os.path.join(basepath, "singlejobs", wfem.uid)
+        os.makedirs(jobdirectory, exist_ok=True)
+
+        # Unpack WaNo bundle to inputs sub-directory
+        wano_dir_root = _Path(jobdirectory) / "inputs"
+        Workflow._unpack_wano_bundle(wfem, wano_dir_root)
+
+        if not wfem.wano_xml:
+            wfem.set_runtime_directory(jobdirectory)
+            return
+
+        # Load the WaNo model and render it
+        xml_path = wano_dir_root / wfem.wano_xml
+        if not xml_path.exists():
+            wfem.set_runtime_directory(jobdirectory)
+            return
+
+        wmr = WaNoModelRoot.from_spec(
+            xml_file_to_spec(xml_path), wano_dir_root=wano_dir_root
+        )
+        try:
+            wmr.read(wano_dir_root)
+        except FileNotFoundError:
+            pass
+        wmr = wano_without_view_constructor_helper(wmr)
+        wmr.datachanged_force()
+        wmr.datachanged_force()
+
+        rendered_wano = wmr.wano_walker()
+        rendered_wano = wmr.wano_walker_render_pass(
+            rendered_wano,
+            submitdir=None,
+            flat_variable_list=None,
+            input_var_db={},
+            output_var_db={},
+            runtime_variables=wfem.get_runtime_variables(),
+        )
+
+        with open(os.path.join(jobdirectory, "rendered_wano.yml"), "wt") as fh:
+            yaml.safe_dump(rendered_wano, fh)
+
+        # Render Jinja2 templates in the exec command (e.g. {{ wano["name"] }})
+        from jinja2 import Template
+
+        rendered_cmd = Template(wfem.exec_command, newline_sequence="\n").render(
+            wano=rendered_wano
+        )
+        rendered_cmd = rendered_cmd.strip(" \t\n\r") + "\n"
+        wfem.set_exec_command(rendered_cmd)
+
+        # Copy static WaNo input files (from <WaNoInputFiles>) into the job dir
+        for remote_file, local_file in wmr.input_files:
+            src = wano_dir_root / local_file
+            if src.exists():
+                import shutil
+
+                shutil.copy(str(src), os.path.join(jobdirectory, remote_file))
+
+        wfem.set_runtime_directory(jobdirectory)
 
     def get_singlejob_status(self, wfem_uid: str):
         resultdict = {"status": "inprogress"}
@@ -433,24 +505,25 @@ class SimStackServer(object):
     def __init__(self, my_executable):
         self._clear_server_state()
         self._setup_root_logger()
-        self._config: Config = None
+        self._config = Config()
+        self._config.load_server_config()
         self._logger = logging.getLogger("SimStackServer")
         if not self._register(my_executable):
             self._logger.debug("Already running, should exit here.")
             raise AlreadyRunningException("Already running, please discard silently.")
         self._workflow_manager = WorkflowManager()
         self._workflow_manager.restore()
-        self._zmq_context = None
+
         self._http_server = None
 
         self._http_user = None
         self._http_pass = None
         self._http_port = None
 
-        self._auth = None
+        self._fastapi_thread = None
+        self._fastapi_port = None
+
         self._communication_timeout = 4.0
-        self._polling_time = 500  # We check every half second for new message
-        self._commthread = None
         self._stop_thread = False
         self._stop_main = False
         self._signal_termination = False
@@ -505,222 +578,30 @@ class SimStackServer(object):
         self._http_server.start()
         return user, mypass, myport
 
-    def _message_handler(self, message_type, message, sock):
-        # Every message here MUST absolutely have a send after, otherwise the client will hang.
-        # All code, which is not a deadfire send has to be in try except
-        if message_type == MessageTypes.CONNECT:
-            # Simply acknowledge connection, no args
-            sock.send(Message.connect_message())
-
-        elif message_type == MessageTypes.NOOP:
-            sock.send(Message.ack_message())
-            self._logger.info("Received noop message.")
-
-        elif message_type == MessageTypes.SHUTDOWN:
-            sock.send(Message.ack_message())
-            self._stop_main = True
-            self._stop_thread = True
-
-        elif message_type == MessageTypes.CLEARSERVERSTATE:
-            sock.send(Message.ack_message())
-            self._logger.info("Hard clearing server state.")
-            self._clear_server_state()
-
-        elif message_type == MessageTypes.ABORTWF:
-            # Arg is associated workflow
-            sock.send(Message.ack_message())
-            try:
-                toabort = message["workflow_submit_name"]
-                self._logger.debug("Receive workflow abort message %s" % toabort)
-                self._workflow_manager.abort_workflow(toabort)
-            except Exception:
-                self._logger.exception("Error aborting workflow %s." % (toabort))
-
-        elif message_type == MessageTypes.LISTWFJOBS:
-            # Arg is associated workflow
-            tolistwf = message["workflow_submit_name"]
-            try:
-                list_of_jobs = self._workflow_manager.list_jobs_of_workflow(tolistwf)
-            except Exception:
-                self._logger.exception("Error listing jobs of workflow %s" % tolistwf)
-                list_of_jobs = []
-            sock.send(Message.list_jobs_of_wf_message_reply(tolistwf, list_of_jobs))
-
-        elif message_type == MessageTypes.DELWF:
-            sock.send(Message.ack_message())
-            try:
-                toabort = message["workflow_submit_name"]
-                self._logger.debug("Receive workflow delete message %s" % toabort)
-                self._workflow_manager.abort_workflow(toabort)
-                self._workflow_manager.delete_workflow(toabort)
-            except Exception:
-                self._logger.exception("Error deleting workflow %s." % toabort)
-
-        elif message_type == MessageTypes.DELJOB:
-            sock.send(Message.ack_message())
-            try:
-                workflow_submit_name = message["workflow_submit_name"]
-                job_submit_name = message["job_submit_name"]
-                self._logger.error(
-                    "DELWF not implemented, however I would like to delete %s from %s"
-                    % (job_submit_name, workflow_submit_name)
-                )
-            except Exception:
-                self._logger.exception("Error during job deletion.")
-
-        elif message_type == MessageTypes.LISTWFS:
-            # No Args, returns stringlist of Workflow submit names
-            try:
-                self._logger.debug("Received LISTWFS message")
-                workflows = (
-                    self._workflow_manager.get_inprogress_workflows()
-                    + self._workflow_manager.get_finished_workflows()
-                )
-            except Exception:
-                self._logger.exception("Error listing workflows.")
-                workflows = []
-
-            sock.send(Message.list_wfs_reply_message(workflows))
-
-        elif message_type == MessageTypes.GETHTTPSERVER:
-            # In case http server is not started, we start it here.
-            assert "basefolder" in message, "Basefolder not found in message."
-            basefolder = message["basefolder"]
-            if not self._http_server or not self._http_server.is_alive():
-                user, mypass, port = self._start_http_server(directory=basefolder)
-                self._http_user = user
-                self._http_pass = mypass
-                self._http_port = port
-            else:
-                user = self._http_user
-                mypass = self._http_pass
-                port = self._http_port
-
-            sock.send(Message.get_http_server_ack_message(port, user, mypass))
-
-        elif message_type == MessageTypes.SUBMITSINGLEJOB:
-            sock.send(Message.ack_message())
-            try:
-                wfem_dict = message["wfem"]
-                wfem = WorkflowExecModule()
-                wfem.from_dict(wfem_dict)
-                self._logger.info("Received SingleJob message, submitting %s" % wfem)
-                self._submitted_singlejob_queue.put(wfem)
-                self._external_job_uid_to_jobid[wfem.uid] = -1
-            except Exception:
-                self._logger.exception("Error submitting single job.")
-
-        elif message_type == MessageTypes.ABORTSINGLEJOB:
-            try:
-                wfem_uid = message["WFEM_UID"]
-                self._logger.info(f"Received abort message for singlejob {wfem_uid}")
-                tocheck = []
-                while not self._submitted_singlejob_queue.empty():
-                    tocheck.append(self._submitted_singlejob_queue.get())
-
-                unsubmitted = {wfem.uid for wfem in tocheck}
-                unsubmitted_str = " ".join(uid for uid in unsubmitted)
-                while tocheck:
-                    wfem = tocheck.pop()
-                    if wfem.uid == wfem_uid:
-                        self._logger.info(
-                            f"Aborted single job {wfem_uid}, which was not yet known to workflow manager."
-                        )
-                        self._workflow_manager.add_aborted_singlejob(wfem)
-                    else:
-                        self._submitted_singlejob_queue.put(tocheck.pop())
-                self._logger.info(f"Unsubmitted jobs: {unsubmitted_str}")
-                self._workflow_manager.abort_singlejob(wfem_uid)
-            except Exception:
-                self._logger.exception(
-                    "Exception during single job abort message handler."
-                )
-            sock.send(Message.ack_message())
-
-        elif message_type == MessageTypes.GETSINGLEJOBSTATUS:
-            try:
-                wfem_uid = message["WFEM_UID"]
-                mystatus = self._workflow_manager.get_singlejob_status(wfem_uid)
-                self._logger.info(
-                    f"Status of {wfem_uid} requested. Status was: {mystatus}"
-                )
-                reply = Message.getsinglejobstatus_message_reply(
-                    reply=mystatus["status"]
-                )
-                sock.send(reply)
-            except Exception:
-                # Empty the socket again.
-                self._logger.exception("EXCEPTION RECEIVED")
-                sock.send(Message.ack_message())
-
-        elif message_type == MessageTypes.SUBMITWF:
-            sock.send(Message.ack_message())
-            try:
-                workflow_filename = message["filename"]
-                self._logger.debug(
-                    "Received SUBMITWF message, submitting %s" % workflow_filename
-                )
-                self._submitted_workflow_queue.put(workflow_filename)
-            except Exception:
-                self._logger.exception("Error submitting workflow.")
-
-    def _zmq_worker_loop(self, port):
-        context = self._zmq_context
-        sock = context.socket(zmq.REP)
-        sock.plain_server = True
-        sock.setsockopt(zmq.RCVTIMEO, 1000)
-        sock.setsockopt(zmq.LINGER, 0)
-        bindaddr = "tcp://127.0.0.1:%s" % port
-        self._logger.info("Message worker thread binding to %s." % bindaddr)
-        sock.bind(bindaddr)
-        poller = zmq.Poller()
-        poller.register(sock, zmq.POLLIN)
-        counter = 0
-        while True:
-            counter += 1
-            if self._stop_thread:
-                self._logger.info("Terminating communication thread.")
-                poller.unregister(sock)
-                sock.close()
-                self._logger.info("Closed socket, unregistered poller.")
-                return
-            socks = dict(poller.poll(self._polling_time))
-            if sock in socks:
-                data = sock.recv()
-                self._logger.debug("Received a message.")
-                messagetype, message = Message.unpack(data)
-                self._logger.debug(
-                    "MessageType was: %s." % MessageTypes(messagetype).name
-                )
-                self._message_handler(messagetype, message, sock)
-            else:
-                pass
-            if counter % 50 == 0:
-                self._logger.debug("Socket Worker Heartbeat log")
+    def _start_fastapi_server(
+        self,
+        host="127.0.0.1",
+        port=None,
+        username=None,
+        password=None,
+    ):
+        """Start FastAPI server in background thread"""
+        if self._fastapi_thread is None:
+            if port is None:
+                port = get_open_port()
+            self._fastapi_port = port
+            self._fastapi_thread = FastAPIThread(
+                self, host, port, username=username, password=password
+            )
+            self._fastapi_thread.start()
+            self._logger.info(f"FastAPI server started on {host}:{port}")
+        return self._fastapi_port
 
     def _register(self, my_executable):
         self._config = Config()
         if self._config.is_running():
             return False
         return True
-
-    def setup_zmq_port(self, port, password):
-        if self._zmq_context is None:
-            self._zmq_context = zmq.Context.instance()
-
-        if self._auth is None:
-            self._auth = ThreadAuthenticator(self._zmq_context)
-            auth = self._auth
-            auth.start()
-            auth.allow("127.0.0.1")
-            auth.configure_plain(domain="*", passwords={"simstack_client": password})
-            self._logger.debug("Configured Authentication with pass %s" % password)
-
-        if self._commthread is None:
-            self._commthread = threading.Thread(
-                target=self._zmq_worker_loop, name="ZMQ Commthread", args=(port,)
-            )
-            self._commthread.start()
 
     def _signal_handler(self, signum, frame):
         self._logger.debug("Received signal %d. Terminating server." % signum)
@@ -758,19 +639,14 @@ class SimStackServer(object):
                     self._logger.debug(
                         "Stopping HTTP server thread, try %d of 10" % (count + 1)
                     )
-        time.sleep(2.0 * self._polling_time / 1000.0)
-        if self._auth is not None:
-            self._auth.stop()
-        if self._zmq_context is not None:
-            self._logger.debug("Terminating ZMQ context.")
-            # The correct call here would be:
-            # self._zmq_context.term()
-            # However: term can hang and leave the Server dangling. Therefore: destory
-            # I will gladly take an error message over deadlock.
-            # If term ever gets a timeout argument, please switch over.
-            # Note, maybe with the current setup, where we set linger on all ports this would be a non-issue.
-            self._zmq_context.destroy()
-            self._logger.debug("ZMQ context terminated.")
+
+        # Shutdown FastAPI server
+        if self._fastapi_thread is not None:
+            self._logger.info("Shutting down FastAPI server")
+            self._fastapi_thread.shutdown()
+            self._fastapi_thread.join(timeout=5.0)
+            if self._fastapi_thread.is_alive():
+                self._logger.warning("FastAPI thread did not terminate in time")
 
         # Now that nothing is running anymore, we save WorkflowManagers runtime information and all workflows (inside WFM)
         self._workflow_manager.backup_and_save()
@@ -789,8 +665,6 @@ class SimStackServer(object):
         if self._config is None:
             # Something seriously went wrong here.
             raise SystemExit("Could not setup config. Exiting.")
-        if remove_crontab:
-            self._config.unregister_crontab()
 
     def main_loop(self, workflow_file=None):
         work_done = False

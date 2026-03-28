@@ -1,0 +1,25 @@
+<WaNoTemplate>
+ <WaNoRoot name="EmployeeRecordWithCV">
+  <WaNoString name="name">Rocko</WaNoString>
+  <WaNoDropDown name="Job">
+    <Entry id="0" chosen="True">Developer</Entry>
+    <Entry id="1">Guy who brings the coffee</Entry>
+    <Entry id="2">Karen</Entry>
+  </WaNoDropDown>
+  <WaNoMultipleOf name="Kids">
+    <Element id="0">
+       <WaNoString name="name">Bronco</WaNoString>
+    </Element>
+  </WaNoMultipleOf>
+  <WaNoFile logical_filename="cv.txt" name="CV">Choose CV file</WaNoFile>
+ </WaNoRoot>
+ <WaNoExecCommand>echo "hello"; cp rendered_wano.yml output_dict.yml; echo "density=5.5" &gt;&gt; output_config.ini; echo "=== CV contents ===" &gt;&gt; output_dict.yml; cat cv.txt &gt;&gt; output_dict.yml</WaNoExecCommand>
+ <WaNoInputFiles>
+   <WaNoInputFile logical_filename="report_template.body">report_template.body</WaNoInputFile>
+   <WaNoInputFile logical_filename="output_config.ini">sample_config.ini</WaNoInputFile>
+   <WaNoInputFile logical_filename="test.png">test.png</WaNoInputFile>
+ </WaNoInputFiles>
+ <WaNoOutputFiles>
+   <WaNoOutputFile>output_dict.yml</WaNoOutputFile>
+ </WaNoOutputFiles>
+</WaNoTemplate>
