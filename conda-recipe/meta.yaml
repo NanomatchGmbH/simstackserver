@@ -12,14 +12,14 @@ build:
   noarch: python
 requirements:
   build:
-    - python >=3.10
+    - python >=3.11
     - python-build
     - setuptools
     - setuptools-scm
   run:
-    - python >=3.10
+    - python >=3.11
     - appdirs >=1.4.4
-    - Jinja2 >=3.0.3
+    - jinja2 >=3.0.3
     - lockfile >=0.12.2
     - lxml >=4.8.0
     - msgpack-python >=1.0.3
@@ -29,18 +29,19 @@ requirements:
     - genson >=1.2.2
     - psutil >=5.9.0
     - python-daemon >=2.3.0
-    - PyYAML >=6.0
-    - pyzmq  >=22.3.0
+    - pyyaml >=6.0
     - jsonschema
     - nestdictmod >=1.1.0
     - pyparsing >=3.0.9
     - xmltodict >=0.12.0
     - clusterjob >=2.1.0,<2.2.0
-    - threadfarm ==2.0.0
-    - SQLAlchemy ==2.0.*
+    - threadfarm >=2.0.0
+    - sqlalchemy >2
     - micromamba >=1.5.6
-    - python-build
-    - setuptools
+    - fastapi >=0.115.0
+    - uvicorn >=0.32.0
+    - httpx >=0.27.0
+    - fastapilocalhttps >=0.1.1
 test:
   source_files:
     - tests
