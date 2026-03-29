@@ -90,8 +90,7 @@ class WaNoModelDictLike(AbstractWanoModel):
         self.wano_dict = OrderedDictIterHelper()
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-        for child in self.xml:
+        for child in xml:
             if not is_regular_element(child):
                 continue
             name = child.attrib["name"]
@@ -192,10 +191,6 @@ class WaNoModelDictLike(AbstractWanoModel):
     # def __repr__(self):
     #    return repr(self.wano_dict)
 
-    def update_xml(self):
-        for wano in self.wano_dict.values():
-            wano.update_xml()
-
     def decommission(self):
         for wano in self.wano_dict.values():
             wano.decommission()
@@ -241,8 +236,7 @@ class WaNoChoiceModel(AbstractWanoModel):
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
-        self.xml = xml
-        for child in self.xml.iter("Entry"):
+        for child in xml.iter("Entry"):
             if not is_regular_element(child):
                 continue
             myid = int(child.attrib["id"])
@@ -279,17 +273,6 @@ class WaNoChoiceModel(AbstractWanoModel):
     def set_chosen(self, choice):
         self.chosen = int(choice)
         self.set_data(self.choices[self.chosen])
-
-    def update_xml(self):
-        for child in self.xml.iter("Entry"):
-            if not is_regular_element(child):
-                continue
-            myid = int(child.attrib["id"])
-            if "chosen" in child.attrib:
-                del child.attrib["chosen"]
-
-            if self.chosen == myid:
-                child.attrib["chosen"] = "True"
 
     def get_secure_schema(self) -> Optional[str]:
         schema = {
@@ -338,11 +321,10 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
-        self.xml = xml
-        self._collection_path = self.xml.attrib["collection_path"]
-        self._subpath = self.xml.attrib["subpath"]
+        self._collection_path = xml.attrib["collection_path"]
+        self._subpath = xml.attrib["subpath"]
         self.choices = ["uninitialized"]
-        self.chosen = int(self.xml.attrib["chosen"])
+        self.chosen = int(xml.attrib["chosen"])
         self._connected = True
         self._updating = False
 
@@ -420,9 +402,6 @@ class WaNoDynamicChoiceModel(WaNoChoiceModel):
         if len(self.choices) > self.chosen:
             self.set_data(self.choices[self.chosen])
 
-    def update_xml(self):
-        self.xml.attrib["chosen"] = str(self.chosen)
-
     def decommission(self):
         if self._registered:
             self.get_root().unregister_callback(
@@ -486,25 +465,24 @@ class WaNoMatrixModel(AbstractWanoModel):
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
-        self.xml = xml
 
-        self.rows = int(self.xml.attrib["rows"])
-        self.cols = int(self.xml.attrib["cols"])
+        self.rows = int(xml.attrib["rows"])
+        self.cols = int(xml.attrib["cols"])
         self.col_header = None
-        if "col_header" in self.xml.attrib:
-            self.col_header = self.xml.attrib["col_header"].split(";")
+        if "col_header" in xml.attrib:
+            self.col_header = xml.attrib["col_header"].split(";")
         self.row_header = None
-        if "row_header" in self.xml.attrib:
-            self.row_header = self.xml.attrib["row_header"].split(";")
+        if "row_header" in xml.attrib:
+            self.row_header = xml.attrib["row_header"].split(";")
 
-        if self.xml.text is None or self.xml.text.strip() == "":
+        if xml.text is None or xml.text.strip() == "":
             self.storage = [[] for i in range(self.rows)]
             for i in range(self.rows):
                 self.storage[i] = []
                 for j in range(self.cols):
                     self.storage[i].append("")
         else:
-            self.storage = self._fromstring(self.xml.text)
+            self.storage = self._fromstring(xml.text)
         self._default = copy.deepcopy(self.storage)
 
     def _tostring(self, ar):
@@ -564,9 +542,6 @@ class WaNoMatrixModel(AbstractWanoModel):
 
     def get_data(self):
         return self._tostring(self.storage)
-
-    def update_xml(self):
-        self.xml.text = self._tostring(self.storage)
 
     def get_secure_schema(self) -> Optional[str]:
         schema = {self.name: {"type": "string", "pattern": r"\[\s*\[.+\]\s*\]"}}
@@ -632,13 +607,11 @@ class WaNoModelListLike(AbstractWanoModel):
         self.style = ""
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-
-        if "style" in self.xml.attrib:
-            self.style = self.xml.attrib["style"]
+        if "style" in xml.attrib:
+            self.style = xml.attrib["style"]
         else:
             self.style = ""
-        for current_id, child in enumerate(self.xml):
+        for current_id, child in enumerate(xml):
             if not is_regular_element(child):
                 continue
             ModelClass = SimStackServer.WaNo.WaNoFactory.WaNoFactory.get_model_class(
@@ -686,10 +659,6 @@ class WaNoModelListLike(AbstractWanoModel):
         for model in self.wano_list:
             model.set_parent_visible(is_visible)
 
-    def update_xml(self):
-        for wano in self.wano_list:
-            wano.update_xml()
-
     def decommission(self):
         for wano in self.wano_list:
             wano.decommission()
@@ -706,7 +675,6 @@ class WaNoNoneModel(AbstractWanoModel):
         super(WaNoNoneModel, self).__init__(*args, **kwargs)
 
     def parse_from_xml(self, xml):
-        self.xml = xml
         super().parse_from_xml(xml)
 
     def get_data(self):
@@ -721,9 +689,6 @@ class WaNoNoneModel(AbstractWanoModel):
 
     def get_type_str(self):
         return "String"
-
-    def update_xml(self):
-        pass
 
     def changed_from_default(self) -> bool:
         return False
@@ -770,15 +735,14 @@ class WaNoSwitchModel(WaNoModelListLike):
 
     def parse_from_xml(self, xml):
         super().parse_from_xml(xml)
-        self.xml = xml
-        for child in self.xml:
+        for child in xml:
             if not is_regular_element(child):
                 continue
             switch_name = child.attrib["switch_name"]
             name = child.attrib["name"]
             self._names_list.append(name)
             self._switch_name_list.append(switch_name)
-        self._parse_switch_conditions(self.xml)
+        self._parse_switch_conditions(xml)
         self._visible_thing = -1
         self._name = self._names_list[self._visible_thing]
 
@@ -937,28 +901,26 @@ class MultipleOfModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(MultipleOfModel, self).__init__(*args, **kwargs)
 
-        self.first_xml_child = None
         self.list_of_dicts = []
         self._default_len = -1
         # Spec-based template (JSON-compatible).  Populated by parse_from_xml
         # AND by _apply_spec so that add_item() can work on both paths.
         self._template_spec: dict = {"children": []}
-        self.xml = None
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-        for child in self.xml:
+        first_xml_child = None
+        for child in xml:
             if not is_regular_element(child):
                 continue
-            if self.first_xml_child is None:
-                self.first_xml_child = child
+            if first_xml_child is None:
+                first_xml_child = child
             wano_temp_dict = self.parse_one_child(child)
             self.list_of_dicts.append(wano_temp_dict)
         super().parse_from_xml(xml)
         self._default_len = len(self.list_of_dicts)
         # Build _template_spec from the first XML child so that the spec-based
         # add_item() path works after XML-based construction too.
-        if self.first_xml_child is not None:
+        if first_xml_child is not None:
             from SimStackServer.WaNo.xml_compat import (
                 element_to_spec,
                 _is_regular_element as _ire,
@@ -966,12 +928,9 @@ class MultipleOfModel(AbstractWanoModel):
 
             self._template_spec = {
                 "children": [
-                    element_to_spec(c) for c in self.first_xml_child if _ire(c)
+                    element_to_spec(c) for c in first_xml_child if _ire(c)
                 ]
             }
-
-    def numitems_per_add(self):
-        return len(self.first_xml_child)
 
     def set_parent(self, parent):
         super().set_parent(parent)
@@ -1089,14 +1048,6 @@ class MultipleOfModel(AbstractWanoModel):
             for wano in self.list_of_dicts[-1].values():
                 wano.decommission()
             self.list_of_dicts.pop()
-            # Only manipulate the XML tree when we were constructed from XML.
-            if self.xml is not None:
-                for child in reversed(self.xml):
-                    if not is_regular_element(child):
-                        continue
-                    self.xml.remove(child)
-                    break
-
             self._root.block_signals(before)
             self._root.datachanged_force()
 
@@ -1105,34 +1056,27 @@ class MultipleOfModel(AbstractWanoModel):
 
     def add_item(self, build_view=True):
         before = self._root.block_signals(True)
-        if self.xml is not None and self.first_xml_child is not None:
-            # Legacy XML path: clone the first XML child and parse it.
-            my_xml = copy.copy(self.first_xml_child)
-            my_xml.attrib["id"] = str(len(self.list_of_dicts))
-            self.xml.append(my_xml)
-            model_dict = self.parse_one_child(my_xml, build_view=build_view)
-        else:
-            # Spec-based path: instantiate fresh models from the template spec.
-            from SimStackServer.WaNo.WaNoSpec import spec_to_model
+        # Spec-based path: instantiate fresh models from the template spec.
+        from SimStackServer.WaNo.WaNoSpec import spec_to_model
 
-            model_dict = OrderedDictIterHelper()
-            current_id = len(self.list_of_dicts)
-            for child_spec in self._template_spec.get("children", []):
-                model = spec_to_model(child_spec)
-                if build_view and self.view is not None:
-                    start_path = [*self.path.split(".")] + [str(current_id), model.name]
-                    model.set_root(self.get_root())
-                    (
-                        model,
-                        rootview,
-                    ) = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(
-                        model,
-                        start_path=start_path,
-                        parent_view=self.view,
-                    )
-                    rootview.set_parent(self.view)
-                    model.set_parent(self)
-                model_dict[child_spec["name"]] = model
+        model_dict = OrderedDictIterHelper()
+        current_id = len(self.list_of_dicts)
+        for child_spec in self._template_spec.get("children", []):
+            model = spec_to_model(child_spec)
+            if build_view and self.view is not None:
+                start_path = [*self.path.split(".")] + [str(current_id), model.name]
+                model.set_root(self.get_root())
+                (
+                    model,
+                    rootview,
+                ) = SimStackServer.WaNo.WaNoFactory.wano_constructor_helper(
+                    model,
+                    start_path=start_path,
+                    parent_view=self.view,
+                )
+                rootview.set_parent(self.view)
+                model.set_parent(self)
+            model_dict[child_spec["name"]] = model
         self.list_of_dicts.append(model_dict)
         self._root.block_signals(before)
         self.get_root().datachanged_force()
@@ -1166,11 +1110,6 @@ class MultipleOfModel(AbstractWanoModel):
         for wano_dict in self.list_of_dicts:
             for wano in wano_dict.values():
                 wano.set_parent_visible(is_visible)
-
-    def update_xml(self):
-        for wano_dict in self.list_of_dicts:
-            for wano in wano_dict.values():
-                wano.update_xml()
 
     def decommission(self):
         for wano_dict in self.list_of_dicts:
@@ -2440,12 +2379,10 @@ class WaNoItemFloatModel(AbstractWanoModel):
         super(WaNoItemFloatModel, self).__init__(*args, **kwargs)
         self._default = -100.0
         self._myfloat = self._default
-        self.xml = None
 
     def parse_from_xml(self, xml):
         self._default = float(xml.text)
         self._myfloat = self._default
-        self.xml = xml
         super().parse_from_xml(xml)
 
     def get_data(self):
@@ -2482,12 +2419,6 @@ class WaNoItemFloatModel(AbstractWanoModel):
     def get_type_str(self):
         return "Float"
 
-    def update_xml(self):
-        super().update_xml()
-        if self.xml is not None:
-            print(self._myfloat)
-            self.xml.text = str(self._myfloat)
-
     def model_to_dict(self, outdict):
         outdict["data"] = str(self._myfloat)
         super().model_to_dict(outdict)
@@ -2522,12 +2453,10 @@ class WaNoItemIntModel(AbstractWanoModel):
         super(WaNoItemIntModel, self).__init__(*args, **kwargs)
         self.myint = -10000000
         self._default = self.myint
-        self.xml = None
 
     def parse_from_xml(self, xml):
         self.myint = float(xml.text)
         self._default = self.myint
-        self.xml = xml
         super().parse_from_xml(xml)
 
     def get_data(self):
@@ -2562,11 +2491,6 @@ class WaNoItemIntModel(AbstractWanoModel):
     def get_type_str(self):
         return "Int"
 
-    def update_xml(self):
-        super().update_xml()
-        if self.xml is not None:
-            self.xml.text = str(self.myint)
-
     def __repr__(self):
         return repr(self.myint)
 
@@ -2595,13 +2519,11 @@ class WaNoItemIntModel(AbstractWanoModel):
 class WaNoItemBoolModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoItemBoolModel, self).__init__(*args, **kwargs)
-        self.xml = None
         self.mybool = False
         self._default = False
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-        bool_as_text = self.xml.text
+        bool_as_text = xml.text
         if bool_as_text.lower() == "true":
             self.mybool = True
         else:
@@ -2635,13 +2557,6 @@ class WaNoItemBoolModel(AbstractWanoModel):
     def changed_from_default(self) -> bool:
         return self.mybool != self._default
 
-    def update_xml(self):
-        if self.xml is not None:
-            if self.mybool:
-                self.xml.text = "True"
-            else:
-                self.xml.text = "False"
-
     # ------------------------------------------------------------------
     # Spec API
     # ------------------------------------------------------------------
@@ -2667,7 +2582,6 @@ class WaNoItemBoolModel(AbstractWanoModel):
 class WaNoItemFileModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoItemFileModel, self).__init__(*args, **kwargs)
-        self.xml = None
         self.is_local_file = True
         self.mystring = "FileData"
         self._default = self.mystring
@@ -2676,17 +2590,14 @@ class WaNoItemFileModel(AbstractWanoModel):
         self._cached_logical_name = "unset"
 
     def parse_from_xml(self, xml):
-        self.xml = xml
         self.is_local_file = True
-        self.mystring = self.xml.text
-        self.logical_name = self.xml.attrib["logical_filename"]
-        if "local" in self.xml.attrib:
-            if self.xml.attrib["local"].lower() == "true":
+        self.mystring = xml.text
+        self.logical_name = xml.attrib["logical_filename"]
+        if "local" in xml.attrib:
+            if xml.attrib["local"].lower() == "true":
                 self.is_local_file = True
             else:
                 self.is_local_file = False
-        else:
-            self.xml.attrib["local"] = "True"
         self._local_file_default = self.is_local_file
         self._default = self.mystring
         super().parse_from_xml(xml)
@@ -2729,10 +2640,6 @@ class WaNoItemFileModel(AbstractWanoModel):
 
     def set_local(self, is_local):
         self.is_local_file = is_local
-        if self.is_local_file:
-            self.xml.attrib["local"] = "True"
-        else:
-            self.xml.attrib["local"] = "False"
 
     def get_local(self):
         return self.is_local_file
@@ -2742,9 +2649,6 @@ class WaNoItemFileModel(AbstractWanoModel):
             return "File"
         else:
             return "FString"
-
-    def update_xml(self):
-        self.xml.text = self.mystring
 
     def __repr__(self):
         return repr(self.mystring)
@@ -2838,13 +2742,11 @@ class WaNoItemFileModel(AbstractWanoModel):
 class WaNoItemScriptFileModel(WaNoItemFileModel):
     def __init__(self, *args, **kwargs):
         super(WaNoItemScriptFileModel, self).__init__(*args, **kwargs)
-        self.xml = None
         self.mystring = ""
         self.logical_name = self.mystring
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-        self.mystring = self.xml.text
+        self.mystring = xml.text
         self.logical_name = self.mystring
         super().parse_from_xml(xml)
 
@@ -2891,16 +2793,14 @@ class WaNoItemStringModel(AbstractWanoModel):
     def __init__(self, *args, **kwargs):
         super(WaNoItemStringModel, self).__init__(*args, **kwargs)
         self._output_filestring = ""
-        self.xml = None
         self.mystring = "unset"
         self._default = self.mystring
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-        self.mystring = self.xml.text
+        self.mystring = xml.text
         self._default = self.mystring
-        if "dynamic_output" in self.xml.attrib:
-            self._output_filestring = self.xml.attrib["dynamic_output"]
+        if "dynamic_output" in xml.attrib:
+            self._output_filestring = xml.attrib["dynamic_output"]
             self._root.register_outputfile_callback(self.get_extra_output_files)
         super().parse_from_xml(xml)
 
@@ -2937,11 +2837,6 @@ class WaNoItemStringModel(AbstractWanoModel):
 
     def get_type_str(self):
         return "String"
-
-    def update_xml(self):
-        super().update_xml()
-        if self.xml is not None:
-            self.xml.text = self.mystring
 
     def __repr__(self):
         return repr(self.mystring)
@@ -2982,7 +2877,6 @@ class WaNoItemStringModel(AbstractWanoModel):
 class WaNoThreeRandomLetters(WaNoItemStringModel):
     def __init__(self, *args, **kwargs):
         super(WaNoThreeRandomLetters, self).__init__(*args, **kwargs)
-        self.xml = None
         self.mystring = None
 
         if self.mystring == "" or self.mystring is None:
@@ -2990,8 +2884,7 @@ class WaNoThreeRandomLetters(WaNoItemStringModel):
             self.set_data(self.mystring)
 
     def parse_from_xml(self, xml):
-        self.xml = xml
-        self.mystring = self.xml.text
+        self.mystring = xml.text
         super().parse_from_xml(xml)
 
         if self.mystring == "" or self.mystring is None:

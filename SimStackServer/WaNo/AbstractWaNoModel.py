@@ -360,20 +360,6 @@ class AbstractWanoModel:
     def render(self, rendered_wano, path, submitdir):
         return self.get_rendered_wano_data()
 
-    @abc.abstractmethod
-    def update_xml(self):
-        if not hasattr(self, "xml"):
-            return
-
-        if self.xml is None:
-            return
-
-        if self._do_import:
-            self.xml.attrib["import_from"] = self._import_from
-        else:
-            if "import_from" in self.xml.attrib:
-                del self.xml.attrib["import_from"]
-
     def decommission(self):
         if self._view is not None:
             self._view.decommission()
