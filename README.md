@@ -164,12 +164,18 @@ config file, so they take effect on every container start.
 
 ### Volumes
 
-| Mount | Purpose |
-|---|---|
-| `./simstack_workspace` | Workflow data; must match `SIMSTACK_BASEPATH` |
-| `./certs` | TLS certificates (`~/.simstack/certs/`); persisted so clients don't need to re-trust after container restarts |
+The entire container home directory is mounted to `docker/home/`:
 
-Both directories are created automatically on first run.
+```
+docker/home/
+  simstack_workspace/    ← workflow data (matches SIMSTACK_BASEPATH)
+  .simstack/certs/       ← TLS certificates (auto-generated, persisted across restarts)
+  .config/SimStackServer/ ← server config and PID file
+```
+
+All subdirectories are created automatically by the container on first run.
+The `docker/home/simstack_workspace/` placeholder is tracked in git; all other
+contents are excluded via `docker/home/.gitignore`.
 
 ## Development
 
