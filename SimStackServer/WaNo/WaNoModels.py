@@ -927,9 +927,7 @@ class MultipleOfModel(AbstractWanoModel):
             )
 
             self._template_spec = {
-                "children": [
-                    element_to_spec(c) for c in first_xml_child if _ire(c)
-                ]
+                "children": [element_to_spec(c) for c in first_xml_child if _ire(c)]
             }
 
     def set_parent(self, parent):

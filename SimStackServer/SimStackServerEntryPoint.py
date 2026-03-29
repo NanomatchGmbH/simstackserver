@@ -154,6 +154,7 @@ def main():
             # Start FastAPI server
             # Default to loopback; set SIMSTACK_BIND_HOST=0.0.0.0 when running in Docker
             import os
+
             bind_host = os.environ.get("SIMSTACK_BIND_HOST", "127.0.0.1")
             fastapi_port = ss._start_fastapi_server(
                 host=bind_host,
