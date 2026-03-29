@@ -3545,7 +3545,7 @@ packages:
 - pypi: ./
   name: simstackserver
   version: 2.0.0
-  sha256: 594961c3a9100b04f4f76a210e472c755c477d383c0d35502c8eb8d6ec076b88
+  sha256: 52cfb1e32d7cd37a71e37e1f2895dc456a68f18344cf3ae4069ac39c8d7f4850
   requires_python: '>=3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda

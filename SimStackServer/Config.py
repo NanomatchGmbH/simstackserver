@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
+import os
 
 from appdirs import AppDirs
 from os import path
@@ -209,3 +210,68 @@ class Config:
         if server_config is None:
             return None
         return server_config.resources
+
+    # Maps environment variable name -> Resources field name
+    _ENV_RESOURCES_MAP = {
+        "SIMSTACK_RESOURCE_NAME": "resource_name",
+        "SIMSTACK_WALLTIME": "walltime",
+        "SIMSTACK_CPUS_PER_NODE": "cpus_per_node",
+        "SIMSTACK_NODES": "nodes",
+        "SIMSTACK_QUEUE": "queue",
+        "SIMSTACK_MEMORY": "memory",
+        "SIMSTACK_CUSTOM_REQUESTS": "custom_requests",
+        "SIMSTACK_BASE_URI": "base_URI",
+        "SIMSTACK_SSH_PORT": "port",
+        "SIMSTACK_RESOURCE_REST_PORT": "rest_port",
+        "SIMSTACK_USERNAME": "username",
+        "SIMSTACK_BASEPATH": "basepath",
+        "SIMSTACK_QUEUEING_SYSTEM": "queueing_system",
+        "SIMSTACK_SW_DIR": "sw_dir_on_resource",
+        "SIMSTACK_EXTRA_CONFIG": "extra_config",
+        "SIMSTACK_SSH_KEY": "ssh_private_key",
+        "SIMSTACK_RESOURCE_SECRET": "client_secret",
+        "SIMSTACK_USE_SSH_TUNNEL": "use_ssh_tunnel",
+        "SIMSTACK_SGE_PE": "sge_pe",
+        "SIMSTACK_REUSE_RESULTS": "reuse_results",
+    }
+
+    @classmethod
+    def apply_env_overrides(cls, server_config: "ServerConfig") -> "ServerConfig":
+        """Apply SIMSTACK_* environment variable overrides onto a ServerConfig.
+
+        Server-level variables:
+          SIMSTACK_SERVER_PORT   — overrides rest_port
+          SIMSTACK_SERVER_SECRET — overrides client_secret
+
+        Resources variables (see _ENV_RESOURCES_MAP for full list):
+          SIMSTACK_BASEPATH, SIMSTACK_QUEUEING_SYSTEM, SIMSTACK_CPUS_PER_NODE, …
+
+        Only variables that are actually set in the environment are applied;
+        unset variables leave the corresponding field unchanged.
+
+        :param server_config: ServerConfig to modify in-place.
+        :return: The same ServerConfig instance (for convenience).
+        """
+        from SimStackServer.WorkflowModel import Resources
+
+        port_env = os.environ.get("SIMSTACK_SERVER_PORT")
+        if port_env is not None:
+            server_config.rest_port = int(port_env)
+
+        secret_env = os.environ.get("SIMSTACK_SERVER_SECRET")
+        if secret_env is not None:
+            server_config.client_secret = secret_env
+
+        # Build a partial Resources dict from env vars and apply via from_dict,
+        # which handles bool coercion ("true"/"false") and numeric casting.
+        resources_overrides = {
+            field: os.environ[env_var]
+            for env_var, field in cls._ENV_RESOURCES_MAP.items()
+            if env_var in os.environ
+        }
+        if resources_overrides:
+            if server_config.resources is None:
+                server_config.resources = Resources()
+            server_config.resources.from_dict(resources_overrides)  # type: ignore[union-attr]
+
+        return server_config

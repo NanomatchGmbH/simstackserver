@@ -135,6 +135,15 @@ class ConfigureResponse(BaseModel):
     message: str
 
 
+class ConfigGetResponse(BaseModel):
+    """Response model for GET /api/configure"""
+
+    rest_port: int
+    client_secret: str
+    server_version: str
+    resources: Optional[dict]
+
+
 class FastAPIThread(threading.Thread):
     """Thread to run FastAPI server for SimStackServer REST API"""
 
@@ -929,6 +938,38 @@ used to set credentials for interactive testing.
                 return {"status": "cleared", "message": "Server state has been cleared"}
             except Exception as e:
                 self._logger.exception("Error clearing server state")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.get(
+            "/api/configure", response_model=ConfigGetResponse, tags=["Server"]
+        )
+        async def get_configure():
+            """Return the current server configuration with secrets masked.
+
+            All secret values (e.g. `client_secret`) are replaced with
+            `"***"` so the response is safe to log or display.
+            """
+            try:
+                server_config = Config.get_server_config()
+                if server_config is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="ServerConfig not initialized. Server must be started first.",
+                    )
+                resources_dict = None
+                if server_config.resources is not None:
+                    resources_dict = {}
+                    server_config.resources.to_dict(resources_dict)
+                return ConfigGetResponse(
+                    rest_port=server_config.rest_port,
+                    client_secret="***",
+                    server_version=server_config.server_version,
+                    resources=resources_dict,
+                )
+            except HTTPException:
+                raise
+            except Exception as e:
+                self._logger.exception("Error retrieving server configuration")
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post(

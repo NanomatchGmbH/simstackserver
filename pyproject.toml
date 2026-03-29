@@ -37,6 +37,11 @@ simstackserver = { path = ".", editable = true }
 
 # End of your dependencies
 [tool.pixi.tasks]
+serve = "SimStackServer -D"
+docker-build = "docker build -f docker/Dockerfile -t simstackserver:latest ."
+docker-up = "docker compose -f docker/docker-compose.yml up --build"
+docker-down = "docker compose -f docker/docker-compose.yml down"
+
 
 [tool.pixi.dependencies]
 # These the main conda dependencies, they will override the pypi ones
