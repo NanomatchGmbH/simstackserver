@@ -17,7 +17,6 @@ import logging
 
 from SimStackServer.Config import Config
 from SimStackServer.RemoteServerManager import RemoteServerManager
-from SimStackServer.SecureWaNos import SecureModeGlobal
 from SimStackServer.Util.FileUtilities import mkdir_p
 
 from SimStackServer.Util.SocketUtils import get_open_port, random_pass
@@ -667,8 +666,6 @@ class SimStackServer(object):
             raise SystemExit("Could not setup config. Exiting.")
 
     def main_loop(self, workflow_file=None):
-        work_done = False
-        secure_mode = SecureModeGlobal.get_secure_mode()
         # Do stuff
         if workflow_file is not None:
             workflow = Workflow.new_instance_from_xml(workflow_file)
@@ -676,15 +673,11 @@ class SimStackServer(object):
             return
 
         counter = 0
-        maxidleduration = 1200  # After 20 minutes idle (i.e. no running workflow and nobody doing anything) we quit.
-        terminationtime = time.time() + maxidleduration
         while not self._stop_main:
             counter += 1
-            timeextension = False
             # Submitted job queue
             while not self._submitted_singlejob_queue.empty():
                 try:
-                    timeextension = True
                     tostart = self._submitted_singlejob_queue.get(timeout=5)
                     self._logger.info("Starting singlejob %s" % tostart)
                     self._workflow_manager.start_singlejob(tostart)
@@ -701,7 +694,6 @@ class SimStackServer(object):
             else:
                 try:
                     try:
-                        timeextension = True
                         tostart = self._submitted_workflow_queue.get(timeout=5)
                         tostart_abs = self._remote_relative_to_absolute_filename(
                             tostart
@@ -715,12 +707,6 @@ class SimStackServer(object):
                 except Exception:
                     self._logger.exception("Exception in Workflow starting.")
 
-            if self._workflow_manager.workflows_running() > 0:
-                timeextension = True
-
-            if timeextension:
-                terminationtime = time.time() + maxidleduration
-
             if counter % 30 == 0:
                 self._logger.debug("Main Thread heartbeat")
                 # We also check whether there is an update.
@@ -730,14 +716,5 @@ class SimStackServer(object):
                     )
                     self._stop_main = True
 
-            if not secure_mode and (time.time() > terminationtime):
-                # We have been idling for maxidleduration. Terminating.
-                self._logger.info(
-                    "Server has been idle for %d minutes. Terminating server."
-                    % (maxidleduration // 60)
-                )
-                work_done = True
-                self._stop_main = True
-
         self.terminate()
-        self._shutdown(remove_crontab=(work_done or self._signal_termination))
+        self._shutdown(remove_crontab=self._signal_termination)
