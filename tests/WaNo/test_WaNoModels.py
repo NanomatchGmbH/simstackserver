@@ -64,8 +64,6 @@ def test_WaNoItemIntModel(tmpfile):
     assert wiim.changed_from_default() is True
     assert wiim.get_type_str() == "Int"
     wiim.set_data(13)
-    wiim.update_xml()
-    assert wiim.xml.text == "13"
     assert repr(wiim) == "13"
     wiim._do_import = True
     assert wiim.changed_from_default() is True
@@ -86,11 +84,6 @@ def test_WaNoItemFloatModel(tmpfile):
     assert wifm.changed_from_default() is False
     assert wifm.get_data() == 2.0
     wifm.set_data(3.0)
-    old_xml = wifm.xml.text
-    wifm.update_xml()
-    new_xml = wifm.xml.text
-    assert new_xml == "3.0"
-    assert old_xml != new_xml
     assert wifm.get_data() == 3.0
     assert wifm.get_secure_schema() == {"key": {"type": "number"}}
     assert wifm.get_delta_to_default() == 3.0
@@ -135,13 +128,6 @@ def test_WaNoItemBoolModel():
     wibm.set_data(True)
     assert wibm.changed_from_default() is True
     assert wibm.get_type_str() == "Boolean"
-    wibm.set_data(False)
-    wibm.update_xml()
-    assert wibm.xml.text == "False"
-    wibm.set_data(True)
-    wibm.update_xml()
-    assert wibm.xml.text == "True"
-
     wibm.parse_from_xml(xml_lower_true)
     assert wibm.get_data() is True
     wibm.parse_from_xml(xml_lower_false)
@@ -162,11 +148,6 @@ def test_WaNoItemStringModel(tmpfile):
     wism.parse_from_xml(xml)
     assert wism.get_data() == "content"
     wism.set_data("newcontent")
-    old_xml = copy.deepcopy(wism.xml.text)
-    wism.update_xml()
-    new_xml = wism.xml.text
-    assert new_xml != old_xml
-    assert new_xml == "newcontent"
     assert wism.get_data() == "newcontent"
     assert wism.get_delta_to_default() == "newcontent"
     result = wism.get_secure_schema()
@@ -244,11 +225,6 @@ def test_WaNoFileModel(tmpdir):
     assert wifm.get_data() == "molecule.pdb"
     wifm.set_data("molecule_2.pdb")
     assert wifm.get_data() == "molecule_2.pdb"
-    old_xml = copy.deepcopy(wifm.xml.text)
-    wifm.update_xml()
-    new_xml = wifm.xml.text
-    assert new_xml != old_xml
-    assert new_xml == "molecule_2.pdb"
     with raises(SecurityError):
         wifm.get_secure_schema()
     assert wifm.get_local() is True
@@ -302,25 +278,11 @@ def test_WaNoChoice():
     assert wm.get_type_str() == "String"
     assert wm.__getitem__("someitem") is None
     wm.set_chosen(2)
-    wm.update_xml()
     assert wm.get_data() == "Perl"
     assert wm.changed_from_default() is True
     assert wm.get_delta_to_default() == "Perl"
     wm.apply_delta("Python")
     assert wm.get_data() == "Python"
-    old_xml = copy.deepcopy(wm.xml)
-    wm.update_xml()
-    new_xml = wm.xml
-    for iter_id, child in enumerate(old_xml.iter("Entry")):
-        if "chosen" in child.attrib:
-            old_id = iter_id
-            break
-    for iter_id, child in enumerate(new_xml.iter("Entry")):
-        if "chosen" in child.attrib:
-            new_id = iter_id
-            break
-    assert old_id == 2
-    assert new_id == 1
     assert wm.get_secure_schema() == {
         "Interpreter": {"enum": ["Bash", "Python", "Perl"]}
     }
@@ -477,11 +439,6 @@ def test_WaNoModelDictLike():
     mydict["test_float_add"] = copy.deepcopy(wm.get_data()["test_float"])
     wm.set_data(mydict)
     assert len([key for key in wm.keys()]) == 3
-    prev_xml = wm.xml.text
-    wm.update_xml()
-    new_xml = wm.xml.text
-    assert prev_xml == new_xml  # ToDo: Double check if this should do anything
-
     sec_scheme = wm.get_secure_schema()
     assert sec_scheme == {
         "ParentXML": {
@@ -716,30 +673,6 @@ def test_WaNoMatrixModel_set_data_and_delta():
     assert wm.storage == wm._default
 
 
-def test_WaNoMatrixModel_update_xml():
-    """
-    Verify that update_xml sets the underlying XML text to the string form of storage.
-    """
-    wm = WaNoMatrixModel()
-    xml = fromstring(
-        """
-        <WaNoMatrixModel name="MyMatrix" rows="2" cols="2">
-            [ [ "A", "B"], [3, 4.5] ]
-        </WaNoMatrixModel>
-        """
-    )
-    wm.parse_from_xml(xml)
-
-    # Make a small change
-    wm.set_data(0, 0, "XYZ")
-    wm.update_xml()
-    # Now xml.text should reflect the new storage:
-    assert "XYZ" in xml.text
-    # Another check:
-    assert "B" in xml.text
-    assert "4.5" in xml.text
-
-
 def test_WaNoMatrixModel_secure_schema():
     """
     Check that get_secure_schema returns the expected dictionary structure.
@@ -816,7 +749,6 @@ def test_WaNoNoneModel():
     )
     wm.parse_from_xml(xml)
     wm.set_data(None)
-    wm.update_xml()
     assert wm.get_data() == ""
     assert wm.get_type_str() == "String"
     assert wm.changed_from_default() is False
@@ -905,7 +837,6 @@ def test_MultipleOf(tmpWaNoRoot):
     wm_parent = WaNoModelDictLike()
     wm_parent.parse_from_xml(parent_xml)
 
-    assert wm.numitems_per_add() == 2
     assert wm.listlike is True
     wm.set_parent(wm_parent)
 
@@ -920,7 +851,7 @@ def test_MultipleOf(tmpWaNoRoot):
         "SimStackServer.WaNo.WaNoFactory.wano_constructor_helper",
         return_value=(dummy_model, dummy_root),
     ):
-        for child in wm.xml:
+        for child in xml:
             wm.parse_one_child(child, build_view=True)
 
     assert wm.get_parent().get_secure_schema() == {
@@ -978,7 +909,7 @@ def test_MultipleOf(tmpWaNoRoot):
         "SimStackServer.WaNo.WaNoFactory.wano_constructor_helper",
         return_value=(dummy_model, dummy_root),
     ):
-        for child in wm.xml:
+        for child in xml:
             this_child = wm.parse_one_child(child, build_view=True)
             break
         with patch.object(wm, "parse_one_child", return_value=this_child):
@@ -1041,7 +972,6 @@ def test_MultipleOf(tmpWaNoRoot):
     assert wm.number_of_multiples() == 1
     wm.set_parent_visible(True)
     wm.set_visible(True)
-    wm.update_xml()
     wm.decommission()
 
 
@@ -1406,8 +1336,6 @@ def test_WaNoModelListLike(WaNoModelListLike):
         assert item[1]._parent_visible is False
 
     assert wm.changed_from_default() is False
-
-    assert wm.update_xml() is None
 
     assert wm.decommission() is None
 

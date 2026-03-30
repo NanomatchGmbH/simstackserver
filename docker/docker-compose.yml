@@ -1,0 +1,43 @@
+services:
+  simstackserver:
+    image: simstackserver:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      # Must match SIMSTACK_SERVER_PORT below
+      - "8000:8000"
+    environment:
+      # ── Server ────────────────────────────────────────────────────────────
+      SIMSTACK_SERVER_PORT: "8000"
+      SIMSTACK_SERVER_SECRET: "dockertest"
+      # ── Resources ─────────────────────────────────────────────────────────
+      SIMSTACK_BASEPATH: "simstack_workspace"
+      SIMSTACK_QUEUEING_SYSTEM: "Internal"
+      SIMSTACK_CPUS_PER_NODE: "1"
+      SIMSTACK_NODES: "1"
+      SIMSTACK_MEMORY: "4096"
+      SIMSTACK_WALLTIME: "86399"
+      SIMSTACK_QUEUE: "default"
+      SIMSTACK_RESOURCE_NAME: "<Connected Server>"
+      # ── Optional / advanced ────────────────────────────────────────────────
+      # SIMSTACK_BASE_URI: ""
+      # SIMSTACK_USERNAME: ""
+      # SIMSTACK_SSH_PORT: "22"
+      # SIMSTACK_SSH_KEY: "UseSystemDefault"
+      # SIMSTACK_RESOURCE_SECRET: ""
+      # SIMSTACK_USE_SSH_TUNNEL: "false"
+      # SIMSTACK_SW_DIR: "/home/nanomatch/nanomatch"
+      # SIMSTACK_EXTRA_CONFIG: "None Required (default)"
+      # SIMSTACK_CUSTOM_REQUESTS: ""
+      # SIMSTACK_SGE_PE: ""
+      # SIMSTACK_REUSE_RESULTS: "false"
+      # SIMSTACK_RESOURCE_REST_PORT: "0"
+    volumes:
+      # Mount the entire container home into docker/home/.
+      # This persists all runtime state in one place:
+      #   home/simstack_workspace/  — workflow data (matches SIMSTACK_BASEPATH)
+      #   home/.simstack/certs/     — TLS certificates
+      #   home/.config/SimStackServer/ — server config / PID / logs
+      - ./home:/home/simstack
+    restart: unless-stopped

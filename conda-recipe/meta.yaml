@@ -1,6 +1,6 @@
 package:
   name: simstackserver
-  version: "2.0.0"
+  version: "2.0.1"
 about:
   home: https://github.com/NanomatchGmbH/simstackserver
   license: proprietary

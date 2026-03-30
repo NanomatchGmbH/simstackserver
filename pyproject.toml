@@ -6,7 +6,7 @@ dependencies = []
 readme = "README.md"
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: MIT License"]
-version="2.0.0"
+version="2.0.1"
 description="Server Component of the SimStack workflow system"
 
 [project.urls]
@@ -37,6 +37,11 @@ simstackserver = { path = ".", editable = true }
 
 # End of your dependencies
 [tool.pixi.tasks]
+serve = "SimStackServer -D"
+docker-build = "docker build -f docker/Dockerfile -t simstackserver:latest ."
+docker-up = "docker compose -f docker/docker-compose.yml up --build"
+docker-down = "docker compose -f docker/docker-compose.yml down"
+
 
 [tool.pixi.dependencies]
 # These the main conda dependencies, they will override the pypi ones

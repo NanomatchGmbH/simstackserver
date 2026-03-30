@@ -97,10 +97,7 @@ def main():
     try:
         # We should be locked and running here:
         server_config = Config.load_server_config()
-        if server_config is not None:
-            myport = server_config.rest_port
-            mysecret = server_config.client_secret
-        else:
+        if server_config is None:
             from SimStackServer import __version__ as server_version
 
             mysecret = random_pass()
@@ -111,7 +108,10 @@ def main():
                 client_secret=mysecret,
                 server_version=allversions,
             )
-            Config.save_server_config(server_config)
+        Config.apply_env_overrides(server_config)
+        myport = server_config.rest_port
+        mysecret = server_config.client_secret
+        Config.save_server_config(server_config)
         flush_port_and_password_to_stdout()
         sys.stdout.flush()
 
@@ -152,8 +152,12 @@ def main():
             logger.debug("PID written")
 
             # Start FastAPI server
+            # Default to loopback; set SIMSTACK_BIND_HOST=0.0.0.0 when running in Docker
+            import os
+
+            bind_host = os.environ.get("SIMSTACK_BIND_HOST", "127.0.0.1")
             fastapi_port = ss._start_fastapi_server(
-                host="127.0.0.1",
+                host=bind_host,
                 port=myport,
                 username="simstack",
                 password=mysecret,

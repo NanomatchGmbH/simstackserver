@@ -104,6 +104,79 @@ wf = (step_a >> (step_b & step_c) >> step_d).build("complex_wf")
 
 See `demo_singlejob_submission.py` for a runnable end-to-end example (Demo D).
 
+## Docker
+
+Docker support files live in the `docker/` subdirectory:
+
+| File | Purpose |
+|---|---|
+| `docker/Dockerfile` | Builds the server image (build context is the project root) |
+| `docker/docker-compose.yml` | Runs the server; configure via environment variables |
+
+**Build the image:**
+
+```bash
+pixi run docker-build
+# or directly:
+docker build -f docker/Dockerfile -t simstackserver:latest .
+```
+
+**Start with docker compose:**
+
+```bash
+pixi run docker-up
+# or directly:
+docker compose -f docker/docker-compose.yml up
+```
+
+**Stop:**
+
+```bash
+pixi run docker-down
+```
+
+### Configuration via environment variables
+
+All server settings are controlled by `SIMSTACK_*` environment variables defined
+in `docker/docker-compose.yml`. No config file mount is required.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SIMSTACK_SERVER_PORT` | `8000` | REST API port (must match the `ports:` mapping) |
+| `SIMSTACK_SERVER_SECRET` | `changeme` | Password for HTTP Basic authentication — **change this** |
+| `SIMSTACK_BASEPATH` | `simstack_workspace` | Workflow data directory (relative to container home) |
+| `SIMSTACK_QUEUEING_SYSTEM` | `Internal` | Queuing system (`Internal`, `slurm`, `sge`, …) |
+| `SIMSTACK_CPUS_PER_NODE` | `1` | CPUs available per node |
+| `SIMSTACK_NODES` | `1` | Number of nodes |
+| `SIMSTACK_MEMORY` | `4096` | Memory in MB |
+| `SIMSTACK_WALLTIME` | `86399` | Walltime in seconds |
+| `SIMSTACK_QUEUE` | `default` | Queue name |
+| `SIMSTACK_RESOURCE_NAME` | `<Connected Server>` | Display name for the resource |
+
+Advanced / remote-cluster variables (commented out in `docker-compose.yml`):
+`SIMSTACK_BASE_URI`, `SIMSTACK_USERNAME`, `SIMSTACK_SSH_PORT`, `SIMSTACK_SSH_KEY`,
+`SIMSTACK_RESOURCE_SECRET`, `SIMSTACK_USE_SSH_TUNNEL`, `SIMSTACK_SW_DIR`,
+`SIMSTACK_EXTRA_CONFIG`, `SIMSTACK_CUSTOM_REQUESTS`, `SIMSTACK_SGE_PE`,
+`SIMSTACK_REUSE_RESULTS`, `SIMSTACK_RESOURCE_REST_PORT`.
+
+Environment variables override any values already persisted in the server's
+config file, so they take effect on every container start.
+
+### Volumes
+
+The entire container home directory is mounted to `docker/home/`:
+
+```
+docker/home/
+  simstack_workspace/    ← workflow data (matches SIMSTACK_BASEPATH)
+  .simstack/certs/       ← TLS certificates (auto-generated, persisted across restarts)
+  .config/SimStackServer/ ← server config and PID file
+```
+
+All subdirectories are created automatically by the container on first run.
+The `docker/home/simstack_workspace/` placeholder is tracked in git; all other
+contents are excluded via `docker/home/.gitignore`.
+
 ## Development
 
 ### Prerequisites
