@@ -655,7 +655,12 @@ class ClusterManager:
     def get_url_for_workflow(self, workflow):
         if not workflow.startswith("/"):
             workflow = "/%s" % workflow
-        return f"{self.get_client_url()}/http/browse{workflow}"
+        if self._use_ssh_tunnel and self._ssh_tunnel is not None:
+            local_port = self._ssh_tunnel.local_bind_port
+            base_url = f"https://127.0.0.1:{local_port}"
+        else:
+            base_url = self.get_client_url()
+        return f"{base_url}/http/browse{workflow}"
 
     def submit_wf(self, filename, basepath_override=None):
         """Submit a workflow using REST API"""
