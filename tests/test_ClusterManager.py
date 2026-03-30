@@ -1007,3 +1007,33 @@ def test_direct_connection_context(direct_cluster_manager, respx_mock):
             assert result is None
             mock_init.assert_called_once()
         mock_disconnect.assert_called_once()
+
+
+def test_get_url_for_workflow_direct(direct_cluster_manager):
+    """Without SSH tunnel, get_url_for_workflow uses the remote host URL."""
+    url = direct_cluster_manager.get_url_for_workflow("my_workflow")
+    assert url == "https://fake-url:8443/http/browse/my_workflow"
+
+
+def test_get_url_for_workflow_direct_leading_slash(direct_cluster_manager):
+    """Leading slash in workflow name is not doubled."""
+    url = direct_cluster_manager.get_url_for_workflow("/my_workflow")
+    assert url == "https://fake-url:8443/http/browse/my_workflow"
+
+
+def test_get_url_for_workflow_ssh_tunnel(cluster_manager):
+    """With SSH tunnel active, get_url_for_workflow uses localhost and the local bind port."""
+    mock_tunnel = MagicMock()
+    mock_tunnel.local_bind_port = 54321
+    cluster_manager._ssh_tunnel = mock_tunnel
+
+    url = cluster_manager.get_url_for_workflow("my_workflow")
+    assert url == "https://127.0.0.1:54321/http/browse/my_workflow"
+
+
+def test_get_url_for_workflow_ssh_tunnel_not_started(cluster_manager):
+    """With use_ssh_tunnel=True but tunnel not yet started, falls back to remote URL."""
+    cluster_manager._ssh_tunnel = None
+
+    url = cluster_manager.get_url_for_workflow("my_workflow")
+    assert url == "https://fake-url:80/http/browse/my_workflow"
